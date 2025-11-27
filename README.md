@@ -17,7 +17,6 @@ A modern, beautiful supplier management portal built with Next.js, TypeScript, a
 
 - Node.js 18.x or higher
 - npm or yarn
-- Supabase account and project
 
 ### Installation
 
@@ -33,31 +32,13 @@ cd frontend
 npm install
 ```
 
-3. Set up environment variables:
-
-Create a `.env.local` file in the frontend directory:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-Replace the values with your actual Supabase credentials from your Supabase project settings.
-
-4. Run the development server:
+3. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Environment Variables
-
-Create a `.env.local` file (this file is gitignored and should not be committed):
-
-- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous/public key
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Tech Stack
 
