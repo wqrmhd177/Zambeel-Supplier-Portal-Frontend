@@ -17,10 +17,11 @@ import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId } from '@/lib/productHelpers'
 import { canPurchaserEditProduct, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { createPriceHistoryEntry } from '@/lib/priceHistoryHelpers'
 
 interface Variant {
   id: string
-  variant_id?: string
+  variant_id?: number
   size?: string
   color?: string
   ml?: string
@@ -31,6 +32,7 @@ interface Variant {
 
 interface ProductFormData {
   title: string
+  brandName: string
   sellingPrice: number
   stockAmount: number
   bar_code: string
@@ -52,14 +54,18 @@ export default function EditProductPage() {
 
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
+    brandName: '',
     sellingPrice: 0,
     stockAmount: 0,
-    sku: '',
+    bar_code: '',
     images: [],
     existingImages: [],
     hasVariants: false,
     variants: [],
   })
+
+  // Store original prices to track changes for price history
+  const [originalPrices, setOriginalPrices] = useState<Map<number, number>>(new Map())
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
@@ -157,8 +163,25 @@ export default function EditProductPage() {
         ? product.image
         : (typeof product.image === 'string' && product.image ? [product.image] : [])
       
+      // Store original prices for price history tracking
+      const priceMap = new Map<number, number>()
+      if (hasVariants && product.variants.length > 0) {
+        product.variants.forEach(v => {
+          if (v.variant_id) {
+            priceMap.set(v.variant_id, v.variant_selling_price || 0)
+          }
+        })
+      } else if (productRows.length > 0 && productRows[0].variant_id) {
+        priceMap.set(productRows[0].variant_id, productRows[0].variant_selling_price || 0)
+      }
+      setOriginalPrices(priceMap)
+      
+      // Safely get brand_name, handling case where column might not exist yet
+      const brandName = (productRows[0] as any)?.brand_name ?? ''
+      
       setFormData({
         title: product.product_title || '',
+        brandName: brandName,
         sellingPrice: sellingPrice,
         stockAmount: stockAmount,
         bar_code: product.bar_code || '',
@@ -453,6 +476,7 @@ export default function EditProductPage() {
       // Note: fk_owned_by should remain the same (original owner)
       const baseProductData = {
         product_title: formData.title,
+        brand_name: formData.brandName || null,
         bar_code: formData.bar_code,
         fk_owned_by: originalOwnerId, // Keep original owner
         image: allImageUrls.length > 0 ? allImageUrls : null, // Store array of image URLs in JSONB column
@@ -475,17 +499,28 @@ export default function EditProductPage() {
         })
 
 
+        // Track if any price changes are pending approval
+        let hasPendingPriceChanges = false
+
         // Update existing variants
         for (const { variant, variant_id } of variantsToUpdate) {
+          const newPrice = variant.price || formData.sellingPrice
+          const oldPrice = originalPrices.get(variant_id) || 0
+          
+          // Check if price changed
+          const priceChanged = oldPrice !== newPrice
+          
           const { error: updateError } = await supabase
             .from('products')
             .update({
               product_title: formData.title,
+              brand_name: formData.brandName || null,
               bar_code: variant.sku || formData.bar_code,
               size: variant.size || null,
               color: variant.color || null,
               ml: variant.ml || null,
-              variant_selling_price: variant.price || formData.sellingPrice,
+              // Keep old price if price changed (pending approval), otherwise use new price
+              variant_selling_price: priceChanged ? oldPrice : newPrice,
               variant_stock: variant.stock || 0,
               image: allImageUrls.length > 0 ? allImageUrls : null, // Store array of image URLs in JSONB column
               status: 'active',
@@ -501,6 +536,25 @@ export default function EditProductPage() {
             setError(`Failed to update variant. ${updateError.message}`)
             setIsSaving(false)
             return
+          }
+
+          // Create pending price history entry if price changed
+          if (priceChanged && userFriendlyId) {
+            const purchaserIntId = userRole === 'purchaser' && userId 
+              ? await getPurchaserIntegerId(userId) 
+              : null
+            
+            await createPriceHistoryEntry(
+              productIdNum,
+              variant_id,
+              oldPrice,
+              newPrice,
+              userFriendlyId,  // Use userFriendlyId (SUP-000001 format)
+              purchaserIntId,
+              'pending'  // Create as pending for approval
+            )
+            
+            hasPendingPriceChanges = true
           }
         }
 
@@ -555,7 +609,12 @@ export default function EditProductPage() {
           }
         }
 
-        setSuccess('Product updated successfully!')
+        // Show appropriate success message based on whether price changes are pending
+        if (hasPendingPriceChanges) {
+          setSuccess('Request sent for approval! Other changes saved successfully.')
+        } else {
+          setSuccess('Product updated successfully!')
+        }
         setIsSaving(false)
         setTimeout(() => {
           router.push('/products')
@@ -569,14 +628,26 @@ export default function EditProductPage() {
           .limit(1)
           .single()
 
+        // Track if any price changes are pending approval
+        let hasPendingPriceChanges = false
+
         if (existingProductRow) {
+          const variantId = existingProductRow.variant_id
+          const oldPrice = originalPrices.get(variantId) || 0
+          const newPrice = formData.sellingPrice
+          
+          // Check if price changed
+          const priceChanged = oldPrice !== newPrice
+          
           // Update existing product row
           const { error: updateError } = await supabase
             .from('products')
             .update({
               product_title: formData.title,
+              brand_name: formData.brandName || null,
               bar_code: formData.bar_code,
-              variant_selling_price: formData.sellingPrice,
+              // Keep old price if price changed (pending approval), otherwise use new price
+              variant_selling_price: priceChanged ? oldPrice : newPrice,
               variant_stock: formData.stockAmount,
               image: allImageUrls.length > 0 ? allImageUrls : null, // Store array of image URLs in JSONB column
               status: 'active',
@@ -589,6 +660,25 @@ export default function EditProductPage() {
             setError(updateError.message || 'Failed to update product. Please try again.')
             setIsSaving(false)
             return
+          }
+
+          // Create pending price history entry if price changed
+          if (priceChanged && userFriendlyId) {
+            const purchaserIntId = userRole === 'purchaser' && userId 
+              ? await getPurchaserIntegerId(userId) 
+              : null
+            
+            await createPriceHistoryEntry(
+              productIdNum,
+              variantId,
+              oldPrice,
+              newPrice,
+              userFriendlyId,  // Use userFriendlyId (SUP-000001 format)
+              purchaserIntId,
+              'pending'  // Create as pending for approval
+            )
+            
+            hasPendingPriceChanges = true
           }
         } else {
           // Shouldn't happen in edit, but handle it
@@ -614,29 +704,35 @@ export default function EditProductPage() {
             return
           }
         }
+
+        // Update product-level fields (title, brand_name, image, status) for all rows
+        // This ensures consistency across all variant rows
+        const { error: bulkUpdateError } = await supabase
+          .from('products')
+          .update({
+            product_title: formData.title,
+            brand_name: formData.brandName || null,
+            image: allImageUrls.length > 0 ? allImageUrls : null,
+            status: 'active',
+          })
+          .eq('product_id', productIdNum)
+
+        if (bulkUpdateError) {
+          console.warn('Warning: Could not update product-level fields for all rows:', bulkUpdateError)
+          // Don't fail the operation, just log the warning
+        }
+
+        // Show appropriate success message based on whether price changes are pending
+        if (hasPendingPriceChanges) {
+          setSuccess('Request sent for approval! Other changes saved successfully.')
+        } else {
+          setSuccess('Product updated successfully!')
+        }
+        setIsSaving(false)
+        setTimeout(() => {
+          router.push('/products')
+        }, 1500)
       }
-
-      // Update product-level fields (title, image, status) for all rows
-      // This ensures consistency across all variant rows
-      const { error: bulkUpdateError } = await supabase
-        .from('products')
-        .update({
-          product_title: formData.title,
-          image: allImageUrls.length > 0 ? allImageUrls : null,
-          status: 'active',
-        })
-        .eq('product_id', productIdNum)
-
-      if (bulkUpdateError) {
-        console.warn('Warning: Could not update product-level fields for all rows:', bulkUpdateError)
-        // Don't fail the operation, just log the warning
-      }
-
-      setSuccess('Product updated successfully!')
-      setIsSaving(false)
-      setTimeout(() => {
-        router.push('/products')
-      }, 1500)
     } catch (err) {
       console.error('Unexpected error:', err)
       setError('An unexpected error occurred. Please try again.')
@@ -776,6 +872,27 @@ export default function EditProductPage() {
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                     {(formData.images.length + formData.existingImages.length)} / 5 images (maximum 5 images allowed)
                   </p>
+                </div>
+
+                {/* Brand Name */}
+                <div className="mb-6">
+                  <label htmlFor="brandName" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    Brand Name <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    id="brandName"
+                    name="brandName"
+                    type="text"
+                    value={formData.brandName}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
+                      errors.brandName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                    placeholder="e.g., Nike, Samsung, Apple"
+                  />
+                  {errors.brandName && (
+                    <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.brandName}</span>
+                  )}
                 </div>
 
                 {/* Variants Toggle */}

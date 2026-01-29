@@ -195,7 +195,21 @@ export default function Login() {
           } else if (userRole === 'agent') {
             router.push('/listings')
           } else if (existingUser.onboarded) {
-            router.push('/dashboard')
+            // Check account approval status for suppliers
+            const accountApproval = existingUser.account_approval
+            
+            if (accountApproval === 'Approved') {
+              router.push('/dashboard')
+            } else if (accountApproval === 'Refused') {
+              setError('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
+              setIsLoading(false)
+              return
+            } else {
+              // Status is 'Wait' or null
+              setError('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
+              setIsLoading(false)
+              return
+            }
           } else {
             router.push('/onboarding')
           }
@@ -212,33 +226,33 @@ export default function Login() {
 
 
   return (
-    <div className="flex min-h-screen w-full bg-gray-50">
+    <div className="flex flex-col md:flex-row min-h-screen w-full bg-gray-50">
       {/* Left Panel - Branding */}
-      <div className="flex-1 bg-white p-16 flex flex-col justify-center relative border-r border-gray-200">
+      <div className="hidden md:flex md:flex-1 bg-white p-6 md:p-10 lg:p-16 flex-col justify-center relative border-r border-gray-200">
         <div className="relative z-10 max-w-[600px] animate-slide-in-left">
-          <div className="flex items-center gap-3 mb-16">
-            <div className="w-12 h-12 bg-primary-blue/10 rounded-xl flex items-center justify-center text-primary-blue">
-              <Package size={32} strokeWidth={2} />
+          <div className="flex items-center gap-3 mb-8 md:mb-12 lg:mb-16">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-primary-blue/10 rounded-xl flex items-center justify-center text-primary-blue">
+              <Package size={28} className="md:w-8 md:h-8" strokeWidth={2} />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">SupplierHub</h1>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">Zambeel Supplier Portal</h1>
           </div>
           
-          <div className="mb-14">
-            <h2 className="text-5xl font-bold leading-tight text-gray-900 mb-6 tracking-tight">
-              Empower Your Business
+          <div className="mb-8 md:mb-10 lg:mb-14">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-gray-900 mb-4 md:mb-6 tracking-tight">
+            Your Business from Offline to Online Starts Here
               <br />
               <span className="text-primary-blue">
-                in the GCC Market
+                in the Pakistan, GCC Market and many more
               </span>
             </h2>
-            <p className="text-lg leading-relaxed text-gray-600">
+            <p className="text-base md:text-lg leading-relaxed text-gray-600">
               Join the premier supplier portal for dropshipping excellence. 
               List your products, track performance, and grow your reach 
               across the Gulf region.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-6 mb-14">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8 md:mb-10 lg:mb-14">
             {[
               {
                 icon: <Package size={20} />,
@@ -270,66 +284,74 @@ export default function Login() {
                 desc: 'Enterprise-grade security for your business data'
               }
             ].map((feature, idx) => (
-              <div key={idx} className="flex gap-4 items-start">
-                <div className="w-11 h-11 min-w-[44px] bg-primary-blue/10 rounded-lg flex items-center justify-center text-primary-blue">
+              <div key={idx} className="flex gap-3 md:gap-4 items-start">
+                <div className="w-10 h-10 md:w-11 md:h-11 min-w-[40px] md:min-w-[44px] bg-primary-blue/10 rounded-lg flex items-center justify-center text-primary-blue">
                   {feature.icon}
                 </div>
                 <div>
-                  <h4 className="text-base font-semibold text-gray-900 mb-1">{feature.title}</h4>
-                  <p className="text-sm text-gray-600 leading-relaxed">{feature.desc}</p>
+                  <h4 className="text-sm md:text-base font-semibold text-gray-900 mb-1">{feature.title}</h4>
+                  <p className="text-xs md:text-sm text-gray-600 leading-relaxed">{feature.desc}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="flex items-center justify-between p-8 bg-gray-50 rounded-2xl border border-gray-200">
+          <div className="flex flex-col md:flex-row items-center justify-between p-6 md:p-8 bg-gray-50 rounded-2xl border border-gray-200 gap-4 md:gap-0">
             <div className="text-center flex-1">
-              <div className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">10,000+</div>
-              <div className="text-sm text-gray-600 font-medium">Active Suppliers</div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1 md:mb-2 tracking-tight">10,000+</div>
+              <div className="text-xs md:text-sm text-gray-600 font-medium">Active Suppliers</div>
             </div>
-            <div className="w-px h-10 bg-gray-200" />
+            <div className="hidden md:block w-px h-10 bg-gray-200" />
             <div className="text-center flex-1">
-              <div className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">5M+</div>
-              <div className="text-sm text-gray-600 font-medium">Products Listed</div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1 md:mb-2 tracking-tight">50K+</div>
+              <div className="text-xs md:text-sm text-gray-600 font-medium">Products Listed</div>
             </div>
-            <div className="w-px h-10 bg-gray-200" />
+            <div className="hidden md:block w-px h-10 bg-gray-200" />
             <div className="text-center flex-1">
-              <div className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">99.9%</div>
-              <div className="text-sm text-gray-600 font-medium">Uptime SLA</div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1 md:mb-2 tracking-tight">10M+</div>
+              <div className="text-xs md:text-sm text-gray-600 font-medium">Number of Orders</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="flex-1 bg-white flex items-center justify-center p-16">
+      <div className="flex-1 bg-white flex items-center justify-center p-6 sm:p-8 md:p-10 lg:p-16">
         <div className="w-full max-w-[480px] animate-slide-in-right">
-          <div className="text-center mb-10">
-            <h2 className="text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+          <div className="text-center mb-8 md:mb-10">
+            {/* Mobile Logo - Only visible on mobile */}
+            <div className="md:hidden flex items-center justify-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-primary-blue/10 rounded-xl flex items-center justify-center text-primary-blue">
+                <Package size={24} strokeWidth={2} />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">Zambeel Supplier Portal</h1>
+            </div>
+            
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 md:mb-3 tracking-tight">
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </h2>
-            <p className="text-base text-gray-600">
+            <p className="text-sm md:text-base text-gray-600">
               {isSignUp ? 'Sign up to become a supplier' : 'Sign in to your supplier account'}
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
-              <p className="text-sm text-red-600 font-medium">{error}</p>
+            <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+              <p className="text-xs md:text-sm text-red-600 font-medium">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mb-8">
-            <div className="mb-6">
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
+          <form onSubmit={handleSubmit} className="mb-6 md:mb-8">
+            <div className="mb-4 md:mb-6">
+              <label htmlFor="email" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                 Email Address
               </label>
               <div className="relative flex items-center">
-                <Mail className="absolute left-4 text-gray-400 pointer-events-none" size={20} />
+                <Mail className="absolute left-3 md:left-4 text-gray-400 pointer-events-none" size={18} />
                 <input
                   id="email"
                   type="email"
-                  className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                   placeholder="supplier@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -338,16 +360,16 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="mb-6">
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2">
+            <div className="mb-4 md:mb-6">
+              <label htmlFor="password" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                 Password
               </label>
               <div className="relative flex items-center">
-                <Lock className="absolute left-4 text-gray-400 pointer-events-none" size={20} />
+                <Lock className="absolute left-3 md:left-4 text-gray-400 pointer-events-none" size={18} />
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                   placeholder={isSignUp ? 'Create a password' : 'Enter your password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -356,26 +378,26 @@ export default function Login() {
                 />
                 <button
                   type="button"
-                  className="absolute right-4 p-1 text-gray-400 hover:text-primary-blue transition-colors flex items-center justify-center"
+                  className="absolute right-3 md:right-4 p-1 text-gray-400 hover:text-primary-blue transition-colors flex items-center justify-center"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             {isSignUp && (
-              <div className="mb-6">
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-900 mb-2">
+              <div className="mb-4 md:mb-6">
+                <label htmlFor="confirmPassword" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                   Confirm Password
                 </label>
                 <div className="relative flex items-center">
-                  <Lock className="absolute left-4 text-gray-400 pointer-events-none" size={20} />
+                  <Lock className="absolute left-3 md:left-4 text-gray-400 pointer-events-none" size={18} />
                   <input
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                    className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                     placeholder="Re-enter your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -384,23 +406,23 @@ export default function Login() {
                   />
                   <button
                     type="button"
-                    className="absolute right-4 p-1 text-gray-400 hover:text-primary-blue transition-colors flex items-center justify-center"
+                    className="absolute right-3 md:right-4 p-1 text-gray-400 hover:text-primary-blue transition-colors flex items-center justify-center"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
             )}
 
             {!isSignUp && (
-              <div className="flex justify-between items-center mb-6">
-                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                  <input type="checkbox" className="w-[18px] h-[18px] border-2 border-gray-300 rounded cursor-pointer accent-primary-blue" />
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 md:mb-6">
+                <label className="flex items-center gap-2 text-xs md:text-sm text-gray-600 cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 md:w-[18px] md:h-[18px] border-2 border-gray-300 rounded cursor-pointer accent-primary-blue" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="text-sm text-primary-blue font-semibold hover:text-primary-blue-dark transition-colors">
+                <a href="#" className="text-xs md:text-sm text-primary-blue font-semibold hover:text-primary-blue-dark transition-colors">
                   Forgot password?
                 </a>
               </div>
@@ -408,27 +430,27 @@ export default function Login() {
 
             <button
               type="submit"
-              className={`w-full py-4 px-6 text-base font-semibold text-white bg-gradient-to-r from-[#5BA3F5] to-[#4A9FF5] rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(74,159,245,0.4)] transition-all ${
+              className={`w-full py-3 md:py-4 px-4 md:px-6 text-sm md:text-base font-semibold text-white bg-gradient-to-r from-[#5BA3F5] to-[#4A9FF5] rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(74,159,245,0.4)] transition-all ${
                 isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(74,159,245,0.5)] active:translate-y-0'
               }`}
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
-                  <span className="w-5 h-5 border-[3px] border-white/30 border-t-white rounded-full animate-spin"></span>
+                  <span className="w-4 h-4 md:w-5 md:h-5 border-2 md:border-[3px] border-white/30 border-t-white rounded-full animate-spin"></span>
                   <span>{isSignUp ? 'Creating account...' : 'Signing in...'}</span>
                 </>
               ) : (
                 <>
                   <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
-                  <ArrowRight size={20} />
+                  <ArrowRight size={18} className="md:w-5 md:h-5" />
                 </>
               )}
             </button>
           </form>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-xs md:text-sm text-gray-600">
               {isSignUp ? (
                 <>
                   Already have an account?{' '}

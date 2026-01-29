@@ -16,22 +16,29 @@ import {
   Mail,
   Edit2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
+import { getBanksForCountry, getIbanPlaceholder, getIbanHint } from '@/lib/countryData'
+import { formatIBAN, validateIBAN } from '@/lib/formatters'
 
 interface ProfileData {
   userId: string
   ownerName: string
   storeName: string
   email: string
+  country: string
   cnic: string
   pickupAddress: string
   city: string
   phoneNumber: string
+  bankTitle: string
   bankName: string
   iban: string
+  userPictureUrl?: string
+  storePictureUrl?: string
 }
 
 export default function ProfilePage() {
@@ -43,18 +50,25 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('')
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [isArchiving, setIsArchiving] = useState(false)
+  const [imageModalOpen, setImageModalOpen] = useState(false)
+  const [modalImageUrl, setModalImageUrl] = useState('')
+  const [modalImageTitle, setModalImageTitle] = useState('')
   
   const [profileData, setProfileData] = useState<ProfileData>({
     userId: '',
     ownerName: '',
     storeName: '',
     email: '',
+    country: '',
     cnic: '',
     pickupAddress: '',
     city: '',
     phoneNumber: '',
+    bankTitle: '',
     bankName: '',
-    iban: ''
+    iban: '',
+    userPictureUrl: '',
+    storePictureUrl: ''
   })
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
@@ -109,12 +123,16 @@ export default function ProfilePage() {
             ownerName: data.owner_name || '',
             storeName: data.store_name || '',
             email: data.email || '',
+            country: data.country || '',
             cnic: data.cnic || '',
             pickupAddress: data.pickup_address || '',
             city: data.city || '',
             phoneNumber: data.phone_number || '',
+            bankTitle: data.bank_title || '',
             bankName: data.bank_name || '',
-            iban: data.iban || ''
+            iban: data.iban || '',
+            userPictureUrl: data.user_picture_url || '',
+            storePictureUrl: data.store_picture_url || ''
           })
         }
       } catch (err) {
@@ -165,29 +183,18 @@ export default function ProfilePage() {
     if (errors.phoneNumber) setErrors(prev => ({ ...prev, phoneNumber: '' }))
   }
 
+  // Format IBAN
+  const handleIbanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatIBAN(e.target.value, profileData.country)
+    setProfileData(prev => ({ ...prev, iban: formatted }))
+    if (errors.iban) setErrors(prev => ({ ...prev, iban: '' }))
+  }
+
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {}
 
-    if (!profileData.ownerName.trim()) {
-      newErrors.ownerName = 'Owner name is required'
-    }
-    if (!profileData.storeName.trim()) {
-      newErrors.storeName = 'Store name is required'
-    }
-    if (!profileData.cnic.trim()) {
-      newErrors.cnic = 'CNIC is required'
-    } else if (profileData.cnic.replace(/\D/g, '').length !== 13) {
-      newErrors.cnic = 'CNIC must be 13 digits'
-    }
-    if (!profileData.pickupAddress.trim()) {
-      newErrors.pickupAddress = 'Pickup address is required'
-    }
-    if (!profileData.city.trim()) {
-      newErrors.city = 'City is required'
-    }
-    if (!profileData.phoneNumber.trim()) {
-      newErrors.phoneNumber = 'Phone number is required'
-    }
+    // Only validate bank details (optional fields, but if provided must be valid)
+    // No validation needed for now as bank fields are optional
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -213,12 +220,7 @@ export default function ProfilePage() {
       const { data, error: updateError } = await supabase
         .from('users')
         .update({
-          owner_name: profileData.ownerName,
-          store_name: profileData.storeName,
-          cnic: profileData.cnic,
-          pickup_address: profileData.pickupAddress,
-          city: profileData.city,
-          phone_number: profileData.phoneNumber,
+          bank_title: profileData.bankTitle || null,
           bank_name: profileData.bankName || null,
           iban: profileData.iban || null,
           updated_at: new Date().toISOString(),
@@ -331,7 +333,7 @@ export default function ProfilePage() {
                 className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
               >
                 <Edit2 className="w-4 h-4" />
-                Edit Profile
+                Edit Bank Details
               </button>
             ) : (
               <div className="flex gap-3">
@@ -381,7 +383,69 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm">
+          {/* Photos */}
+          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Profile Photos</h3>
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+              {/* User Picture */}
+              <div className="flex flex-col items-center">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3 text-center">
+                  Your Picture
+                </label>
+                {profileData.userPictureUrl ? (
+                  <img
+                    src={profileData.userPictureUrl}
+                    alt="User"
+                    onClick={() => {
+                      setModalImageUrl(profileData.userPictureUrl || '')
+                      setModalImageTitle('Your Picture')
+                      setImageModalOpen(true)
+                    }}
+                    className="w-40 h-40 object-cover rounded-2xl border-4 border-gray-200 dark:border-gray-700 shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
+                  />
+                ) : (
+                  <div className="w-40 h-40 bg-gray-100 dark:bg-dark-hover rounded-2xl border-4 border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-lg">
+                    <div className="text-center">
+                      <User className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No image</p>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">Uploaded during onboarding</p>
+              </div>
+
+              {/* Store Picture */}
+              <div className="flex flex-col items-center">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3 text-center">
+                  Your Store Picture
+                </label>
+                {profileData.storePictureUrl ? (
+                  <img
+                    src={profileData.storePictureUrl}
+                    alt="Store"
+                    onClick={() => {
+                      setModalImageUrl(profileData.storePictureUrl || '')
+                      setModalImageTitle('Your Store Picture')
+                      setImageModalOpen(true)
+                    }}
+                    className="w-40 h-40 object-cover rounded-2xl border-4 border-gray-200 dark:border-gray-700 shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
+                  />
+                ) : (
+                  <div className="w-40 h-40 bg-gray-100 dark:bg-dark-hover rounded-2xl border-4 border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-lg">
+                    <div className="text-center">
+                      <Store className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No image</p>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">Uploaded during onboarding</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Basic Information Section - Read Only */}
+          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* User ID (Read-only, displayed prominently) */}
               <div className="md:col-span-2">
@@ -402,59 +466,43 @@ export default function ProfilePage() {
                 <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">Your unique supplier ID (auto-generated)</p>
               </div>
 
-              {/* Owner Name */}
+              {/* Owner Name - Read Only */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Owner Name <span className="text-red-500">*</span>
+                  Owner Name
                 </label>
                 <div className="relative">
                   <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
                     <User size={20} />
                   </div>
                   <input
-                    name="ownerName"
                     type="text"
                     value={profileData.ownerName}
-                    onChange={handleChange}
-                    disabled={!isEditing}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.ownerName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
-                    placeholder="e.g., Ahmed Khan"
+                    disabled
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
                   />
                 </div>
-                {errors.ownerName && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.ownerName}</span>
-                )}
               </div>
 
-              {/* Store Name */}
+              {/* Store Name - Read Only */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Store Name <span className="text-red-500">*</span>
+                  Store Name
                 </label>
                 <div className="relative">
                   <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
                     <Store size={20} />
                   </div>
                   <input
-                    name="storeName"
                     type="text"
                     value={profileData.storeName}
-                    onChange={handleChange}
-                    disabled={!isEditing}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.storeName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
-                    placeholder="e.g., Khan Electronics"
+                    disabled
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
                   />
                 </div>
-                {errors.storeName && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.storeName}</span>
-                )}
               </div>
 
-              {/* Email (Read-only) */}
+              {/* Email - Read Only */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                   Email Address
@@ -467,118 +515,137 @@ export default function ProfilePage() {
                     type="email"
                     value={profileData.email}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
                   />
                 </div>
-                <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">Email cannot be changed</p>
               </div>
 
-              {/* CNIC */}
+              {/* Country - Read Only */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  CNIC Number <span className="text-red-500">*</span>
+                  Country
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
+                    <MapPin size={20} />
+                  </div>
+                  <input
+                    type="text"
+                    value={profileData.country || 'Not specified'}
+                    disabled
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* CNIC - Read Only */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  ID Number
                 </label>
                 <div className="relative">
                   <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
                     <CreditCard size={20} />
                   </div>
                   <input
-                    name="cnic"
                     type="text"
                     value={profileData.cnic}
-                    onChange={handleCNICChange}
-                    disabled={!isEditing}
-                    maxLength={15}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.cnic ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
-                    placeholder="12345-1234567-1"
+                    disabled
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
                   />
                 </div>
-                {errors.cnic && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.cnic}</span>
-                )}
               </div>
 
-              {/* Pickup Address */}
+              {/* City - Read Only */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  City
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
+                    <Building size={20} />
+                  </div>
+                  <input
+                    type="text"
+                    value={profileData.city}
+                    disabled
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* Pickup Address - Read Only */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Pickup Address <span className="text-red-500">*</span>
+                  Pickup Address
                 </label>
                 <div className="relative">
                   <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
                     <MapPin size={20} />
                   </div>
                   <textarea
-                    name="pickupAddress"
                     value={profileData.pickupAddress}
-                    onChange={handleChange}
-                    disabled={!isEditing}
+                    disabled
                     rows={3}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all resize-y ${
-                      errors.pickupAddress ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
-                    placeholder="e.g., Shop 123, Main Market, F-10 Markaz"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed resize-none"
                   />
                 </div>
-                {errors.pickupAddress && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.pickupAddress}</span>
-                )}
               </div>
 
-              {/* City */}
+              {/* Phone Number - Read Only */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  City <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
-                    <Building size={20} />
-                  </div>
-                  <select
-                    name="city"
-                    value={profileData.city}
-                    onChange={handleChange}
-                    disabled={!isEditing}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.city ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none`}
-                  >
-                    <option value="">Select City</option>
-                    {['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Quetta', 'Sialkot', 'Gujranwala', 'Other'].map(city => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-                </div>
-                {errors.city && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.city}</span>
-                )}
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Phone Number <span className="text-red-500">*</span>
+                  Phone Number
                 </label>
                 <div className="relative">
                   <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
                     <Phone size={20} />
                   </div>
                   <input
-                    name="phoneNumber"
                     type="tel"
                     value={profileData.phoneNumber}
-                    onChange={handlePhoneChange}
-                    disabled={!isEditing}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.phoneNumber ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
-                    placeholder="+92-300-1234567"
+                    disabled
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
                   />
                 </div>
-                {errors.phoneNumber && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.phoneNumber}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bank Details Section - Editable */}
+          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Banking Information</h3>
+              {!isEditing && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Click "Edit Bank Details" to update</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Bank Account Title */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  Bank Account Title
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-3.5 text-gray-400 pointer-events-none">
+                    <User size={20} />
+                  </div>
+                  <input
+                    name="bankTitle"
+                    type="text"
+                    value={profileData.bankTitle}
+                    onChange={handleChange}
+                    disabled={!isEditing}
+                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl transition-all ${
+                      errors.bankTitle ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    } ${!isEditing ? 'bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed' : 'bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
+                    placeholder="e.g., Ahmed Khan"
+                  />
+                </div>
+                {errors.bankTitle && (
+                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.bankTitle}</span>
                 )}
+                <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">Name on the bank account</p>
               </div>
 
               {/* Bank Name */}
@@ -595,12 +662,12 @@ export default function ProfilePage() {
                     value={profileData.bankName}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
+                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl transition-all ${
                       errors.bankName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none`}
+                    } ${!isEditing ? 'bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed' : 'bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none`}
                   >
                     <option value="">Select Bank</option>
-                    {['Meezan Bank', 'Habib Bank Limited (HBL)', 'United Bank Limited (UBL)', 'MCB Bank', 'Allied Bank', 'Bank Alfalah', 'Faysal Bank', 'Standard Chartered', 'JS Bank', 'Askari Bank', 'Other'].map(bank => (
+                    {(profileData.country ? getBanksForCountry(profileData.country) : getBanksForCountry('Pakistan')).map(bank => (
                       <option key={bank} value={bank}>{bank}</option>
                     ))}
                   </select>
@@ -608,7 +675,7 @@ export default function ProfilePage() {
               </div>
 
               {/* IBAN */}
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                   IBAN Number
                 </label>
@@ -620,17 +687,20 @@ export default function ProfilePage() {
                     name="iban"
                     type="text"
                     value={profileData.iban}
-                    onChange={handleChange}
+                    onChange={handleIbanChange}
                     disabled={!isEditing}
-                    maxLength={34}
-                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
+                    maxLength={29}
+                    className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl transition-all ${
                       errors.iban ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'cursor-not-allowed opacity-60' : 'focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
-                    placeholder="PK36MEZN0000001234567890"
+                    } ${!isEditing ? 'bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed' : 'bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
+                    placeholder={profileData.country ? getIbanPlaceholder(profileData.country) : 'XXXXXXXXXXXX'}
                   />
                 </div>
                 {errors.iban && (
                   <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.iban}</span>
+                )}
+                {profileData.country && getIbanHint(profileData.country) && (
+                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">{getIbanHint(profileData.country)}</p>
                 )}
               </div>
             </div>
@@ -697,6 +767,39 @@ export default function ProfilePage() {
           </div>
         </main>
       </div>
+
+      {/* Image Modal */}
+      {imageModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setImageModalOpen(false)}
+        >
+          <div 
+            className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-dark-card rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{modalImageTitle}</h3>
+              <button
+                onClick={() => setImageModalOpen(false)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-dark-hover rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+            
+            {/* Image */}
+            <div className="p-4 flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
+              <img
+                src={modalImageUrl}
+                alt={modalImageTitle}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

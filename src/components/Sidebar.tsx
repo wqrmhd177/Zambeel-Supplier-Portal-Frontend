@@ -1,6 +1,6 @@
 'use client'
 
-import { Package, LayoutDashboard, ShoppingCart, LogOut, List, Users } from 'lucide-react'
+import { Package, LayoutDashboard, ShoppingCart, LogOut, List, Users, CheckCircle, Settings } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
@@ -13,6 +13,7 @@ const supplierMenuItems = [
 
 const agentMenuItems = [
   { icon: List, label: 'Listings', path: '/listings' },
+  { icon: CheckCircle, label: 'Approvals', path: '/approvals' },
 ]
 
 const adminMenuItems = [
@@ -21,6 +22,7 @@ const adminMenuItems = [
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: List, label: 'Listings', path: '/listings' },
+  { icon: Settings, label: 'User Settings', path: '/settings/users' },
 ]
 
 const purchaserMenuItems = [
@@ -33,11 +35,12 @@ const purchaserMenuItems = [
 export default function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
-  const { userRole } = useAuth()
+  const { userRole, isLoading } = useAuth()
   const [activeItem, setActiveItem] = useState('Dashboard')
 
   // Get menu items based on user role
   const getMenuItems = () => {
+    if (!userRole) return [] // Return empty array while loading
     if (userRole === 'admin') {
       return adminMenuItems
     } else if (userRole === 'agent') {
@@ -84,31 +87,43 @@ export default function Sidebar() {
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
             <Package className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900 dark:text-white">SupplierHub</span>
+          <span className="text-xl font-bold text-gray-900 dark:text-white">Zambeel Supplier Portal</span>
         </div>
       </div>
 
       {/* Menu Items */}
       <nav className="flex-1 p-4">
-        {menuItems.map((item) => {
-          const Icon = item.icon
-          const isActive = activeItem === item.label
-          
-          return (
-            <button
-              key={item.label}
-              onClick={() => handleMenuClick(item.label, item.path)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-all ${
-                isActive
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-dark-hover hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-            </button>
-          )
-        })}
+        {isLoading ? (
+          // Loading skeleton
+          <>
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="w-full h-12 bg-gray-200 dark:bg-gray-700 rounded-lg mb-2 animate-pulse"
+              />
+            ))}
+          </>
+        ) : (
+          menuItems.map((item) => {
+            const Icon = item.icon
+            const isActive = activeItem === item.label
+            
+            return (
+              <button
+                key={item.label}
+                onClick={() => handleMenuClick(item.label, item.path)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-all ${
+                  isActive
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-dark-hover hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="font-medium">{item.label}</span>
+              </button>
+            )
+          })
+        )}
       </nav>
 
       {/* Logout */}

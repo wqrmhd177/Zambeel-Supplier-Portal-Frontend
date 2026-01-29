@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId, canSupplierAddProducts } from '@/lib/supplierHelpers'
 
 interface Variant {
   id: string
@@ -28,6 +28,7 @@ interface Variant {
 
 interface ProductFormData {
   title: string
+  brandName: string
   sellingPrice: number
   stockAmount: number
   bar_code: string
@@ -47,6 +48,7 @@ export default function AddProductPage() {
 
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
+    brandName: '',
     sellingPrice: 0,
     stockAmount: 0,
     bar_code: '',
@@ -265,15 +267,25 @@ export default function AddProductPage() {
       return
     }
 
+    // Determine supplier being used for the product
+    const supplierOwnerId = (userRole === 'purchaser' || userRole === 'admin') && selectedSupplierId
+      ? selectedSupplierId
+      : userFriendlyId
+
+    // Block creation if listing approval is Refused
+    const canAdd = await canSupplierAddProducts(supplierOwnerId)
+    if (!canAdd) {
+      setError('You cannot add products. Listing approval status is "Refused". Please contact an administrator.')
+      return
+    }
+
     setIsSaving(true)
     setError('')
     setSuccess('')
 
     try {
       // Determine the owner ID based on user role (for image upload path)
-      const ownerId = (userRole === 'purchaser' || userRole === 'admin') && selectedSupplierId
-        ? selectedSupplierId
-        : userFriendlyId
+      const ownerId = supplierOwnerId
 
       if (!ownerId) {
         setError('Product owner could not be determined. Please select a supplier or log in again.')
@@ -329,6 +341,7 @@ export default function AddProductPage() {
       // ownerId is already determined above for image uploads
       const baseProductData = {
         product_title: formData.title,
+        brand_name: formData.brandName || null,
         bar_code: formData.bar_code,
         fk_owned_by: ownerId, // Use selected supplier for purchasers/admin, or own ID for suppliers
         image: imageUrls.length > 0 ? imageUrls : null, // Store array of image URLs in JSONB column
@@ -623,6 +636,27 @@ export default function AddProductPage() {
                 </div>
               </div>
 
+              {/* Brand Name */}
+              <div className="mb-6">
+                <label htmlFor="brandName" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  Brand Name <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <input
+                  id="brandName"
+                  name="brandName"
+                  type="text"
+                  value={formData.brandName}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
+                    errors.brandName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                  } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                  placeholder="e.g., Nike, Samsung, Apple"
+                />
+                {errors.brandName && (
+                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.brandName}</span>
+                )}
+              </div>
+
               {/* Variants Toggle */}
               <div className="mb-6">
                 <label className="flex items-center gap-3 cursor-pointer">
@@ -668,10 +702,10 @@ export default function AddProductPage() {
               {!formData.hasVariants && (
                 <div className="mb-6">
                   <label htmlFor="sellingPrice" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    Product Selling Price (PKR) <span className="text-red-500">*</span>
+                    Product Selling Price (Product Price + Fulfillment Cost + Margin) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <span className="absolute left-4 top-3.5 text-gray-500">PKR</span>
+                    <span className="absolute left-4 top-3.5 text-gray-500">Amount</span>
                     <input
                       id="sellingPrice"
                       name="sellingPrice"

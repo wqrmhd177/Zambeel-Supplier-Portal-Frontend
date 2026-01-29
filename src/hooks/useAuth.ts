@@ -32,6 +32,7 @@ export function useAuth() {
         userEmail: localStorage.getItem('userEmail'),
         isLoggedIn: localStorage.getItem('isLoggedIn'),
         userFriendlyId: localStorage.getItem('userFriendlyId'),
+        userRole: localStorage.getItem('userRole'),
       }
 
       // If no auth data in localStorage, user is not authenticated
@@ -47,7 +48,17 @@ export function useAuth() {
         return
       }
 
-      // Verify user exists and is not deleted in Supabase
+      // Set initial state from localStorage immediately (optimistic UI)
+      setAuthState({
+        isAuthenticated: true,
+        isLoading: false,
+        userId: authData.userId,
+        userFriendlyId: authData.userFriendlyId,
+        userEmail: authData.userEmail,
+        userRole: authData.userRole || 'supplier',
+      })
+
+      // Verify user exists and is not deleted in Supabase (background validation)
       try {
         const { data, error } = await supabase
           .from('users')
@@ -71,18 +82,21 @@ export function useAuth() {
           return
         }
 
-        // User exists and is not deleted, authentication is valid
+        // User exists and is not deleted, update with fresh data from database
         const userRole = data.role || 'supplier'
         localStorage.setItem('userRole', userRole)
         
-        setAuthState({
-          isAuthenticated: true,
-          isLoading: false,
-          userId: data.id,
-          userFriendlyId: data.user_id || authData.userFriendlyId,
-          userEmail: data.email || authData.userEmail,
-          userRole: userRole,
-        })
+        // Only update if role changed
+        if (userRole !== authData.userRole) {
+          setAuthState({
+            isAuthenticated: true,
+            isLoading: false,
+            userId: data.id,
+            userFriendlyId: data.user_id || authData.userFriendlyId,
+            userEmail: data.email || authData.userEmail,
+            userRole: userRole,
+          })
+        }
       } catch (err) {
         console.error('Error checking authentication:', err)
         clearAuth()

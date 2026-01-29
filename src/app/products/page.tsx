@@ -22,15 +22,16 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
-import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId, canSupplierAddProducts } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
+import { fetchPendingPriceRequests, PriceHistoryEntry } from '@/lib/priceHistoryHelpers'
 
 // Use GroupedProduct as the Product interface
 type Product = GroupedProduct
 
 export default function ProductsPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading, userRole, userId } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, userRole, userId, userFriendlyId } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [allProducts, setAllProducts] = useState<Product[]>([]) // Store all products for filtering
   const [isLoading, setIsLoading] = useState(true)
@@ -46,6 +47,11 @@ export default function ProductsPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [imageLoading, setImageLoading] = useState(false)
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
+  
+  // Pending price changes
+  const [pendingPriceChanges, setPendingPriceChanges] = useState<Map<number, PriceHistoryEntry>>(new Map())
+  const [canAddProducts, setCanAddProducts] = useState(true)
+  const [approvalChecked, setApprovalChecked] = useState(false)
 
   // Stats
   const [stats, setStats] = useState({
@@ -72,6 +78,28 @@ export default function ProductsPage() {
       fetchProducts()
     }
   }, [isAuthenticated, authLoading, router])
+
+  // Check listing approval for suppliers to gate Add Product button
+  useEffect(() => {
+    const checkApproval = async () => {
+      if (authLoading || !isAuthenticated) return
+      if (userRole !== 'supplier') {
+        setApprovalChecked(true)
+        return
+      }
+      if (!userFriendlyId) {
+        setCanAddProducts(false)
+        setApprovalChecked(true)
+        return
+      }
+
+      const allowed = await canSupplierAddProducts(userFriendlyId)
+      setCanAddProducts(allowed)
+      setApprovalChecked(true)
+    }
+
+    checkApproval()
+  }, [authLoading, isAuthenticated, userRole, userFriendlyId])
 
   // Cache extracted images for the viewer product
   const viewerImages = useMemo(() => {
@@ -179,6 +207,17 @@ export default function ProductsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isImageViewerOpen, viewerImages, currentImageIndex, preloadedImages])
 
+  const fetchPendingChanges = async () => {
+    try {
+      const pending = await fetchPendingPriceRequests()
+      const map = new Map<number, PriceHistoryEntry>()
+      pending.forEach(req => map.set(req.variant_id, req))
+      setPendingPriceChanges(map)
+    } catch (err) {
+      console.error('Error fetching pending price changes:', err)
+    }
+  }
+
   const fetchProducts = async () => {
     setIsLoading(true)
     try {
@@ -274,6 +313,9 @@ export default function ProductsPage() {
         setProducts([])
         calculateStats([])
       }
+      
+      // Fetch pending price changes
+      await fetchPendingChanges()
     } catch (err) {
       console.error('Unexpected error:', err)
       setProducts([])
@@ -461,13 +503,32 @@ export default function ProductsPage() {
               <p className="text-gray-600 dark:text-gray-400">Manage your product inventory</p>
             </div>
             <button
-              onClick={() => router.push('/products/new')}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
+              onClick={() => {
+                if (!canAddProducts) return
+                router.push('/products/new')
+              }}
+              disabled={!canAddProducts || !approvalChecked}
+              className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 text-white ${
+                canAddProducts
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+              title={
+                canAddProducts
+                  ? 'Add Product'
+                  : 'You are not allowed to add products yet. Please wait for administration to approve.'
+              }
             >
               <Plus className="w-5 h-5" />
               Add Product
             </button>
           </div>
+
+          {userRole === 'supplier' && approvalChecked && !canAddProducts && (
+            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-800 dark:text-yellow-200">
+              You are not allowed to add products yet. Please wait for administration to approve.
+            </div>
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
@@ -628,11 +689,27 @@ export default function ProductsPage() {
                           ? product.variants[0].variant_stock
                           : 0
                       const status = product.status || 'active' // Use status from database
-                      const displayPrice = hasVariants && product.variants!.length > 0
-                        ? `PKR ${Math.min(...product.variants!.map(v => v.variant_selling_price)).toLocaleString()} - ${Math.max(...product.variants!.map(v => v.variant_selling_price)).toLocaleString()}`
-                        : product.variants.length > 0 && product.variants[0].variant_selling_price
-                          ? `PKR ${product.variants[0].variant_selling_price.toLocaleString()}`
-                          : 'PKR 0'
+                      
+                      // Check if any variant has a pending price change
+                      const pendingVariants = product.variants.filter(v => pendingPriceChanges.has(v.variant_id))
+                      const hasPendingChanges = pendingVariants.length > 0
+                      
+                      // Display price (show old price if pending, current price otherwise)
+                      let displayPrice = ''
+                      if (hasVariants && product.variants!.length > 0) {
+                        const minPrice = Math.min(...product.variants!.map(v => v.variant_selling_price))
+                        const maxPrice = Math.max(...product.variants!.map(v => v.variant_selling_price))
+                        // Only show range if prices are different
+                        if (minPrice === maxPrice) {
+                          displayPrice = `PKR ${minPrice.toLocaleString()}`
+                        } else {
+                          displayPrice = `PKR ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`
+                        }
+                      } else if (product.variants.length > 0 && product.variants[0].variant_selling_price) {
+                        displayPrice = `PKR ${product.variants[0].variant_selling_price.toLocaleString()}`
+                      } else {
+                        displayPrice = 'PKR 0'
+                      }
 
                       const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') ? supplierMap.get(product.fk_owned_by) : null
 
@@ -704,7 +781,16 @@ export default function ProductsPage() {
                                 )
                             }
                           </td>
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{displayPrice}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">{displayPrice}</span>
+                              {hasPendingChanges && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                  Pending Approval
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
                             {totalStock}
                           </td>

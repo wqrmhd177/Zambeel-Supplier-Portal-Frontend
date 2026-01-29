@@ -1,4 +1,4 @@
-# SupplierHub - Supplier Portal Frontend
+# Zambeel Supplier Portal - Frontend
 
 A modern, beautiful supplier management portal built with Next.js, TypeScript, and Tailwind CSS.
 

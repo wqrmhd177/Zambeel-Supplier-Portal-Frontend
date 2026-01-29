@@ -35,6 +35,8 @@ interface Order {
   sku: string
   total_payable: number
   status: string
+  supplier_selling_price?: number  // Historical supplier selling price (stored by backend)
+  supplier_price?: number  // Mapped from supplier_selling_price for display
 }
 
 export default function OrdersPage() {
@@ -68,6 +70,7 @@ export default function OrdersPage() {
       fetchOrders()
     }
   }, [isAuthenticated, authLoading, router])
+
 
   const fetchOrders = async () => {
     setIsLoading(true)
@@ -169,9 +172,15 @@ export default function OrdersPage() {
         ordersData = data || []
       }
 
-      setAllOrders(ordersData)
-      applyFilters(ordersData)
-      calculateStats(ordersData)
+      // Map supplier_selling_price to supplier_price for display
+      const ordersWithPrices = ordersData.map(order => ({
+        ...order,
+        supplier_price: order.supplier_selling_price  // Use backend-stored historical price
+      }))
+
+      setAllOrders(ordersWithPrices)
+      applyFilters(ordersWithPrices)
+      calculateStats(ordersWithPrices)
     } catch (err) {
       console.error('Unexpected error:', err)
       setOrders([])
@@ -228,7 +237,10 @@ export default function OrdersPage() {
       const status = order.status?.toLowerCase() || ''
       if (status.includes('delivered')) {
         delivered++
-        totalRevenue += order.total_payable || 0
+        // Only use supplier_price (no fallback to total_payable)
+        if (order.supplier_price !== undefined && order.supplier_price !== null) {
+          totalRevenue += Number(order.supplier_price)
+        }
       } else if (status.includes('return')) {
         returned++
       } else {
@@ -316,7 +328,7 @@ export default function OrdersPage() {
       'SKU',
       'Phone',
       'Country',
-      'Total Payable',
+      'Selling Price',
       'Status'
     ]
 
@@ -349,7 +361,7 @@ export default function OrdersPage() {
           escapeCSV(order.sku),
           escapeCSV(order.phone),
           escapeCSV(order.country),
-          escapeCSV(order.total_payable || 0),
+          escapeCSV(order.supplier_price ?? 'N/A'),
           escapeCSV(order.status || '')
         ].join(',')
       })
@@ -574,7 +586,7 @@ export default function OrdersPage() {
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Product</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">SKU</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Customer</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Selling Price</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
@@ -637,7 +649,9 @@ export default function OrdersPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                              PKR {order.total_payable?.toLocaleString() || '0'}
+                              {order.supplier_price !== undefined && order.supplier_price !== null
+                                ? `PKR ${Number(order.supplier_price).toLocaleString()}`
+                                : 'N/A'}
                             </div>
                           </td>
                           <td className="px-6 py-4">

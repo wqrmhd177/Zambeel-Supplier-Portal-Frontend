@@ -3,7 +3,7 @@ import './globals.css'
 import { Providers } from '@/components/Providers'
 
 export const metadata: Metadata = {
-  title: 'SupplierHub - Supplier Portal',
+  title: 'Zambeel Supplier Portal',
   description: 'Manage your supplier business efficiently',
 }
 
