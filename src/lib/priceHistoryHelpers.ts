@@ -372,7 +372,7 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
     }
     
     // Get unique variant_ids to fetch product details
-    const variantIds = [...new Set(priceHistoryData.map(entry => entry.variant_id))]
+    const variantIds = Array.from(new Set(priceHistoryData.map(entry => entry.variant_id)))
     
     // Fetch product details for these variants
     const { data: productsData, error: productsError } = await supabase
@@ -556,7 +556,7 @@ export async function fetchRequestsByStatus(
     }
     
     // Get unique variant_ids to fetch product details
-    const variantIds = [...new Set(priceHistoryData.map(entry => entry.variant_id))]
+    const variantIds = Array.from(new Set(priceHistoryData.map(entry => entry.variant_id)))
     
     // Fetch product details for these variants
     const { data: productsData, error: productsError } = await supabase

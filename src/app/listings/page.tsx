@@ -260,19 +260,19 @@ function ProductListingCard({
         // Check if image is already in browser cache
         const testImg = new Image()
         testImg.onload = () => {
-          setPreloadedImages(prev => new Set([...prev, src]))
+          setPreloadedImages(prev => new Set([...Array.from(prev), src]))
           resolve()
         }
         testImg.onerror = () => {
           // Still mark as attempted to avoid retrying
-          setPreloadedImages(prev => new Set([...prev, src]))
+          setPreloadedImages(prev => new Set([...Array.from(prev), src]))
           resolve()
         }
         testImg.src = src
         
         // If image is already complete (cached), resolve immediately
         if (testImg.complete) {
-          setPreloadedImages(prev => new Set([...prev, src]))
+          setPreloadedImages(prev => new Set([...Array.from(prev), src]))
           resolve()
         }
       })
@@ -304,7 +304,7 @@ function ProductListingCard({
             setImageLoading(true)
             const img = new Image()
             img.onload = () => {
-              setPreloadedImages(prev => new Set([...prev, nextImage]))
+              setPreloadedImages(prev => new Set([...Array.from(prev), nextImage]))
               setCurrentImageIndex(newIndex)
             }
             img.onerror = () => setCurrentImageIndex(newIndex)
@@ -322,7 +322,7 @@ function ProductListingCard({
             setImageLoading(true)
             const img = new Image()
             img.onload = () => {
-              setPreloadedImages(prev => new Set([...prev, nextImage]))
+              setPreloadedImages(prev => new Set([...Array.from(prev), nextImage]))
               setCurrentImageIndex(newIndex)
             }
             img.onerror = () => setCurrentImageIndex(newIndex)
@@ -599,7 +599,7 @@ function ProductListingCard({
             setImageLoading(true)
             const img = new Image()
             img.onload = () => {
-              setPreloadedImages(prev => new Set([...prev, nextImage]))
+              setPreloadedImages(prev => new Set([...Array.from(prev), nextImage]))
               setCurrentImageIndex(newIndex)
             }
             img.onerror = () => {
@@ -621,7 +621,7 @@ function ProductListingCard({
             setImageLoading(true)
             const img = new Image()
             img.onload = () => {
-              setPreloadedImages(prev => new Set([...prev, nextImage]))
+              setPreloadedImages(prev => new Set([...Array.from(prev), nextImage]))
               setCurrentImageIndex(newIndex)
             }
             img.onerror = () => {
