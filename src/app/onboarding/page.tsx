@@ -596,13 +596,13 @@ export default function SupplierOnboarding() {
           <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 md:p-10 lg:p-12 text-center">
             {/* Success Icon */}
             <div className="flex justify-center mb-4 md:mb-6">
-              <div className="w-20 h-20 md:w-24 md:h-24 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-12 h-12 md:w-16 md:h-16 text-green-600" />
+              <div className="w-20 h-20 md:w-24 md:h-24 bg-[#4A9FF5]/10 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-12 h-12 md:w-16 md:h-16 text-[#4A9FF5]" />
               </div>
             </div>
 
             {/* Main Heading */}
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-green-600 mb-3 md:mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#4A9FF5] mb-3 md:mb-4">
               Application Submitted Successfully!
             </h1>
 
@@ -612,26 +612,26 @@ export default function SupplierOnboarding() {
             </p>
 
             {/* What happens next? Section */}
-            <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 mb-8 text-left">
-              <h2 className="text-2xl font-bold text-green-700 mb-4 text-center">
+            <div className="bg-[#4A9FF5]/10 border-2 border-[#4A9FF5]/30 rounded-xl p-6 mb-8 text-left">
+              <h2 className="text-2xl font-bold text-[#4A9FF5] mb-4 text-center">
                 What happens next?
               </h2>
               <ul className="space-y-3">
                 <li className="flex items-start gap-3">
-                  <span className="text-green-700 font-bold text-xl mt-0.5">•</span>
-                  <span className="text-green-700 text-base">
+                  <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
+                  <span className="text-gray-700 text-base">
                     You will be added to dedicated WhatsApp Groups & Get Training Materials (1-2 working days)
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <span className="text-green-700 font-bold text-xl mt-0.5">•</span>
-                  <span className="text-green-700 text-base">
+                  <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
+                  <span className="text-gray-700 text-base">
                     Account Approval
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <span className="text-green-700 font-bold text-xl mt-0.5">•</span>
-                  <span className="text-green-700 text-base">
+                  <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
+                  <span className="text-gray-700 text-base">
                     Begin Listing Your Products
                   </span>
                 </li>
@@ -641,7 +641,7 @@ export default function SupplierOnboarding() {
             {/* Close Button */}
             <button
               onClick={() => router.push('/login')}
-              className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold text-green-600 bg-white border-2 border-green-600 rounded-xl hover:bg-green-50 transition-colors"
+              className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold text-[#4A9FF5] bg-white border-2 border-[#4A9FF5] rounded-xl hover:bg-[#4A9FF5]/10 transition-colors"
             >
               <span>Close</span>
             </button>
@@ -700,12 +700,12 @@ export default function SupplierOnboarding() {
                 <div 
                   key={step}
                   className={`flex gap-3 lg:gap-4 items-start p-3 lg:p-4 xl:p-5 rounded-xl bg-gray-50 border-2 transition-all ${
-                    currentStep >= step ? 'border-primary-blue bg-primary-blue/5' : 'border-gray-200'
-                  } ${currentStep > step ? 'border-green-500 bg-green-50' : ''}`}
+                    currentStep >= step ? 'border-[#4A9FF5] bg-[#4A9FF5]/10' : 'border-gray-200'
+                  } ${currentStep > step ? 'border-[#4A9FF5] bg-[#4A9FF5]/10' : ''}`}
                 >
                   <div className={`w-10 h-10 lg:w-11 lg:h-11 xl:w-12 xl:h-12 min-w-[40px] lg:min-w-[44px] xl:min-w-[48px] rounded-xl flex items-center justify-center transition-all ${
-                    currentStep > step ? 'bg-green-500 text-white' :
-                    currentStep === step ? 'bg-primary-blue text-white' :
+                    currentStep > step ? 'bg-[#4A9FF5] text-white' :
+                    currentStep === step ? 'bg-[#4A9FF5] text-white' :
                     'bg-gray-100 text-gray-400'
                   }`}>
                     {icon}
@@ -741,7 +741,7 @@ export default function SupplierOnboarding() {
                 'Access to analytics dashboard'
               ].map((item, idx) => (
                 <li key={idx} className="text-sm lg:text-[15px] text-gray-700 py-1 flex items-center gap-2">
-                  <span className="text-green-500">✓</span> {item}
+                  <span className="text-[#4A9FF5]">✓</span> {item}
                 </li>
               ))}
             </ul>
@@ -1725,27 +1725,27 @@ export default function SupplierOnboarding() {
                 <div>
                   <div className="mb-6 md:mb-8">
                     <h2 className="text-2xl font-semibold text-gray-900 mb-2"></h2>
-                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-green-600 mb-2 tracking-tight text-center">Terms & Conditions</h2>
+                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-[#4A9FF5] mb-2 tracking-tight text-center">Terms & Conditions</h2>
                     <p className="text-sm md:text-base text-gray-600 leading-relaxed text-center">
                       Please read and accept the following terms and conditions to proceed with your supplier application.
                     </p>
                   </div>
 
                   <div className="mb-6 md:mb-8">
-                    <h3 className="text-xl md:text-2xl font-bold text-green-600 mb-3">Final Agreement</h3>
+                    <h3 className="text-xl md:text-2xl font-bold text-[#4A9FF5] mb-3">Final Agreement</h3>
                     <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-6">
                       By proceeding, you acknowledge and agree to the following terms:
                     </p>
 
                     <div className="space-y-3 md:space-y-4">
                       {/* Term 1: Claims and Disputes */}
-                      <div className="border-2 border-gray-200 rounded-xl p-4 md:p-5 bg-white">
+                      <div className="border-2 border-[#4A9FF5]/30 rounded-xl p-4 md:p-5 bg-white">
                         <div className="flex items-start gap-3 md:gap-4">
-                          <div className="w-5 h-5 md:w-6 md:h-6 bg-green-600 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#4A9FF5] rounded flex items-center justify-center flex-shrink-0 mt-0.5">
                             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-base md:text-lg font-bold text-green-600 mb-2">Claims and Disputes:</h4>
+                            <h4 className="text-base md:text-lg font-bold text-[#4A9FF5] mb-2">Claims and Disputes:</h4>
                             <p className="text-sm md:text-base text-gray-900">
                               I acknowledge that in case of Claims and Disputes, I will follow all defined SOPs, and in case of non-compliance Zambeel will not be responsible to cater to those cases.
                             </p>
@@ -1754,13 +1754,13 @@ export default function SupplierOnboarding() {
                       </div>
 
                       {/* Term 2: Payment Terms */}
-                      <div className="border-2 border-gray-200 rounded-xl p-4 md:p-5 bg-white">
+                      <div className="border-2 border-[#4A9FF5]/30 rounded-xl p-4 md:p-5 bg-white">
                         <div className="flex items-start gap-3 md:gap-4">
-                          <div className="w-5 h-5 md:w-6 md:h-6 bg-green-600 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#4A9FF5] rounded flex items-center justify-center flex-shrink-0 mt-0.5">
                             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-base md:text-lg font-bold text-green-600 mb-2">Payment Terms:</h4>
+                            <h4 className="text-base md:text-lg font-bold text-[#4A9FF5] mb-2">Payment Terms:</h4>
                             <p className="text-sm md:text-base text-gray-900">
                               I acknowledge and agree to the standard payment terms and timelines shared by the company.
                             </p>
@@ -1769,13 +1769,13 @@ export default function SupplierOnboarding() {
                       </div>
 
                       {/* Term 3: Information Accuracy */}
-                      <div className="border-2 border-gray-200 rounded-xl p-4 md:p-5 bg-white">
+                      <div className="border-2 border-[#4A9FF5]/30 rounded-xl p-4 md:p-5 bg-white">
                         <div className="flex items-start gap-3 md:gap-4">
-                          <div className="w-5 h-5 md:w-6 md:h-6 bg-green-600 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#4A9FF5] rounded flex items-center justify-center flex-shrink-0 mt-0.5">
                             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-base md:text-lg font-bold text-green-600 mb-2">Information Accuracy:</h4>
+                            <h4 className="text-base md:text-lg font-bold text-[#4A9FF5] mb-2">Information Accuracy:</h4>
                             <p className="text-sm md:text-base text-gray-900">
                               I confirm that all information provided by me is valid, accurate, and honest to the best of my knowledge.
                             </p>
@@ -1783,14 +1783,29 @@ export default function SupplierOnboarding() {
                         </div>
                       </div>
 
-                      {/* Term 4: Probation Period */}
-                      <div className="border-2 border-gray-200 rounded-xl p-4 md:p-5 bg-white">
+                      {/* Term 4: Dispatch and Return Guidelines */}
+                      <div className="border-2 border-[#4A9FF5]/30 rounded-xl p-4 md:p-5 bg-white">
                         <div className="flex items-start gap-3 md:gap-4">
-                          <div className="w-5 h-5 md:w-6 md:h-6 bg-green-600 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#4A9FF5] rounded flex items-center justify-center flex-shrink-0 mt-0.5">
                             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-base md:text-lg font-bold text-green-600 mb-2">Probation Period:</h4>
+                            <h4 className="text-base md:text-lg font-bold text-[#4A9FF5] mb-2">Dispatch and Return Guidelines:</h4>
+                            <p className="text-sm md:text-base text-gray-900">
+                              I will follow all the dispatch and return SLAs, otherwise company will not be liable to compensate me or can charge penalty on breach of SLA.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Term 5: Probation Period */}
+                      <div className="border-2 border-[#4A9FF5]/30 rounded-xl p-4 md:p-5 bg-white">
+                        <div className="flex items-start gap-3 md:gap-4">
+                          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#4A9FF5] rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-base md:text-lg font-bold text-[#4A9FF5] mb-2">Probation Period:</h4>
                             <p className="text-sm md:text-base text-gray-900">
                               I acknowledge and agree to abide by the probation period terms as communicated.
                             </p>
@@ -1813,7 +1828,7 @@ export default function SupplierOnboarding() {
                             setErrors(prev => ({ ...prev, termsAccepted: '' }))
                           }
                         }}
-                        className="w-4 h-4 md:w-5 md:h-5 mt-1 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 cursor-pointer"
+                        className="w-4 h-4 md:w-5 md:h-5 mt-1 text-[#4A9FF5] bg-gray-100 border-gray-300 rounded focus:ring-[#4A9FF5] focus:ring-2 cursor-pointer"
                       />
                       <label htmlFor="termsAccepted" className="text-sm md:text-base text-gray-700 cursor-pointer">
                         I have read and accept all the terms and conditions stated above
@@ -1858,7 +1873,7 @@ export default function SupplierOnboarding() {
                   type="submit"
                   className={`flex-1 py-3 md:py-4 px-4 md:px-6 text-sm md:text-base font-semibold text-white ${
                     currentStep === 4 
-                      ? 'bg-green-600 hover:bg-green-700 shadow-[0_4px_14px_rgba(34,197,94,0.4)] hover:shadow-[0_6px_20px_rgba(34,197,94,0.5)]'
+                      ? 'bg-gradient-to-r from-[#5BA3F5] to-[#4A9FF5] shadow-[0_4px_14px_rgba(74,159,245,0.4)] hover:shadow-[0_6px_20px_rgba(74,159,245,0.5)] hover:-translate-y-0.5'
                       : 'bg-gradient-to-r from-[#5BA3F5] to-[#4A9FF5] hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(74,159,245,0.5)] shadow-[0_4px_14px_rgba(74,159,245,0.4)]'
                   } rounded-xl flex items-center justify-center gap-2 transition-all ${
                     isLoading || (currentStep === 4 && !termsAccepted) ? 'opacity-70 cursor-not-allowed' : ''
