@@ -1006,7 +1006,7 @@ export default function EditProductPage() {
                     </div>
 
                     {formData.variants.length === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">No variants added yet. Click "Add Variant" to create one.</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">No variants added yet. Click &quot;Add Variant&quot; to create one.</p>
                     )}
 
                     {formData.variants.map((variant, index) => (

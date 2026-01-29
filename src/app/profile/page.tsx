@@ -617,7 +617,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Banking Information</h3>
               {!isEditing && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">Click "Edit Bank Details" to update</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Click &quot;Edit Bank Details&quot; to update</p>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

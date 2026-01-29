@@ -470,7 +470,7 @@ export default function Login() {
                 </>
               ) : (
                 <>
-                  Don't have an account?{' '}
+                  Don&apos;t have an account?{' '}
                   <a 
                     href="#" 
                     onClick={(e) => {

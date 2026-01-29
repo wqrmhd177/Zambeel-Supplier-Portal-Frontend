@@ -769,7 +769,7 @@ export default function AddProductPage() {
 
                   {formData.variants.length === 0 ? (
                     <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                      No variants added yet. Click "Add Variant" to get started.
+                      No variants added yet. Click &quot;Add Variant&quot; to get started.
                     </p>
                   ) : (
                     <div className="space-y-4">
