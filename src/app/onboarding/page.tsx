@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 import { 
   Package, 
   User, 
@@ -134,12 +135,20 @@ const CRYPTO_EXCHANGES = [
 
 export default function SupplierOnboarding() {
   const router = useRouter()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [currentStep, setCurrentStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   
   const isNavigatingRef = useRef(false)
   const isSubmittingRef = useRef(false)
+
+  // Protect route: only logged-in users can access onboarding
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [authLoading, isAuthenticated, router])
 
   const [formData, setFormData] = useState<FormData>({
     ownerName: '',
@@ -590,6 +599,21 @@ export default function SupplierOnboarding() {
 
 
   const progress = (currentStep / 4) * 100
+
+  // Show loading while checking auth; redirect to login if not authenticated
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen w-full bg-gray-50 items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#4A9FF5] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600">Verifying authentication...</p>
+        </div>
+      </div>
+    )
+  }
+  if (!isAuthenticated) {
+    return null
+  }
 
   // Show success screen after submission
   if (isSubmitted) {

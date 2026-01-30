@@ -16,7 +16,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      // Auth check will redirect to login automatically
+      router.push('/login')
       return
     }
     
