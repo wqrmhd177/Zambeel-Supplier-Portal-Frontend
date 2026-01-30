@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 export default function Login() {
@@ -225,10 +225,103 @@ export default function Login() {
 
 
 
+  const countryFlags = [
+    { code: 'pk', initials: 'PK', name: 'Pakistan' },
+    { code: 'ae', initials: 'AE', name: 'United Arab Emirates' },
+    { code: 'sa', initials: 'SA', name: 'Saudi Arabia' },
+    { code: 'qa', initials: 'QA', name: 'Qatar' },
+    { code: 'kw', initials: 'KW', name: 'Kuwait' },
+    { code: 'bh', initials: 'BH', name: 'Bahrain' },
+    { code: 'om', initials: 'OM', name: 'Oman' },
+    { code: 'iq', initials: 'IQ', name: 'Iraq' },
+  ]
+
   return (
-    <div className="flex flex-col md:flex-row min-h-screen w-full bg-gray-50">
+    <div className="flex flex-col min-h-screen w-full bg-gray-50">
+      {/* Top bar - 3D futuristic purple strip */}
+      <header
+        className="relative flex-shrink-0 flex items-center justify-between px-4 sm:px-6 h-20 sm:h-24 w-full text-white overflow-hidden"
+        style={{
+          background: 'linear-gradient(180deg, #a78bfa 0%, #8b5cf6 18%, #7c3aed 45%, #6d28d9 72%, #5b21b6 100%)',
+          boxShadow: [
+            'inset 0 2px 0 rgba(255,255,255,0.35)',
+            'inset 0 -2px 0 rgba(0,0,0,0.2)',
+            '0 0 40px rgba(124, 58, 237, 0.25)',
+          ].join(', '),
+          borderBottom: '2px solid rgba(34, 211, 238, 0.6)',
+        }}
+      >
+        {/* Futuristic top edge highlight */}
+        <div
+          className="absolute inset-x-0 top-0 h-px pointer-events-none"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)' }}
+        />
+        {/* Full-width cyan glow strip at bottom */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-0.5 pointer-events-none w-full"
+          style={{
+            background: 'linear-gradient(90deg, rgba(34, 211, 238, 0.7), rgba(34, 211, 238, 0.9), rgba(34, 211, 238, 0.7))',
+            boxShadow: '0 0 16px rgba(34, 211, 238, 0.6)',
+          }}
+        />
+        <div className="relative z-10 flex items-center gap-2">
+          <div
+            className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: 'linear-gradient(145deg, rgba(255,255,255,0.25), rgba(255,255,255,0.08))',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(255,255,255,0.2)',
+            }}
+          >
+            <Package size={20} className="sm:w-6 sm:h-6" strokeWidth={2} />
+          </div>
+          <span className="text-base sm:text-lg font-bold tracking-tight hidden sm:inline drop-shadow-sm">Zambeel Supplier Portal</span>
+        </div>
+        <div className="relative z-10 flex items-center gap-2.5 sm:gap-4">
+          {countryFlags.map(({ code, initials, name }) => (
+            <div
+              key={code}
+              className="flex flex-col items-center gap-0.5 hover:scale-105 transition-transform cursor-default group"
+            >
+              <span className="text-[10px] sm:text-xs font-bold text-white/95 tracking-wide uppercase leading-none drop-shadow-sm group-hover:text-white">
+                {initials}
+              </span>
+              <div
+                className="rounded-sm overflow-hidden flex-shrink-0 p-0.5"
+                style={{
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.3)',
+                  background: 'linear-gradient(145deg, rgba(255,255,255,0.15), rgba(0,0,0,0.1))',
+                }}
+              >
+                <img
+                  src={`https://flagcdn.com/w40/${code}.png`}
+                  srcSet={`https://flagcdn.com/w80/${code}.png 2x`}
+                  alt={name}
+                  width={36}
+                  height={27}
+                  className="h-6 w-9 sm:h-8 sm:w-12 object-cover block rounded-sm"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </header>
+
+      {/* Full-width 3D shadow band below header - ensures even depth across entire page */}
+      <div
+        className="w-full flex-shrink-0 pointer-events-none"
+        style={{
+          height: '12px',
+          background: 'linear-gradient(180deg, #3b0764 0%, rgba(59, 7, 100, 0.4) 40%, transparent 100%)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        }}
+      />
+
+      {/* Main content: Left panel + Right panel */}
+      <div className="flex flex-1 flex-col md:flex-row min-h-0">
       {/* Left Panel - Branding */}
-      <div className="hidden md:flex md:flex-1 bg-white p-6 md:p-10 lg:p-16 flex-col justify-center relative border-r border-gray-200">
+      <div className="hidden md:flex md:flex-1 bg-gradient-to-br from-purple-50/50 via-white to-primary-blue/5 p-6 md:p-10 lg:p-16 flex-col justify-center relative border-r border-gray-200">
         <div className="relative z-10 max-w-[600px] animate-slide-in-left">
           <div className="flex items-center gap-3 mb-8 md:mb-12 lg:mb-16">
             <div className="w-10 h-10 md:w-12 md:h-12 bg-primary-blue/10 rounded-xl flex items-center justify-center text-primary-blue">
@@ -238,10 +331,10 @@ export default function Login() {
           </div>
           
           <div className="mb-8 md:mb-10 lg:mb-14">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-gray-900 mb-4 md:mb-6 tracking-tight">
+            <h2 className="text-xl md:text-2xl lg:text-3xl font-bold leading-tight text-gray-900 mb-4 md:mb-6 tracking-tight">
             Your Business from Offline to Online Starts Here
               <br />
-              <span className="text-primary-blue">
+              <span className="text-primary-blue animate-come-and-go inline-block">
                 in the Pakistan, GCC Market and many more
               </span>
             </h2>
@@ -316,8 +409,10 @@ export default function Login() {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="flex-1 bg-white flex items-center justify-center p-6 sm:p-8 md:p-10 lg:p-16">
+      <div className="flex-1 bg-gray-50 flex items-center justify-center p-6 sm:p-8 md:p-10 lg:p-16">
         <div className="w-full max-w-[480px] animate-slide-in-right">
+          {/* Form card with blue border on all sides */}
+          <div className="relative flex flex-col bg-white rounded-2xl shadow-xl border-4 border-primary-blue p-6 sm:p-8 md:p-10">
           <div className="text-center mb-8 md:mb-10">
             {/* Mobile Logo - Only visible on mobile */}
             <div className="md:hidden flex items-center justify-center gap-3 mb-6">
@@ -336,7 +431,8 @@ export default function Login() {
           </div>
 
           {error && (
-            <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+            <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl flex items-start gap-3">
+              <AlertCircle className="flex-shrink-0 w-5 h-5 text-red-500 mt-0.5" />
               <p className="text-xs md:text-sm text-red-600 font-medium">{error}</p>
             </div>
           )}
@@ -351,7 +447,7 @@ export default function Login() {
                 <input
                   id="email"
                   type="email"
-                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                   placeholder="supplier@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -369,7 +465,7 @@ export default function Login() {
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                   placeholder={isSignUp ? 'Create a password' : 'Enter your password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -397,7 +493,7 @@ export default function Login() {
                   <input
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
-                    className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                    className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                     placeholder="Re-enter your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -418,11 +514,11 @@ export default function Login() {
 
             {!isSignUp && (
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 md:mb-6">
-                <label className="flex items-center gap-2 text-xs md:text-sm text-gray-600 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 md:w-[18px] md:h-[18px] border-2 border-gray-300 rounded cursor-pointer accent-primary-blue" />
+                <label className="flex items-center gap-2 text-xs md:text-sm text-gray-600 cursor-pointer py-1">
+                  <input type="checkbox" className="w-4 h-4 md:w-[18px] md:h-[18px] border-2 border-gray-300 rounded cursor-pointer accent-purple-600 focus:ring-2 focus:ring-purple-500/30" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="text-xs md:text-sm text-primary-blue font-semibold hover:text-primary-blue-dark transition-colors">
+                <a href="#" className="text-xs md:text-sm text-primary-blue font-semibold hover:text-primary-blue-dark transition-colors py-2 px-1 -m-1 rounded hover:bg-primary-blue/5">
                   Forgot password?
                 </a>
               </div>
@@ -430,8 +526,10 @@ export default function Login() {
 
             <button
               type="submit"
-              className={`w-full py-3 md:py-4 px-4 md:px-6 text-sm md:text-base font-semibold text-white bg-gradient-to-r from-[#5BA3F5] to-[#4A9FF5] rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(74,159,245,0.4)] transition-all ${
-                isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(74,159,245,0.5)] active:translate-y-0'
+              className={`w-full py-3.5 md:py-4 px-4 md:px-6 text-sm md:text-base font-semibold text-white rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
+                isLoading
+                  ? 'opacity-70 cursor-not-allowed bg-primary-blue shadow-lg'
+                  : 'bg-primary-blue shadow-[0_4px_14px_rgba(74,159,245,0.4)] hover:bg-primary-blue/90 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(74,159,245,0.5)] active:translate-y-0'
               }`}
               disabled={isLoading}
             >
@@ -447,9 +545,13 @@ export default function Login() {
                 </>
               )}
             </button>
+            <p className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-500">
+              <Lock size={14} className="text-gray-400" />
+              <span>Secure login</span>
+            </p>
           </form>
 
-          <div className="text-center">
+          <div className="text-center mt-6">
             <p className="text-xs md:text-sm text-gray-600">
               {isSignUp ? (
                 <>
@@ -463,7 +565,7 @@ export default function Login() {
                       setPassword('')
                       setConfirmPassword('')
                     }}
-                    className="text-primary-blue font-semibold hover:text-primary-blue-dark hover:underline transition-colors"
+                    className="text-primary-blue font-semibold hover:text-primary-blue-dark hover:underline transition-colors inline-block py-2 px-1 -m-1 rounded hover:bg-primary-blue/5"
                   >
                     Sign in
                   </a>
@@ -480,7 +582,7 @@ export default function Login() {
                       setPassword('')
                       setConfirmPassword('')
                     }}
-                    className="text-primary-blue font-semibold hover:text-primary-blue-dark hover:underline transition-colors"
+                    className="text-primary-blue font-semibold hover:text-primary-blue-dark hover:underline transition-colors inline-block py-2 px-1 -m-1 rounded hover:bg-primary-blue/5"
                   >
                     Sign up as a supplier
                   </a>
@@ -488,7 +590,9 @@ export default function Login() {
               )}
             </p>
           </div>
+          </div>
         </div>
+      </div>
       </div>
     </div>
   )

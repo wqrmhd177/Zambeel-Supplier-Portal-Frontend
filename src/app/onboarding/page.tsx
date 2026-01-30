@@ -183,12 +183,16 @@ export default function SupplierOnboarding() {
   const cities = useMemo(() => getCitiesForCountry(formData.country), [formData.country])
   const banks = useMemo(() => getBanksForCountry(formData.bankCountry), [formData.bankCountry])
 
+  // True when country is one of the 7 with formatting/validation (Pakistan, UAE, KSA, Qatar, Kuwait, Bahrain, Oman)
+  const isSupportedCountry = useCallback((country: string) => (COUNTRIES as readonly string[]).includes(country), [])
+
   // Handle input changes
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
       [name]: value,
+      ...(name === 'bankCountry' ? { bankName: '', customBank: '', iban: '' } : {}),
       ...(name === 'bankName' && value !== 'Other' ? { customBank: '' } : {}),
       ...(name === 'pickupCity' && value !== 'Other' ? { customPickupCity: '' } : {}),
       ...(name === 'returnCity' && value !== 'Other' ? { customReturnCity: '' } : {}),
@@ -202,6 +206,9 @@ export default function SupplierOnboarding() {
       setErrors(prev => ({ ...prev, [name]: '' }))
     }
     
+    if (name === 'bankCountry') {
+      setErrors(prev => ({ ...prev, bankName: '', customBank: '', iban: '' }))
+    }
     if (name === 'bankName' && errors.customBank) {
       setErrors(prev => ({ ...prev, customBank: '' }))
     }
@@ -307,21 +314,17 @@ export default function SupplierOnboarding() {
     }
   }, [errors])
 
-  // Handle country change
+  // Handle living country change (Step 1)
   const handleCountryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCountry = e.target.value
     setFormData(prev => ({
       ...prev,
       country: newCountry,
       cnic: '',
-      bankName: '',
-      customBank: '',
     }))
     setErrors(prev => ({
       ...prev,
       country: '',
-      bankName: '',
-      customBank: ''
     }))
   }, [])
 
@@ -335,21 +338,21 @@ export default function SupplierOnboarding() {
       
       if (formData.country) {
         if (!formData.cnic.trim()) {
-          newErrors.cnic = `${getIdNumberLabel(formData.country)} is required`
-        } else if (!validateIDNumber(formData.cnic, formData.country)) {
+          newErrors.cnic = isSupportedCountry(formData.country) ? `${getIdNumberLabel(formData.country)} is required` : 'National ID number is required'
+        } else if (isSupportedCountry(formData.country) && !validateIDNumber(formData.cnic, formData.country)) {
           newErrors.cnic = `Invalid ${getIdNumberLabel(formData.country)} format`
         }
       }
       
       if (!formData.phoneNumber.trim()) {
         newErrors.phoneNumber = 'Phone number is required'
-      } else if (formData.country && !validatePhoneNumber(formData.phoneNumber, formData.country)) {
+      } else if (formData.country && isSupportedCountry(formData.country) && !validatePhoneNumber(formData.phoneNumber, formData.country)) {
         newErrors.phoneNumber = `Phone number must be in format ${getPhonePlaceholder(formData.country)}`
       }
       
       if (!formData.whatsappPhoneNumber.trim()) {
         newErrors.whatsappPhoneNumber = 'WhatsApp phone number is required'
-      } else if (formData.country && !validatePhoneNumber(formData.whatsappPhoneNumber, formData.country)) {
+      } else if (formData.country && isSupportedCountry(formData.country) && !validatePhoneNumber(formData.whatsappPhoneNumber, formData.country)) {
         newErrors.whatsappPhoneNumber = `WhatsApp phone number must be in format ${getPhonePlaceholder(formData.country)}`
       }
       
@@ -402,7 +405,7 @@ export default function SupplierOnboarding() {
           
           if (!formData.iban.trim()) {
             newErrors.iban = 'IBAN number is required'
-          } else if (formData.bankCountry && !validateIBAN(formData.iban, formData.bankCountry)) {
+          } else if (formData.bankCountry && isSupportedCountry(formData.bankCountry) && !validateIBAN(formData.iban, formData.bankCountry)) {
             newErrors.iban = `Invalid IBAN format. ${getIbanHint(formData.bankCountry)}`
           }
         } else if (formData.paymentMethod === 'Paypal') {
@@ -442,7 +445,7 @@ export default function SupplierOnboarding() {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
-  }, [formData, termsAccepted])
+  }, [formData, termsAccepted, isSupportedCountry])
 
   // Handle next step
   const handleNext = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
@@ -851,10 +854,10 @@ export default function SupplierOnboarding() {
                     <p className="text-[13px] text-gray-500 mt-1.5">Where do you live?</p>
                   </div>
 
-                  {/* ID Number - Simple input for all countries */}
+                  {/* ID Number - Formatted for 7 countries, plain for others */}
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="cnic" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
-                      National ID Number <span className="text-red-500 ml-0.5">*</span>
+                      {formData.country && isSupportedCountry(formData.country) ? getIdNumberLabel(formData.country) : 'National ID Number'} <span className="text-red-500 ml-0.5">*</span>
                     </label>
                     <div className="relative flex items-start">
                       <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -867,18 +870,20 @@ export default function SupplierOnboarding() {
                         className={`w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 rounded-xl bg-white text-gray-900 transition-all ${
                           errors.cnic ? 'border-red-500' : 'border-gray-200'
                         } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                        placeholder="Enter your National ID Number"
+                        placeholder={formData.country && isSupportedCountry(formData.country) ? getIdNumberPlaceholder(formData.country) : 'Enter your National ID Number'}
                         value={formData.cnic}
-                        onChange={handleChange}
+                        onChange={formData.country && isSupportedCountry(formData.country) ? handleIDNumberChange : handleChange}
                       />
                     </div>
                     {errors.cnic && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.cnic}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">Your government-issued ID number</p>
+                    <p className="text-[13px] text-gray-500 mt-1.5">
+                      {formData.country && isSupportedCountry(formData.country) && getIdNumberHint(formData.country) ? getIdNumberHint(formData.country) : 'Your government-issued ID number'}
+                    </p>
                   </div>
 
-                  {/* Phone Number */}
+                  {/* Phone Number - Formatted for 7 countries, plain for others */}
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="phoneNumber" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       Phone Number <span className="text-red-500 ml-0.5">*</span>
@@ -894,18 +899,20 @@ export default function SupplierOnboarding() {
                         className={`w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 rounded-xl bg-white text-gray-900 transition-all ${
                           errors.phoneNumber ? 'border-red-500' : 'border-gray-200'
                         } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                        placeholder="+XX-XXX-XXXXXXX"
+                        placeholder={formData.country && isSupportedCountry(formData.country) ? getPhonePlaceholder(formData.country) : '+XXXXXXXXXXXX'}
                         value={formData.phoneNumber}
-                        onChange={handleChange}
+                        onChange={formData.country && isSupportedCountry(formData.country) ? handlePhoneChange : handleChange}
                       />
                     </div>
                     {errors.phoneNumber && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.phoneNumber}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">Include country code (e.g., +92-300-1234567)</p>
+                    <p className="text-[13px] text-gray-500 mt-1.5">
+                      {formData.country && isSupportedCountry(formData.country) ? getPhoneHint(formData.country) : 'Include country code'}
+                    </p>
                   </div>
 
-                  {/* WhatsApp Phone Number */}
+                  {/* WhatsApp Phone Number - Formatted for 7 countries, plain for others */}
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="whatsappPhoneNumber" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       WhatsApp Phone Number <span className="text-red-500 ml-0.5">*</span>
@@ -923,9 +930,9 @@ export default function SupplierOnboarding() {
                         } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400 ${
                           useSameAsPhone ? 'bg-gray-50 cursor-not-allowed' : ''
                         }`}
-                        placeholder="+XX-XXX-XXXXXXX"
+                        placeholder={formData.country && isSupportedCountry(formData.country) ? getPhonePlaceholder(formData.country) : '+XXXXXXXXXXXX'}
                         value={formData.whatsappPhoneNumber}
-                        onChange={handleChange}
+                        onChange={formData.country && isSupportedCountry(formData.country) ? handleWhatsAppPhoneChange : handleChange}
                         disabled={useSameAsPhone}
                       />
                     </div>
@@ -1442,12 +1449,16 @@ export default function SupplierOnboarding() {
                             } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
                             value={formData.bankName}
                             onChange={handleChange}
-                            disabled={!formData.country}
+                            disabled={!formData.bankCountry}
                           >
-                            <option value="">{formData.country ? 'Select Bank' : 'Select Country First'}</option>
+                            <option value="">{formData.bankCountry ? 'Select Bank' : 'Select bank country first'}</option>
                             {banks.map(bank => (
                               <option key={bank} value={bank}>{bank}</option>
                             ))}
+                            {/* When bank country has no list (e.g. not in 7), show Other so user can type bank name */}
+                            {banks.length === 0 && formData.bankCountry ? (
+                              <option value="Other">Other</option>
+                            ) : null}
                           </select>
                         </div>
                         {errors.bankName && (
@@ -1485,7 +1496,7 @@ export default function SupplierOnboarding() {
 
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="iban" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
-                          IBAN / Account Number <span className="text-red-500 ml-0.5">*</span>
+                          {formData.bankCountry && isSupportedCountry(formData.bankCountry) ? 'IBAN Number' : 'IBAN / Account Number'} <span className="text-red-500 ml-0.5">*</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1498,16 +1509,17 @@ export default function SupplierOnboarding() {
                             className={`w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 rounded-xl bg-white text-gray-900 transition-all ${
                               errors.iban ? 'border-red-500' : 'border-gray-200'
                             } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                            placeholder="Enter your IBAN or Account Number"
+                            placeholder={formData.bankCountry && isSupportedCountry(formData.bankCountry) ? getIbanPlaceholder(formData.bankCountry) : 'Enter your IBAN or Account Number'}
                             value={formData.iban}
-                            onChange={handleChange}
+                            onChange={formData.bankCountry && isSupportedCountry(formData.bankCountry) ? handleIbanChange : handleChange}
+                            maxLength={formData.bankCountry && isSupportedCountry(formData.bankCountry) ? 40 : undefined}
                           />
                         </div>
                         {errors.iban && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.iban}</span>
                         )}
                         <p className="text-[13px] text-gray-500 mt-1.5">
-                          International Bank Account Number or local account number
+                          {formData.bankCountry && isSupportedCountry(formData.bankCountry) ? getIbanHint(formData.bankCountry) : 'International Bank Account Number or local account number'}
                         </p>
                       </div>
                     </>

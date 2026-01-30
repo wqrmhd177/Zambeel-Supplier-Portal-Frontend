@@ -37,7 +37,7 @@ export const ALL_COUNTRIES = [
 ] as const
 
 // Countries with full form data (ID, phone, IBAN formatting)
-export const COUNTRIES = ['Pakistan', 'United Arab Emirates', 'Saudia Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman'] as const
+export const COUNTRIES = ['Pakistan', 'United Arab Emirates', 'Saudia Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Iraq'] as const
 export type Country = typeof COUNTRIES[number]
 
 export const COUNTRY_DATA = {
@@ -67,27 +67,22 @@ export const COUNTRY_DATA = {
       'Silkbank', 'Zarai Taraqiati Bank Limited (ZTBL)', 'Other'
     ],
     phone: {
-      placeholder: '+92-300-1234567',
+      placeholder: '+923001234567',
       hint: 'Include country code (e.g., +92)',
       countryCode: '92',
       maxDigits: 10,
-      format: (digits: string) => {
-        if (digits.length > 3) {
-          return digits.slice(0, 3) + '-' + digits.slice(3, 10)
-        }
-        return digits
-      }
+      format: (digits: string) => digits.slice(0, 10)
     },
     iban: {
-      placeholder: 'PK36 MEZN 0000 0012 3456 7890',
+      placeholder: 'PK36MEZN0000001234567890',
       hint: 'Pakistan IBAN format: PK + 22 digits (24 characters total)',
       countryCode: 'PK',
       maxLength: 24
     },
     idNumber: {
       label: 'NIC Number (National Identity Number)',
-      placeholder: '12345-1234567-1',
-      hint: 'Format: xxxxx-xxxxxxx-x (13 digits)',
+      placeholder: '1234512345671',
+      hint: '13 digits',
       maxLength: 15,
       required: true,
       validate: (value: string) => {
@@ -111,19 +106,14 @@ export const COUNTRY_DATA = {
       'JP Morgan Chase Bank', 'BNP Paribas', 'Other'
     ],
     phone: {
-      placeholder: '+971-50-1234567',
+      placeholder: '+971501234567',
       hint: 'Include country code (e.g., +971)',
       countryCode: '971',
       maxDigits: 9,
-      format: (digits: string) => {
-        if (digits.length > 2) {
-          return digits.slice(0, 2) + '-' + digits.slice(2, 9)
-        }
-        return digits
-      }
+      format: (digits: string) => digits.slice(0, 9)
     },
     iban: {
-      placeholder: 'AE07 0331 2345 6789 0123 456',
+      placeholder: 'AE070331234567890123456',
       hint: 'UAE IBAN format: AE + 21 digits (23 characters total)',
       countryCode: 'AE',
       maxLength: 23
@@ -159,19 +149,14 @@ export const COUNTRY_DATA = {
       'JP Morgan Chase Bank', 'BNP Paribas', 'Credit Suisse', 'Other'
     ],
     phone: {
-      placeholder: '+966-50-1234567',
+      placeholder: '+966501234567',
       hint: 'Include country code (e.g., +966)',
       countryCode: '966',
       maxDigits: 9,
-      format: (digits: string) => {
-        if (digits.length > 2) {
-          return digits.slice(0, 2) + '-' + digits.slice(2, 9)
-        }
-        return digits
-      }
+      format: (digits: string) => digits.slice(0, 9)
     },
     iban: {
-      placeholder: 'SA03 8000 0000 6080 1016 7519',
+      placeholder: 'SA0380000000608010167519',
       hint: 'Saudi Arabia IBAN format: SA + 22 digits (24 characters total)',
       countryCode: 'SA',
       maxLength: 24
@@ -203,19 +188,14 @@ export const COUNTRY_DATA = {
       'BNP Paribas', 'Deutsche Bank', 'Other'
     ],
     phone: {
-      placeholder: '+974-3312-3456',
+      placeholder: '+97433123456',
       hint: 'Include country code (e.g., +974)',
       countryCode: '974',
       maxDigits: 8,
-      format: (digits: string) => {
-        if (digits.length > 4) {
-          return digits.slice(0, 4) + '-' + digits.slice(4, 8)
-        }
-        return digits
-      }
+      format: (digits: string) => digits.slice(0, 8)
     },
     iban: {
-      placeholder: 'QA58 DOHB 0000 0000 0001 2345 6789 0',
+      placeholder: 'QA58DOHB00000000001234567890',
       hint: 'Qatar IBAN format: QA + 27 digits (29 characters total)',
       countryCode: 'QA',
       maxLength: 29
@@ -291,19 +271,14 @@ export const COUNTRY_DATA = {
       'Citibank N.A.', 'BNP Paribas', 'Deutsche Bank', 'Other'
     ],
     phone: {
-      placeholder: '+973-1234-5678',
+      placeholder: '+97312345678',
       hint: 'Include country code (e.g., +973)',
       countryCode: '973',
       maxDigits: 8,
-      format: (digits: string) => {
-        if (digits.length > 4) {
-          return digits.slice(0, 4) + '-' + digits.slice(4, 8)
-        }
-        return digits
-      }
+      format: (digits: string) => digits.slice(0, 8)
     },
     iban: {
-      placeholder: 'BH67 BMAG 0000 1299 1234 56',
+      placeholder: 'BH67BMAG00001299123456',
       hint: 'Bahrain IBAN format: BH + 20 digits (22 characters total)',
       countryCode: 'BH',
       maxLength: 22
@@ -338,19 +313,14 @@ export const COUNTRY_DATA = {
       'Citibank N.A.', 'BNP Paribas', 'Other'
     ],
     phone: {
-      placeholder: '+968-9123-4567',
+      placeholder: '+96891234567',
       hint: 'Include country code (e.g., +968)',
       countryCode: '968',
       maxDigits: 8,
-      format: (digits: string) => {
-        if (digits.length > 4) {
-          return digits.slice(0, 4) + '-' + digits.slice(4, 8)
-        }
-        return digits
-      }
+      format: (digits: string) => digits.slice(0, 8)
     },
     iban: {
-      placeholder: 'OM54 0480 0000 0000 0000 0000 00',
+      placeholder: 'OM540480000000000000000000',
       hint: 'Oman IBAN format: OM + 21 digits (23 characters total)',
       countryCode: 'OM',
       maxLength: 23
@@ -364,6 +334,44 @@ export const COUNTRY_DATA = {
       validate: (value: string) => {
         const digits = value.replace(/\D/g, '')
         return digits.length === 9
+      }
+    }
+  },
+  Iraq: {
+    cities: [
+      'Baghdad', 'Basra', 'Erbil', 'Najaf', 'Mosul', 'Karbala', 'Sulaymaniyah',
+      'Nasiriyah', 'Ramadi', 'Baqubah', 'Hillah', 'Kirkuk', 'Duhok', 'Samarra',
+      'Fallujah', 'Tikrit', 'Amarah', 'Diwaniyah', 'Kut', 'Hit', 'Other'
+    ],
+    banks: [
+      'Central Bank of Iraq', 'Rafidain Bank', 'Rasheed Bank', 'Trade Bank of Iraq',
+      'Bank of Baghdad', 'Commercial Bank of Iraq', 'Al Janoob Islamic Bank',
+      'Iraqi Islamic Bank', 'National Bank of Iraq', 'Bank of Babel',
+      'Investment Bank of Iraq', 'Gulf Commercial Bank', 'Al Baraka Bank Iraq',
+      'Standard Chartered Bank', 'HSBC', 'Other'
+    ],
+    phone: {
+      placeholder: '+964701234567',
+      hint: 'Include country code (e.g., +964)',
+      countryCode: '964',
+      maxDigits: 10,
+      format: (digits: string) => digits.slice(0, 10)
+    },
+    iban: {
+      placeholder: 'IQ98NBIQ850123456789012',
+      hint: 'Iraq IBAN format: IQ + 21 digits (23 characters total)',
+      countryCode: 'IQ',
+      maxLength: 23
+    },
+    idNumber: {
+      label: 'Iraq National ID Number',
+      placeholder: 'XXXXXXXXXXXX',
+      hint: 'Format: 12 digits',
+      maxLength: 12,
+      required: true,
+      validate: (value: string) => {
+        const digits = value.replace(/\D/g, '')
+        return digits.length === 12
       }
     }
   }
@@ -383,7 +391,7 @@ export const getBanksForCountry = (country: string): readonly string[] => {
 }
 
 export const getPhonePlaceholder = (country: string): string => {
-  return getCountryData(country)?.phone.placeholder || '+XXX-XXX-XXXXXX'
+  return getCountryData(country)?.phone.placeholder || '+XXXXXXXXXXXX'
 }
 
 export const getPhoneHint = (country: string): string => {

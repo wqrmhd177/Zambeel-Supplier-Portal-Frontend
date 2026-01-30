@@ -30,3 +30,26 @@ body {
   color: white;
 }
 
+@keyframes come-and-go {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+.animate-come-and-go {
+  animation: come-and-go 3s ease-in-out infinite;
+}
+
