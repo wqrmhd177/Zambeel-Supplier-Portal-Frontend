@@ -610,9 +610,22 @@ export default function SupplierOnboarding() {
             </h1>
 
             {/* Confirmation Message */}
-            <p className="text-sm sm:text-base md:text-lg text-gray-700 mb-6 md:mb-8 leading-relaxed px-2">
-              Thank you for your interest in becoming a Zambeel supplier. We have received your application and our team will review it within 2-3 business days.
-            </p>
+            <div className="text-sm sm:text-base md:text-lg text-gray-700 mb-6 md:mb-8 leading-relaxed px-2 space-y-3">
+              <p>
+                We have received your application, and our team will review it in 2-3 business days.
+              </p>
+              <p>
+                Please join the WhatsApp community for more updates:{' '}
+                <a
+                  href="https://whatsapp.com/channel/0029VbBtAQwJP20xKqeMZ82F"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#4A9FF5] font-semibold hover:underline break-all"
+                >
+                  https://whatsapp.com/channel/0029VbBtAQwJP20xKqeMZ82F
+                </a>
+              </p>
+            </div>
 
             {/* What happens next? Section */}
             <div className="bg-[#4A9FF5]/10 border-2 border-[#4A9FF5]/30 rounded-xl p-6 mb-8 text-left">
