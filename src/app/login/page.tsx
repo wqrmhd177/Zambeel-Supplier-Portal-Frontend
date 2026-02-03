@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
+import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 export default function Login() {
   const router = useRouter()
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [isSignUp, setIsSignUp] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -15,6 +15,7 @@ export default function Login() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [popupMessage, setPopupMessage] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,12 +202,14 @@ export default function Login() {
             if (accountApproval === 'Approved') {
               router.push('/dashboard')
             } else if (accountApproval === 'Refused') {
-              setError('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
+              setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
+              setError('')
               setIsLoading(false)
               return
             } else {
               // Status is 'Wait' or null
-              setError('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
+              setPopupMessage('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
+              setError('')
               setIsLoading(false)
               return
             }
@@ -428,6 +431,35 @@ export default function Login() {
             </div>
           )}
 
+          {/* Popup for account status messages (refused / pending) */}
+          {popupMessage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog">
+              <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8 border-2 border-primary-blue/20">
+                <button
+                  type="button"
+                  onClick={() => setPopupMessage(null)}
+                  className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+                <div className="flex items-start gap-3 pr-8">
+                  <AlertCircle className="flex-shrink-0 w-8 h-8 text-primary-blue mt-0.5" />
+                  <p className="text-sm md:text-base text-gray-700 leading-relaxed">{popupMessage}</p>
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setPopupMessage(null)}
+                    className="py-2.5 px-5 text-sm font-semibold text-white bg-primary-blue rounded-xl hover:bg-primary-blue/90 transition-colors"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="mb-6 md:mb-8">
             <div className="mb-4 md:mb-6">
               <label htmlFor="email" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
@@ -531,7 +563,7 @@ export default function Login() {
                 </>
               ) : (
                 <>
-                  <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
+                  <span>{isSignUp ? 'Next' : 'Sign In'}</span>
                   <ArrowRight size={18} className="md:w-5 md:h-5" />
                 </>
               )}
@@ -553,6 +585,7 @@ export default function Login() {
                       e.preventDefault()
                       setIsSignUp(false)
                       setError('')
+                      setPopupMessage(null)
                       setPassword('')
                       setConfirmPassword('')
                     }}
@@ -570,6 +603,7 @@ export default function Login() {
                       e.preventDefault()
                       setIsSignUp(true)
                       setError('')
+                      setPopupMessage(null)
                       setPassword('')
                       setConfirmPassword('')
                     }}
