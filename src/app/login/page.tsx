@@ -269,7 +269,7 @@ export default function Login() {
           }}
         />
         <div className="relative z-10 flex items-center justify-center w-full">
-          <span className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-white drop-shadow-sm">
+          <span className="text-base sm:text-lg md:text-x1 font-bold tracking-tight text-white drop-shadow-sm">
             Welcome to Zambeel
           </span>
         </div>

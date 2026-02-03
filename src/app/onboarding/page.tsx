@@ -852,6 +852,7 @@ export default function SupplierOnboarding() {
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="country" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       Country <span className="text-red-500 ml-0.5">*</span>
+                      <span className="text-gray-500 font-normal ml-1.5">Where do you live?</span>
                     </label>
                     <div className="relative flex items-center">
                       <div className="absolute right-10 md:right-11 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
@@ -875,7 +876,6 @@ export default function SupplierOnboarding() {
                     {errors.country && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.country}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">Where do you live?</p>
                   </div>
 
                   {/* ID Number - Formatted for 7 countries, plain for others */}
@@ -902,15 +902,15 @@ export default function SupplierOnboarding() {
                     {errors.cnic && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.cnic}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">
-                      {formData.country && isSupportedCountry(formData.country) && getIdNumberHint(formData.country) ? getIdNumberHint(formData.country) : 'Your government-issued ID number'}
-                    </p>
                   </div>
 
                   {/* Phone Number - Formatted for 7 countries, plain for others */}
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="phoneNumber" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       Phone Number <span className="text-red-500 ml-0.5">*</span>
+                      <span className="text-gray-500 font-normal ml-1.5">
+                        {formData.country && isSupportedCountry(formData.country) ? getPhoneHint(formData.country) : 'Include country code'}
+                      </span>
                     </label>
                     <div className="relative flex items-start">
                       <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -931,9 +931,6 @@ export default function SupplierOnboarding() {
                     {errors.phoneNumber && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.phoneNumber}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">
-                      {formData.country && isSupportedCountry(formData.country) ? getPhoneHint(formData.country) : 'Include country code'}
-                    </p>
                   </div>
 
                   {/* WhatsApp Phone Number - Formatted for 7 countries, plain for others */}
@@ -1051,9 +1048,9 @@ export default function SupplierOnboarding() {
                       <span className="flex items-center gap-2">
                         <Tag size={18} className="text-gray-500" />
                         Category <span className="text-red-500 ml-0.5">*</span>
+                        <span className="text-gray-500 font-normal ml-1.5">Select all categories that apply to your business</span>
                       </span>
                     </label>
-                    <p className="text-[13px] text-gray-500 mb-3">Select all categories that apply to your business</p>
                     <div
                       className={`max-h-48 overflow-y-auto border-2 rounded-xl p-4 bg-white ${
                         errors.category ? 'border-red-500' : 'border-gray-200'
@@ -1171,6 +1168,7 @@ export default function SupplierOnboarding() {
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="pickupAddress" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       Pickup Address <span className="text-red-500 ml-0.5">*</span>
+                      <span className="text-gray-500 font-normal ml-1.5">Full business address for product pickup</span>
                     </label>
                     <div className="relative flex items-start">
                       <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1191,7 +1189,6 @@ export default function SupplierOnboarding() {
                     {errors.pickupAddress && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.pickupAddress}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">Full business address for product pickup</p>
                   </div>
 
                   {/* Pickup City */}
@@ -1256,6 +1253,7 @@ export default function SupplierOnboarding() {
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="returnAddress" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       Return Address <span className="text-red-500 ml-0.5">*</span>
+                      <span className="text-gray-500 font-normal ml-1.5">Address for product returns</span>
                     </label>
                     <div className="relative flex items-start">
                       <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1279,7 +1277,6 @@ export default function SupplierOnboarding() {
                     {errors.returnAddress && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.returnAddress}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">Address for product returns</p>
                     {/* Checkbox for "Same as pickup address" */}
                     <div className="mt-3 flex items-center">
                       <input
@@ -1372,6 +1369,7 @@ export default function SupplierOnboarding() {
                   <div className="mb-4 md:mb-6">
                     <label htmlFor="paymentMethod" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                       Payment Method <span className="text-red-500 ml-0.5">*</span>
+                      <span className="text-gray-500 font-normal ml-1.5">Choose how you want to receive payments</span>
                     </label>
                     <div className="relative flex items-center">
                       <div className="absolute right-10 md:right-11 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
@@ -1395,7 +1393,6 @@ export default function SupplierOnboarding() {
                     {errors.paymentMethod && (
                       <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.paymentMethod}</span>
                     )}
-                    <p className="text-[13px] text-gray-500 mt-1.5">Choose how you want to receive payments</p>
                   </div>
 
                   {/* Bank Account Fields - Show when Bank Account is selected */}
@@ -1405,6 +1402,7 @@ export default function SupplierOnboarding() {
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="bankCountry" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           Bank Country <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Select the country where your bank account is located</span>
                         </label>
                         <div className="relative flex items-center">
                           <div className="absolute right-10 md:right-11 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
@@ -1428,12 +1426,12 @@ export default function SupplierOnboarding() {
                         {errors.bankCountry && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.bankCountry}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Select the country where your bank account is located</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="bankTitle" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           Bank Account Title <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Name on the bank account</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1454,7 +1452,6 @@ export default function SupplierOnboarding() {
                         {errors.bankTitle && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.bankTitle}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Name on the bank account</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
@@ -1542,9 +1539,6 @@ export default function SupplierOnboarding() {
                         {errors.iban && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.iban}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">
-                          {formData.bankCountry && isSupportedCountry(formData.bankCountry) ? getIbanHint(formData.bankCountry) : 'International Bank Account Number or local account number'}
-                        </p>
                       </div>
                     </>
                   )}
@@ -1555,6 +1549,7 @@ export default function SupplierOnboarding() {
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="paypalEmail" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           PayPal Email <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Enter your PayPal account email address</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1575,12 +1570,12 @@ export default function SupplierOnboarding() {
                         {errors.paypalEmail && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.paypalEmail}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Enter your PayPal account email address</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="paypalAccountName" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           PayPal Account Name <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Name registered on your PayPal account</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1601,7 +1596,6 @@ export default function SupplierOnboarding() {
                         {errors.paypalAccountName && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.paypalAccountName}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Name registered on your PayPal account</p>
                       </div>
                     </>
                   )}
@@ -1612,6 +1606,7 @@ export default function SupplierOnboarding() {
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="exchangeName" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           Exchange Name <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Select the crypto exchange you use</span>
                         </label>
                         <div className="relative flex items-center">
                           <div className="absolute right-10 md:right-11 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
@@ -1635,12 +1630,12 @@ export default function SupplierOnboarding() {
                         {errors.exchangeName && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.exchangeName}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Select the crypto exchange you use</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="exchangeAccountName" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           Account Name on Exchange <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Your registered name on the exchange</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1661,12 +1656,12 @@ export default function SupplierOnboarding() {
                         {errors.exchangeAccountName && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.exchangeAccountName}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Your registered name on the exchange</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="exchangeId" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           Exchange ID <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Your exchange user ID or wallet address</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1687,7 +1682,6 @@ export default function SupplierOnboarding() {
                         {errors.exchangeId && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.exchangeId}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Your exchange user ID or wallet address</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
@@ -1716,12 +1710,12 @@ export default function SupplierOnboarding() {
                         {errors.exchangeCountry && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.exchangeCountry}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Country where your exchange account is registered</p>
                       </div>
 
                       <div className="mb-4 md:mb-6">
                         <label htmlFor="binanceWallet" className="block text-xs md:text-sm font-semibold text-gray-900 mb-2">
                           Wallet Address <span className="text-red-500 ml-0.5">*</span>
+                          <span className="text-gray-500 font-normal ml-1.5">Your crypto wallet address for receiving payments</span>
                         </label>
                         <div className="relative flex items-start">
                           <div className="absolute left-3 md:left-4 top-3 md:top-3.5 text-gray-400 pointer-events-none z-10">
@@ -1742,7 +1736,6 @@ export default function SupplierOnboarding() {
                         {errors.binanceWallet && (
                           <span className="block text-xs md:text-[13px] text-red-500 mt-1.5 font-medium">{errors.binanceWallet}</span>
                         )}
-                        <p className="text-[13px] text-gray-500 mt-1.5">Your crypto wallet address for receiving payments</p>
                       </div>
                     </>
                   )}
