@@ -653,19 +653,19 @@ export default function SupplierOnboarding() {
                 <li className="flex items-start gap-3">
                   <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
                   <span className="text-gray-700 text-base">
-                    You will be added to dedicated WhatsApp Groups & Get Training Materials (1-2 working days)
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
-                  <span className="text-gray-700 text-base">
                     Account Approval
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
                   <span className="text-gray-700 text-base">
-                    Begin Listing Your Products
+                  List your products
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#4A9FF5] font-bold text-xl mt-0.5">•</span>
+                  <span className="text-gray-700 text-base">
+                  Get Orders to Fulfill
                   </span>
                 </li>
               </ul>
@@ -753,7 +753,7 @@ export default function SupplierOnboarding() {
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="text-xs lg:text-sm text-gray-600 font-medium text-center">Step {currentStep} of 4</p>
+              <p className="text-xs lg:text-sm text-gray-600 font-medium text-center">Step {currentStep} of 3</p>
             </div>
           </div>
 
@@ -796,7 +796,7 @@ export default function SupplierOnboarding() {
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="text-xs text-gray-600 font-medium text-center">Step {currentStep} of 4</p>
+              <p className="text-xs text-gray-600 font-medium text-center">Step {currentStep} of 3</p>
             </div>
           </div>
 

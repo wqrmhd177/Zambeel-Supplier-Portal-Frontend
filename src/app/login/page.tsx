@@ -268,47 +268,10 @@ export default function Login() {
             boxShadow: '0 0 16px rgba(34, 211, 238, 0.6)',
           }}
         />
-        <div className="relative z-10 flex items-center gap-2">
-          <div
-            className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{
-              background: 'linear-gradient(145deg, rgba(255,255,255,0.25), rgba(255,255,255,0.08))',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.2)',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}
-          >
-            <Package size={20} className="sm:w-6 sm:h-6" strokeWidth={2} />
-          </div>
-          <span className="text-base sm:text-lg font-bold tracking-tight hidden sm:inline drop-shadow-sm">Zambeel Supplier Portal</span>
-        </div>
-        <div className="relative z-10 flex items-center gap-2.5 sm:gap-4">
-          {countryFlags.map(({ code, initials, name }) => (
-            <div
-              key={code}
-              className="flex flex-col items-center gap-0.5 hover:scale-105 transition-transform cursor-default group"
-            >
-              <span className="text-[10px] sm:text-xs font-bold text-white/95 tracking-wide uppercase leading-none drop-shadow-sm group-hover:text-white">
-                {initials}
-              </span>
-              <div
-                className="rounded-sm overflow-hidden flex-shrink-0 p-0.5"
-                style={{
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.3)',
-                  background: 'linear-gradient(145deg, rgba(255,255,255,0.15), rgba(0,0,0,0.1))',
-                }}
-              >
-                <img
-                  src={`https://flagcdn.com/w40/${code}.png`}
-                  srcSet={`https://flagcdn.com/w80/${code}.png 2x`}
-                  alt={name}
-                  width={36}
-                  height={27}
-                  className="h-6 w-9 sm:h-8 sm:w-12 object-cover block rounded-sm"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-          ))}
+        <div className="relative z-10 flex items-center justify-center w-full">
+          <span className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-white drop-shadow-sm">
+            Welcome to Zambeel
+          </span>
         </div>
       </header>
 
@@ -349,63 +312,37 @@ export default function Login() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8 md:mb-10 lg:mb-14">
-            {[
-              {
-                icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-primary-blue"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96" fill="none" stroke="currentColor" strokeWidth="2"/><line x1="12" y1="22.08" x2="12" y2="12" fill="none" stroke="currentColor" strokeWidth="2"/></svg>,
-                title: 'Easy Product Listing',
-                desc: 'Upload and manage your products with our intuitive interface'
-              },
-              {
-                icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-primary-blue"><path d="M3 3v18h18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M18 9l-5 6-4-4-3 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 15h4l2-3 3 2 5-4v4" fill="none" stroke="currentColor" strokeWidth="2"/></svg>,
-                title: 'Real-Time Analytics',
-                desc: 'Track your product performance and sales metrics instantly'
-              },
-              {
-                icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" className="text-primary-blue"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2z"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" strokeWidth="2"/><path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" strokeWidth="2"/></svg>,
-                title: 'GCC Market Access',
-                desc: 'Connect with customers across the entire Gulf region'
-              },
-              {
-                icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-primary-blue"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-                title: 'Secure & Reliable',
-                desc: 'Enterprise-grade security for your business data'
-              }
-            ].map((feature, idx) => (
-              <div key={idx} className="flex gap-3 md:gap-4 items-start">
-                <div className="w-10 h-10 md:w-11 md:h-11 min-w-[40px] md:min-w-[44px] bg-primary-blue/10 rounded-lg flex items-center justify-center text-primary-blue">
-                  {feature.icon}
+          {/* Country flags - moved from top bar */}
+          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mb-8 md:mb-10 lg:mb-14">
+            {countryFlags.map(({ code, initials, name }) => (
+              <div
+                key={code}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/80 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-default group"
+              >
+                <span className="text-xs font-bold text-gray-700 tracking-wide uppercase group-hover:text-primary-blue transition-colors">
+                  {initials}
+                </span>
+                <div className="rounded-md overflow-hidden border border-gray-200">
+                  <img
+                    src={`https://flagcdn.com/w40/${code}.png`}
+                    srcSet={`https://flagcdn.com/w80/${code}.png 2x`}
+                    alt={name}
+                    width={40}
+                    height={30}
+                    className="h-7 w-10 sm:h-9 sm:w-14 object-cover block"
+                    loading="lazy"
+                  />
                 </div>
-                <div>
-                  <h4 className="text-sm md:text-base font-semibold text-gray-900 mb-1">{feature.title}</h4>
-                  <p className="text-xs md:text-sm text-gray-600 leading-relaxed">{feature.desc}</p>
-                </div>
+                <span className="text-[10px] sm:text-xs text-gray-500 font-medium">{name}</span>
               </div>
             ))}
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center justify-between p-6 md:p-8 bg-gray-50 rounded-2xl border border-gray-200 gap-4 md:gap-0">
-            <div className="text-center flex-1">
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1 md:mb-2 tracking-tight">10,000+</div>
-              <div className="text-xs md:text-sm text-gray-600 font-medium">Active Suppliers</div>
-            </div>
-            <div className="hidden md:block w-px h-10 bg-gray-200" />
-            <div className="text-center flex-1">
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1 md:mb-2 tracking-tight">50K+</div>
-              <div className="text-xs md:text-sm text-gray-600 font-medium">Products Listed</div>
-            </div>
-            <div className="hidden md:block w-px h-10 bg-gray-200" />
-            <div className="text-center flex-1">
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1 md:mb-2 tracking-tight">10M+</div>
-              <div className="text-xs md:text-sm text-gray-600 font-medium">Number of Orders</div>
-            </div>
           </div>
         </div>
       </div>
 
       {/* Right Panel - Login Form */}
       <div className="flex-1 bg-gray-50 flex items-center justify-center p-6 sm:p-8 md:p-10 lg:p-16">
-        <div className="w-full max-w-[480px] animate-slide-in-right">
+        <div className="w-full max-w-[480px] mr-8 lg:mr-16 animate-slide-in-right">
           {/* Form card with blue border on all sides */}
           <div className="relative flex flex-col bg-white rounded-2xl shadow-xl border-4 border-primary-blue p-6 sm:p-8 md:p-10">
           <div className="text-center mb-8 md:mb-10">
