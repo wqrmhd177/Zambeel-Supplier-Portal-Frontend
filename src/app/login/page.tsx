@@ -269,9 +269,13 @@ export default function Login() {
           }}
         />
         <div className="relative z-10 flex items-center justify-center w-full">
-          <span className="text-base sm:text-lg md:text-x1 font-bold tracking-tight text-white drop-shadow-sm">
-            Welcome to Zambeel
-          </span>
+          <div className="relative inline-block h-10 sm:h-12 md:h-14 lg:h-16 flex items-center">
+            <img
+              src="/Zambeel LOGO Yellow dots.png"
+              alt="Zambeel"
+              className="h-full w-auto object-contain object-center drop-shadow-sm"
+            />
+          </div>
         </div>
       </header>
 
@@ -291,10 +295,10 @@ export default function Login() {
       <div className="hidden md:flex md:flex-1 bg-gradient-to-br from-purple-50/50 via-white to-primary-blue/5 p-6 md:p-10 lg:p-16 flex-col justify-center relative border-r border-gray-200">
         <div className="relative z-10 max-w-[600px] animate-slide-in-left">
           <div className="flex items-center gap-3 mb-8 md:mb-12 lg:mb-16">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-primary-blue/10 rounded-xl flex items-center justify-center text-primary-blue">
-              <Package size={28} className="md:w-8 md:h-8" strokeWidth={2} />
+            <div className="h-10 w-auto md:h-12 flex items-center shrink-0">
+              <img src="/zambeel-logo.png" alt="Zambeel" className="h-full w-auto object-contain" />
             </div>
-            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">Zambeel Supplier Portal</h1>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">Welcome to Supplier Portal</h1>
           </div>
           
           <div className="mb-8 md:mb-10 lg:mb-14">
@@ -497,7 +501,7 @@ export default function Login() {
               {isLoading ? (
                 <>
                   <span className="w-4 h-4 md:w-5 md:h-5 border-2 md:border-[3px] border-white/30 border-t-white rounded-full animate-spin"></span>
-                  <span>{isSignUp ? 'Creating account...' : 'Signing in...'}</span>
+                  <span>{isSignUp ? 'Next' : 'Signing in...'}</span>
                 </>
               ) : (
                 <>
