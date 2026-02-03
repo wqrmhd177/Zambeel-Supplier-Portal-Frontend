@@ -113,6 +113,7 @@ export default function Login() {
               email: email,
               password: password, // Note: In production, hash passwords before storing
               created_at: new Date().toISOString(),
+              account_approval: 'Wait',
             }
           ])
           .select()
