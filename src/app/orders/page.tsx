@@ -263,25 +263,25 @@ export default function OrdersPage() {
     if (statusLower.includes('delivered')) {
       return {
         icon: CheckCircle,
-        className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
+        className: 'bg-green-100 text-green-800 border-green-200',
         label: status
       }
     } else if (statusLower.includes('return')) {
       return {
         icon: XCircle,
-        className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+        className: 'bg-red-100 text-red-800 border-red-200',
         label: status
       }
     } else if (statusLower.includes('shipped') || statusLower.includes('dispatch')) {
       return {
         icon: Truck,
-        className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+        className: 'bg-blue-100 text-blue-800 border-blue-200',
         label: status
       }
     } else {
       return {
         icon: Clock,
-        className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
+        className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         label: status
       }
     }
@@ -388,12 +388,12 @@ export default function OrdersPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading orders...</p>
+            <p className="mt-4 text-gray-600">Loading orders...</p>
           </div>
         </div>
       </div>
@@ -405,7 +405,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-dark-bg transition-colors">
+    <div className="flex h-screen bg-gray-100 transition-colors">
       <Sidebar />
       
       <div className="flex-1 overflow-auto">
@@ -415,14 +415,14 @@ export default function OrdersPage() {
           {/* Header Section */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Orders</h2>
-              <p className="text-gray-600 dark:text-gray-400">View and manage your orders</p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Orders</h2>
+              <p className="text-gray-600">View and manage your orders</p>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={exportToCSV}
                 disabled={orders.length === 0}
-                className="px-6 py-3 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-gray-700 rounded-lg font-medium hover:border-blue-500 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all text-gray-700 dark:text-gray-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="w-5 h-5" />
                 Export CSV
@@ -439,11 +439,11 @@ export default function OrdersPage() {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 hover:border-gray-400 dark:hover:border-gray-700 transition-all">
+            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Total Orders</p>
-                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total}</h3>
+                  <p className="text-gray-600 text-sm mb-1">Total Orders</p>
+                  <h3 className="text-3xl font-bold text-gray-900">{stats.total}</h3>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
                   <ShoppingCart className="w-6 h-6 text-white" />
@@ -451,11 +451,11 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 hover:border-gray-400 dark:hover:border-gray-700 transition-all">
+            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Delivered</p>
-                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.delivered}</h3>
+                  <p className="text-gray-600 text-sm mb-1">Delivered</p>
+                  <h3 className="text-3xl font-bold text-gray-900">{stats.delivered}</h3>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center">
                   <CheckCircle className="w-6 h-6 text-white" />
@@ -463,11 +463,11 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 hover:border-gray-400 dark:hover:border-gray-700 transition-all">
+            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Pending</p>
-                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pending}</h3>
+                  <p className="text-gray-600 text-sm mb-1">Pending</p>
+                  <h3 className="text-3xl font-bold text-gray-900">{stats.pending}</h3>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
                   <Clock className="w-6 h-6 text-white" />
@@ -475,11 +475,11 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 hover:border-gray-400 dark:hover:border-gray-700 transition-all">
+            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Returned</p>
-                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.returned}</h3>
+                  <p className="text-gray-600 text-sm mb-1">Returned</p>
+                  <h3 className="text-3xl font-bold text-gray-900">{stats.returned}</h3>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center">
                   <XCircle className="w-6 h-6 text-white" />
@@ -487,11 +487,11 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 hover:border-gray-400 dark:hover:border-gray-700 transition-all">
+            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Total Revenue</p>
-                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white">PKR {stats.totalRevenue.toLocaleString()}</h3>
+                  <p className="text-gray-600 text-sm mb-1">Total Revenue</p>
+                  <h3 className="text-3xl font-bold text-gray-900">PKR {stats.totalRevenue.toLocaleString()}</h3>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                   <DollarSign className="w-6 h-6 text-white" />
@@ -501,7 +501,7 @@ export default function OrdersPage() {
           </div>
 
           {/* Search and Filter Bar */}
-          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 mb-6">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 mb-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
@@ -510,7 +510,7 @@ export default function OrdersPage() {
                   placeholder="Search by order ID, SKU, title, phone, or country..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
                 />
               </div>
               {(userRole === 'purchaser' || userRole === 'admin') && suppliers.length > 0 && (
@@ -519,7 +519,7 @@ export default function OrdersPage() {
                   <select
                     value={filterSupplier}
                     onChange={(e) => setFilterSupplier(e.target.value)}
-                    className="pl-12 pr-10 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none appearance-none cursor-pointer"
+                    className="pl-12 pr-10 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none appearance-none cursor-pointer"
                   >
                     <option value="all">All Suppliers</option>
                     {suppliers.map(supplier => (
@@ -535,7 +535,7 @@ export default function OrdersPage() {
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="pl-12 pr-10 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none appearance-none cursor-pointer"
+                  className="pl-12 pr-10 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none appearance-none cursor-pointer"
                 >
                   <option value="all">All Status</option>
                   <option value="delivered">Delivered</option>
@@ -549,16 +549,16 @@ export default function OrdersPage() {
           </div>
 
           {/* Orders Table */}
-          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl overflow-hidden">
+          <div className="bg-white border border-gray-300 rounded-2xl overflow-hidden">
             {orders.length === 0 ? (
               <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-dark-hover rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <ShoppingCart className="w-8 h-8 text-gray-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   {allOrders.length === 0 ? 'No orders yet' : 'No orders found'}
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">
+                <p className="text-gray-600 mb-6">
                   {allOrders.length === 0 
                     ? 'Orders will appear here once they are synced from Metabase' 
                     : 'Try adjusting your search or filter criteria'}
@@ -576,41 +576,41 @@ export default function OrdersPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-dark-hover border-b border-gray-200 dark:border-gray-700">
+                  <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Order ID</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Order ID</th>
                       {(userRole === 'purchaser' || userRole === 'admin') && (
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Supplier</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Supplier</th>
                       )}
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Product</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">SKU</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Customer</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Selling Price</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Product</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">SKU</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Selling Price</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="divide-y divide-gray-200">
                     {orders.map((order) => {
                       const statusBadge = getStatusBadge(order.status)
                       const StatusIcon = statusBadge.icon
                       const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') ? supplierMap.get(order.vendor_id) : null
 
                       return (
-                        <tr key={`${order.order_id}-${order.sku}`} className="hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+                        <tr key={`${order.order_id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            <div className="text-sm font-medium text-gray-900">
                               #{order.order_id}
                             </div>
                           </td>
                           {(userRole === 'purchaser' || userRole === 'admin') && (
                             <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900 dark:text-white">
+                              <div className="text-sm text-gray-900">
                                 {supplierInfo ? (
                                   <div>
                                     <div className="font-medium">{supplierInfo.store_name || supplierInfo.owner_name || 'Unnamed'}</div>
                                     {supplierInfo.store_name && supplierInfo.owner_name && (
-                                      <div className="text-xs text-gray-500 dark:text-gray-400">{supplierInfo.owner_name}</div>
+                                      <div className="text-xs text-gray-500">{supplierInfo.owner_name}</div>
                                     )}
                                   </div>
                                 ) : (
@@ -620,35 +620,35 @@ export default function OrdersPage() {
                             </td>
                           )}
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
+                            <div className="flex items-center gap-2 text-sm text-gray-900">
                               <Calendar className="w-4 h-4 text-gray-400" />
                               {formatDate(order.order_date)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-white">
+                            <div className="text-sm text-gray-900">
                               {order.title || 'N/A'}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm font-mono text-gray-900 dark:text-white">
+                            <div className="text-sm font-mono text-gray-900">
                               {order.sku}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-white">
+                            <div className="text-sm text-gray-900">
                               <div className="flex items-center gap-2 mb-1">
                                 <Phone className="w-4 h-4 text-gray-400" />
                                 {order.phone}
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
                                 <MapPin className="w-3 h-3" />
                                 {order.country}
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                            <div className="text-sm font-semibold text-gray-900">
                               {order.supplier_price !== undefined && order.supplier_price !== null
                                 ? `PKR ${Number(order.supplier_price).toLocaleString()}`
                                 : 'N/A'}

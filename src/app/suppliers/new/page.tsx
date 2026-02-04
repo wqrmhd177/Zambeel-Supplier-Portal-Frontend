@@ -246,7 +246,7 @@ export default function CreateSupplierPage() {
 
   if (authLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-primary-blue" />
@@ -256,7 +256,7 @@ export default function CreateSupplierPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-dark-bg">
+    <div className="flex min-h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
@@ -266,41 +266,41 @@ export default function CreateSupplierPage() {
             <div className="mb-8">
               <button
                 onClick={() => router.push('/suppliers')}
-                className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4 transition-colors"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span>Back to Suppliers</span>
               </button>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Create New Supplier</h1>
-              <p className="text-gray-600 dark:text-gray-400">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Supplier</h1>
+              <p className="text-gray-600">
                 Add a new supplier account to manage their products
               </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8">
+            <form onSubmit={handleSubmit} className="bg-white border border-gray-300 rounded-2xl p-8">
               {error && (
-                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl">
-                  <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+                <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                  <p className="text-sm text-red-600 font-medium">{error}</p>
                 </div>
               )}
 
               {success && (
-                <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl">
-                  <p className="text-sm text-green-600 dark:text-green-400 font-medium">{success}</p>
+                <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                  <p className="text-sm text-green-600 font-medium">{success}</p>
                 </div>
               )}
 
               <div className="space-y-6">
                 {/* Account Information */}
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <User className="w-5 h-5" />
                     Account Information
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Email <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -310,10 +310,10 @@ export default function CreateSupplierPage() {
                           name="email"
                           value={formData.email}
                           onChange={handleChange}
-                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                             errors.email
                               ? 'border-red-500 focus:border-red-500'
-                              : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              : 'border-gray-200 focus:border-primary-blue'
                           }`}
                           placeholder="supplier@example.com"
                         />
@@ -324,7 +324,7 @@ export default function CreateSupplierPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Password <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -334,10 +334,10 @@ export default function CreateSupplierPage() {
                           name="password"
                           value={formData.password}
                           onChange={handleChange}
-                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                             errors.password
                               ? 'border-red-500 focus:border-red-500'
-                              : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              : 'border-gray-200 focus:border-primary-blue'
                           }`}
                           placeholder="Minimum 6 characters"
                         />
@@ -351,13 +351,13 @@ export default function CreateSupplierPage() {
 
                 {/* Business Information */}
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <Store className="w-5 h-5" />
                     Business Information
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Owner Name <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -365,10 +365,10 @@ export default function CreateSupplierPage() {
                         name="ownerName"
                         value={formData.ownerName}
                         onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                           errors.ownerName
                             ? 'border-red-500 focus:border-red-500'
-                            : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                            : 'border-gray-200 focus:border-primary-blue'
                         }`}
                         placeholder="John Doe"
                       />
@@ -378,7 +378,7 @@ export default function CreateSupplierPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Store Name <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -386,10 +386,10 @@ export default function CreateSupplierPage() {
                         name="storeName"
                         value={formData.storeName}
                         onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                           errors.storeName
                             ? 'border-red-500 focus:border-red-500'
-                            : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                            : 'border-gray-200 focus:border-primary-blue'
                         }`}
                         placeholder="ABC Store"
                       />
@@ -399,7 +399,7 @@ export default function CreateSupplierPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         CNIC <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -407,10 +407,10 @@ export default function CreateSupplierPage() {
                         name="cnic"
                         value={formData.cnic}
                         onChange={handleCNICChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                           errors.cnic
                             ? 'border-red-500 focus:border-red-500'
-                            : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                            : 'border-gray-200 focus:border-primary-blue'
                         }`}
                         placeholder="12345-1234567-1"
                         maxLength={15}
@@ -421,7 +421,7 @@ export default function CreateSupplierPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -431,10 +431,10 @@ export default function CreateSupplierPage() {
                           name="phoneNumber"
                           value={formData.phoneNumber}
                           onChange={handlePhoneChange}
-                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                             errors.phoneNumber
                               ? 'border-red-500 focus:border-red-500'
-                              : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              : 'border-gray-200 focus:border-primary-blue'
                           }`}
                           placeholder="+92-300-1234567"
                         />
@@ -445,7 +445,7 @@ export default function CreateSupplierPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pickup Address <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -455,10 +455,10 @@ export default function CreateSupplierPage() {
                           value={formData.pickupAddress}
                           onChange={handleChange}
                           rows={3}
-                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                             errors.pickupAddress
                               ? 'border-red-500 focus:border-red-500'
-                              : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              : 'border-gray-200 focus:border-primary-blue'
                           }`}
                           placeholder="Street address, area"
                         />
@@ -469,7 +469,7 @@ export default function CreateSupplierPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         City <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -477,10 +477,10 @@ export default function CreateSupplierPage() {
                         name="city"
                         value={formData.city}
                         onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                           errors.city
                             ? 'border-red-500 focus:border-red-500'
-                            : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                            : 'border-gray-200 focus:border-primary-blue'
                         }`}
                         placeholder="Karachi"
                       />
@@ -493,13 +493,13 @@ export default function CreateSupplierPage() {
 
                 {/* Banking Information (Optional) */}
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <CreditCard className="w-5 h-5" />
                     Banking Information (Optional)
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Bank Name
                       </label>
                       <div className="relative">
@@ -509,14 +509,14 @@ export default function CreateSupplierPage() {
                           name="bankName"
                           value={formData.bankName}
                           onChange={handleChange}
-                          className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none focus:border-primary-blue"
+                          className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:border-primary-blue"
                           placeholder="Bank Name"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         IBAN
                       </label>
                       <div className="relative">
@@ -526,10 +526,10 @@ export default function CreateSupplierPage() {
                           name="iban"
                           value={formData.iban}
                           onChange={handleChange}
-                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
+                          className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${
                             errors.iban
                               ? 'border-red-500 focus:border-red-500'
-                              : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              : 'border-gray-200 focus:border-primary-blue'
                           }`}
                           placeholder="PK00XXXX0000000000000000"
                         />
@@ -542,11 +542,11 @@ export default function CreateSupplierPage() {
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={() => router.push('/suppliers')}
-                    className="px-6 py-3 border-2 border-gray-300 dark:border-gray-700 rounded-xl font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+                    className="px-6 py-3 border-2 border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>

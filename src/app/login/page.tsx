@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { setSessionCookie } from '@/lib/authCookie'
 
 export default function Login() {
   const router = useRouter()
@@ -74,6 +75,7 @@ export default function Login() {
               localStorage.setItem('userEmail', email)
               localStorage.setItem('isLoggedIn', 'true')
               localStorage.setItem('userRole', restoredUser.role || 'supplier')
+              setSessionCookie()
               localStorage.removeItem('isOnboarded') // Clear onboarding flag
               localStorage.removeItem('supplierInfo') // Clear old supplier info
               
@@ -132,6 +134,7 @@ export default function Login() {
           localStorage.setItem('userEmail', email)
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', data.role || 'supplier')
+          setSessionCookie()
           
           // Check user role and redirect accordingly
           const userRole = data.role || 'supplier'
@@ -189,6 +192,7 @@ export default function Login() {
           localStorage.setItem('userEmail', email)
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', existingUser.role || 'supplier')
+          setSessionCookie()
           
           // Check user role and redirect accordingly
           const userRole = existingUser.role || 'supplier'

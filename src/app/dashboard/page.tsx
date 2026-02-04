@@ -29,10 +29,10 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Verifying authentication...</p>
+          <p className="mt-4 text-gray-600">Verifying authentication...</p>
         </div>
       </div>
     )
@@ -43,13 +43,13 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-dark-bg transition-colors">
+    <div className="flex h-screen bg-[#f5f3ff]">
       <Sidebar />
       
       <div className="flex-1 overflow-auto">
         <Header />
         
-        <main className="p-8">
+        <main className="p-8 bg-[#f5f3ff]">
           <StatsCards />
           <RevenueChart />
           <SupplierProfile />

@@ -32,7 +32,7 @@ export default function QuickActions() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Quick Actions</h2>
+      <h2 className="text-xl font-bold mb-6 theme-heading-gradient">Quick Actions</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {actions.map((action, index) => {
@@ -42,14 +42,14 @@ export default function QuickActions() {
             <button
               key={index}
               onClick={() => router.push(action.path)}
-              className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 hover:border-gray-400 dark:hover:border-gray-700 transition-all text-left group"
+              className="theme-card rounded-2xl p-6 transition-all text-left group hover:shadow-lg"
             >
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-md`}>
                 <Icon className="w-7 h-7 text-white" />
               </div>
               
-              <h3 className="text-lg font-bold mb-1 text-gray-900 dark:text-white">{action.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">{action.description}</p>
+              <h3 className="text-lg font-bold mb-1 theme-heading">{action.title}</h3>
+              <p className="theme-muted text-sm">{action.description}</p>
             </button>
           )
         })}

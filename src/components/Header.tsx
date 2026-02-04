@@ -1,13 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Moon, Sun } from 'lucide-react'
-import { useTheme } from '@/contexts/ThemeContext'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function Header() {
-  const { theme, toggleTheme } = useTheme()
   const router = useRouter()
   const [ownerName, setOwnerName] = useState('')
 
@@ -41,35 +38,33 @@ export default function Header() {
   const displayName = ownerName || 'there'
 
   return (
-    <header className="bg-light-card dark:bg-dark-card border-b border-gray-300 dark:border-gray-800 px-8 py-6 transition-colors">
+    <header
+      className="relative px-8 py-6"
+      style={{
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 20px rgba(0,0,0,0.25)',
+        borderBottom: '1px solid rgba(0,0,0,0.3)',
+      }}
+    >
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">{displayName}!</span> 👋
+          <h1 className="text-3xl font-bold text-white drop-shadow-sm">
+            Welcome back, <span className="text-white/95">{displayName}!</span> 👋
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Here&apos;s what&apos;s happening with your store today</p>
+          <p className="text-white/75 mt-1">Here&apos;s what&apos;s happening with your store today</p>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={toggleTheme}
-            className="p-2 rounded-lg bg-gray-200 dark:bg-dark-hover hover:bg-gray-300 dark:hover:bg-gray-700 transition-all"
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-5 h-5 text-yellow-400" />
-            ) : (
-              <Moon className="w-5 h-5 text-blue-600" />
-            )}
-          </button>
-          
-          <button 
-            onClick={handleViewProfile}
-            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white"
-          >
-            View Profile
-          </button>
-        </div>
+
+        <button
+          onClick={handleViewProfile}
+          className="px-6 py-2.5 rounded-lg font-medium transition-all text-white relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(90deg, #7c3aed 0%, #5b21b6 50%, #4f46e5 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 3px 10px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          View Profile
+        </button>
       </div>
     </header>
   )

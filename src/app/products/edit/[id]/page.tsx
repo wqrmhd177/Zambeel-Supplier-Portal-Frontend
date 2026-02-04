@@ -742,7 +742,7 @@ export default function EditProductPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-primary-blue" />
@@ -752,7 +752,7 @@ export default function EditProductPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-dark-bg">
+    <div className="flex min-h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
@@ -760,23 +760,23 @@ export default function EditProductPage() {
           <div className="max-w-4xl mx-auto">
             <button
               onClick={() => router.push('/products')}
-              className="mb-6 flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
               <span className="font-medium">Back to Products</span>
             </button>
 
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Edit Product</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">Edit Product</h1>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl">
-                <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+              <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                <p className="text-sm text-red-600 font-medium">{error}</p>
               </div>
             )}
 
             {success && (
-              <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl">
-                <p className="text-sm text-green-600 dark:text-green-400 font-medium">{success}</p>
+              <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                <p className="text-sm text-green-600 font-medium">{success}</p>
               </div>
             )}
 
@@ -787,10 +787,10 @@ export default function EditProductPage() {
               }} 
               className="space-y-6"
             >
-              <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8">
+              <div className="bg-white border border-gray-300 rounded-2xl p-8">
                 {/* Product Title */}
                 <div className="mb-6">
-                  <label htmlFor="title" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
                     Product Title <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -799,8 +799,8 @@ export default function EditProductPage() {
                     type="text"
                     value={formData.title}
                     onChange={handleChange}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.title ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                      errors.title ? 'border-red-500' : 'border-gray-200'
                     } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                     placeholder="e.g., Wireless Bluetooth Headphones"
                     required
@@ -813,7 +813,7 @@ export default function EditProductPage() {
 
                 {/* Product Images */}
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Product Pictures (Max 5) <span className="text-red-500">*</span>
                   </label>
                   <div className="flex flex-wrap gap-4">
@@ -822,7 +822,7 @@ export default function EditProductPage() {
                         <img
                           src={url}
                           alt={`Product ${index + 1}`}
-                          className="w-32 h-32 rounded-xl object-cover border-2 border-gray-200 dark:border-gray-700"
+                          className="w-32 h-32 rounded-xl object-cover border-2 border-gray-200"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none'
                           }}
@@ -841,7 +841,7 @@ export default function EditProductPage() {
                         <img
                           src={URL.createObjectURL(file)}
                           alt={`New ${index + 1}`}
-                          className="w-32 h-32 rounded-xl object-cover border-2 border-gray-200 dark:border-gray-700"
+                          className="w-32 h-32 rounded-xl object-cover border-2 border-gray-200"
                         />
                         <button
                           type="button"
@@ -853,9 +853,9 @@ export default function EditProductPage() {
                       </div>
                     ))}
                     {(formData.images.length + formData.existingImages.length) < 5 && (
-                      <label className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">
+                      <label className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Add Image</span>
+                        <span className="text-xs text-gray-600">Add Image</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -869,14 +869,14 @@ export default function EditProductPage() {
                   {errors.images && (
                     <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.images}</span>
                   )}
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  <p className="text-sm text-gray-500 mt-2">
                     {(formData.images.length + formData.existingImages.length)} / 5 images (maximum 5 images allowed)
                   </p>
                 </div>
 
                 {/* Brand Name */}
                 <div className="mb-6">
-                  <label htmlFor="brandName" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="brandName" className="block text-sm font-semibold text-gray-900 mb-2">
                     Brand Name <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                   </label>
                   <input
@@ -885,8 +885,8 @@ export default function EditProductPage() {
                     type="text"
                     value={formData.brandName}
                     onChange={handleChange}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.brandName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                      errors.brandName ? 'border-red-500' : 'border-gray-200'
                     } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                     placeholder="e.g., Nike, Samsung, Apple"
                   />
@@ -904,7 +904,7 @@ export default function EditProductPage() {
                       onChange={toggleVariants}
                       className="w-5 h-5 text-primary-blue border-gray-300 rounded focus:ring-primary-blue cursor-pointer"
                     />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    <span className="text-sm font-semibold text-gray-900">
                       This product has variants (Size, Color, ML, etc.)
                     </span>
                   </label>
@@ -916,7 +916,7 @@ export default function EditProductPage() {
                 {/* Bar Code (hidden if has variants) */}
                 {!formData.hasVariants && (
                   <div className="mb-6">
-                    <label htmlFor="bar_code" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    <label htmlFor="bar_code" className="block text-sm font-semibold text-gray-900 mb-2">
                       Bar Code
                     </label>
                     <input
@@ -925,8 +925,8 @@ export default function EditProductPage() {
                       type="text"
                       value={formData.bar_code}
                       onChange={handleChange}
-                      className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all font-mono ${
-                        errors.bar_code ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                      className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all font-mono ${
+                        errors.bar_code ? 'border-red-500' : 'border-gray-200'
                       } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                       placeholder="e.g., PROD-001"
                     />
@@ -939,7 +939,7 @@ export default function EditProductPage() {
                 {/* Selling Price (hidden if has variants) */}
                 {!formData.hasVariants && (
                   <div className="mb-6">
-                    <label htmlFor="sellingPrice" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    <label htmlFor="sellingPrice" className="block text-sm font-semibold text-gray-900 mb-2">
                       Product Selling Price (PKR) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -952,8 +952,8 @@ export default function EditProductPage() {
                         step="0.01"
                         value={formData.sellingPrice || ''}
                         onChange={handleChange}
-                        className={`w-full pl-16 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                          errors.sellingPrice ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                        className={`w-full pl-16 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                          errors.sellingPrice ? 'border-red-500' : 'border-gray-200'
                         } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                         placeholder="0.00"
                         required
@@ -968,7 +968,7 @@ export default function EditProductPage() {
                 {/* Stock Amount (hidden if has variants) */}
                 {!formData.hasVariants && (
                   <div className="mb-6">
-                    <label htmlFor="stockAmount" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    <label htmlFor="stockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
                       Stock Amount <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -978,8 +978,8 @@ export default function EditProductPage() {
                       min="0"
                       value={formData.stockAmount || ''}
                       onChange={handleChange}
-                      className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                        errors.stockAmount ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                      className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                        errors.stockAmount ? 'border-red-500' : 'border-gray-200'
                       } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                       placeholder="0"
                       required
@@ -992,9 +992,9 @@ export default function EditProductPage() {
 
                 {/* Variants Details */}
                 {formData.hasVariants && (
-                  <div className="mb-6 p-6 bg-gray-50 dark:bg-dark-hover rounded-xl border-2 border-gray-200 dark:border-gray-700">
+                  <div className="mb-6 p-6 bg-gray-50 rounded-xl border-2 border-gray-200">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Variants Details</h3>
+                      <h3 className="text-sm font-semibold text-gray-900">Variants Details</h3>
                       <button
                         type="button"
                         onClick={addVariant}
@@ -1006,17 +1006,17 @@ export default function EditProductPage() {
                     </div>
 
                     {formData.variants.length === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">No variants added yet. Click &quot;Add Variant&quot; to create one.</p>
+                      <p className="text-sm text-gray-500 mb-4">No variants added yet. Click &quot;Add Variant&quot; to create one.</p>
                     )}
 
                     {formData.variants.map((variant, index) => (
-                      <div key={variant.id} className="mb-4 p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div key={variant.id} className="mb-4 p-4 bg-white rounded-lg border border-gray-200">
                         <div className="flex items-center justify-between mb-4">
-                          <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Variant {index + 1}</h4>
+                          <h4 className="text-sm font-semibold text-gray-900">Variant {index + 1}</h4>
                           <button
                             type="button"
                             onClick={() => removeVariant(index)}
-                            className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1024,45 +1024,45 @@ export default function EditProductPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Size</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Size</label>
                             <input
                               type="text"
                               value={variant.size || ''}
                               onChange={(e) => updateVariant(index, 'size', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white text-sm focus:border-primary-blue focus:outline-none"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm focus:border-primary-blue focus:outline-none"
                               placeholder="e.g., Large"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Color</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Color</label>
                             <input
                               type="text"
                               value={variant.color || ''}
                               onChange={(e) => updateVariant(index, 'color', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white text-sm focus:border-primary-blue focus:outline-none"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm focus:border-primary-blue focus:outline-none"
                               placeholder="e.g., Red"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ML</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">ML</label>
                             <input
                               type="text"
                               value={variant.ml || ''}
                               onChange={(e) => updateVariant(index, 'ml', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white text-sm focus:border-primary-blue focus:outline-none"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 text-sm focus:border-primary-blue focus:outline-none"
                               placeholder="e.g., 500ml"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Price (PKR) <span className="text-red-500">*</span></label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Price (PKR) <span className="text-red-500">*</span></label>
                             <input
                               type="number"
                               min="0"
                               step="0.01"
                               value={variant.price || ''}
                               onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value) || 0)}
-                              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white text-sm focus:outline-none ${
-                                errors[`variant_${index}_price`] ? 'border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 text-sm focus:outline-none ${
+                                errors[`variant_${index}_price`] ? 'border-red-500' : 'border-gray-200 focus:border-primary-blue'
                               }`}
                               placeholder="0.00"
                               required
@@ -1072,14 +1072,14 @@ export default function EditProductPage() {
                             )}
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Stock <span className="text-red-500">*</span></label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Stock <span className="text-red-500">*</span></label>
                             <input
                               type="number"
                               min="0"
                               value={variant.stock || ''}
                               onChange={(e) => updateVariant(index, 'stock', parseInt(e.target.value) || 0)}
-                              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white text-sm focus:outline-none ${
-                                errors[`variant_${index}_stock`] ? 'border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 text-sm focus:outline-none ${
+                                errors[`variant_${index}_stock`] ? 'border-red-500' : 'border-gray-200 focus:border-primary-blue'
                               }`}
                               placeholder="0"
                               required
@@ -1089,13 +1089,13 @@ export default function EditProductPage() {
                             )}
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Bar Code</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Bar Code</label>
                             <input
                               type="text"
                               value={variant.sku || ''}
                               onChange={(e) => updateVariant(index, 'sku', e.target.value)}
-                              className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white text-sm font-mono focus:outline-none ${
-                                errors[`variant_${index}_sku`] ? 'border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                              className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 text-sm font-mono focus:outline-none ${
+                                errors[`variant_${index}_sku`] ? 'border-red-500' : 'border-gray-200 focus:border-primary-blue'
                               }`}
                               placeholder="e.g., PROD-001-RED-L"
                             />
@@ -1114,7 +1114,7 @@ export default function EditProductPage() {
                 )}
 
                 {/* Submit Button */}
-                <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -1122,7 +1122,7 @@ export default function EditProductPage() {
                       e.stopPropagation()
                       router.push('/products')
                     }}
-                    className="px-6 py-3 border-2 border-gray-300 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+                    className="px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>

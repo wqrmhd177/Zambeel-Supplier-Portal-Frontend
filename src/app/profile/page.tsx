@@ -292,12 +292,12 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading profile...</p>
+            <p className="mt-4 text-gray-600">Loading profile...</p>
           </div>
         </div>
       </div>
@@ -305,25 +305,31 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-dark-bg transition-colors">
+    <div className="flex h-screen bg-[#f5f3ff]">
       <Sidebar />
       
       <div className="flex-1 overflow-auto">
         {/* Header */}
-        <header className="bg-white dark:bg-dark-card border-b border-gray-300 dark:border-gray-800 px-8 py-6">
+        <header
+          className="px-8 py-6 border-b border-white/10"
+          style={{
+            background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-all"
+                className="p-2 rounded-lg hover:bg-white/10 transition-all text-white/90"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-3xl font-bold text-white">
                   My Profile
                 </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">Manage your supplier information</p>
+                <p className="text-white/75 mt-1">Manage your supplier information</p>
               </div>
             </div>
             
@@ -344,7 +350,7 @@ export default function ProfilePage() {
                     // Reload data to discard changes
                     window.location.reload()
                   }}
-                  className="px-6 py-2.5 border-2 border-gray-300 dark:border-gray-700 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-dark-hover transition-all text-gray-700 dark:text-gray-300"
+                  className="px-6 py-2.5 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-all text-gray-700"
                 >
                   Cancel
                 </button>
@@ -370,26 +376,26 @@ export default function ProfilePage() {
           </div>
         </header>
 
-        <main className="p-8">
+        <main className="p-8 bg-[#f5f3ff]">
           {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl">
-              <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+              <p className="text-sm text-red-600 font-medium">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl">
-              <p className="text-sm text-green-600 dark:text-green-400 font-medium">{success}</p>
+            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+              <p className="text-sm text-green-600 font-medium">{success}</p>
             </div>
           )}
 
           {/* Photos */}
-          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Profile Photos</h3>
+          <div className="theme-card rounded-2xl p-8 shadow-sm mb-6">
+            <h3 className="text-lg font-semibold theme-heading mb-6">Profile Photos</h3>
             <div className="flex flex-col md:flex-row gap-8 items-start">
               {/* User Picture */}
               <div className="flex flex-col items-center">
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3 text-center">
+                <label className="block text-sm font-semibold theme-heading mb-3 text-center">
                   Your Picture
                 </label>
                 {profileData.userPictureUrl ? (
@@ -401,22 +407,22 @@ export default function ProfilePage() {
                       setModalImageTitle('Your Picture')
                       setImageModalOpen(true)
                     }}
-                    className="w-40 h-40 object-cover rounded-2xl border-4 border-gray-200 dark:border-gray-700 shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
+                    className="w-40 h-40 object-cover rounded-2xl border-4 border-gray-200 shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
                   />
                 ) : (
-                  <div className="w-40 h-40 bg-gray-100 dark:bg-dark-hover rounded-2xl border-4 border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-lg">
+                  <div className="w-40 h-40 bg-gray-100 rounded-2xl border-4 border-gray-200 flex items-center justify-center shadow-lg">
                     <div className="text-center">
                       <User className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-xs text-gray-500 dark:text-gray-400">No image</p>
+                      <p className="text-xs text-gray-500">No image</p>
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">Uploaded during onboarding</p>
+                <p className="text-xs text-gray-500 mt-3 text-center">Uploaded during onboarding</p>
               </div>
 
               {/* Store Picture */}
               <div className="flex flex-col items-center">
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3 text-center">
+                <label className="block text-sm font-semibold text-gray-900 mb-3 text-center">
                   Your Store Picture
                 </label>
                 {profileData.storePictureUrl ? (
@@ -428,28 +434,28 @@ export default function ProfilePage() {
                       setModalImageTitle('Your Store Picture')
                       setImageModalOpen(true)
                     }}
-                    className="w-40 h-40 object-cover rounded-2xl border-4 border-gray-200 dark:border-gray-700 shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
+                    className="w-40 h-40 object-cover rounded-2xl border-4 border-gray-200 shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
                   />
                 ) : (
-                  <div className="w-40 h-40 bg-gray-100 dark:bg-dark-hover rounded-2xl border-4 border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-lg">
+                  <div className="w-40 h-40 bg-gray-100 rounded-2xl border-4 border-gray-200 flex items-center justify-center shadow-lg">
                     <div className="text-center">
                       <Store className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-xs text-gray-500 dark:text-gray-400">No image</p>
+                      <p className="text-xs text-gray-500">No image</p>
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">Uploaded during onboarding</p>
+                <p className="text-xs text-gray-500 mt-3 text-center">Uploaded during onboarding</p>
               </div>
             </div>
           </div>
 
           {/* Basic Information Section - Read Only */}
-          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h3>
+          <div className="theme-card rounded-2xl p-8 shadow-sm mb-6">
+            <h3 className="text-lg font-semibold theme-heading mb-6">Basic Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* User ID (Read-only, displayed prominently) */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   User ID
                 </label>
                 <div className="relative">
@@ -460,15 +466,15 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.userId || 'Not assigned yet'}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 font-mono font-semibold cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 font-mono font-semibold cursor-not-allowed"
                   />
                 </div>
-                <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">Your unique supplier ID (auto-generated)</p>
+                <p className="text-[13px] theme-muted mt-1.5">Your unique supplier ID (auto-generated)</p>
               </div>
 
               {/* Owner Name - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Owner Name
                 </label>
                 <div className="relative">
@@ -479,14 +485,14 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.ownerName}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Store Name - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Store Name
                 </label>
                 <div className="relative">
@@ -497,14 +503,14 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.storeName}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Email - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Email Address
                 </label>
                 <div className="relative">
@@ -515,14 +521,14 @@ export default function ProfilePage() {
                     type="email"
                     value={profileData.email}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Country - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Country
                 </label>
                 <div className="relative">
@@ -533,14 +539,14 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.country || 'Not specified'}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* CNIC - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   ID Number
                 </label>
                 <div className="relative">
@@ -551,14 +557,14 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.cnic}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* City - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   City
                 </label>
                 <div className="relative">
@@ -569,14 +575,14 @@ export default function ProfilePage() {
                     type="text"
                     value={profileData.city}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Pickup Address - Read Only */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Pickup Address
                 </label>
                 <div className="relative">
@@ -587,14 +593,14 @@ export default function ProfilePage() {
                     value={profileData.pickupAddress}
                     disabled
                     rows={3}
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed resize-none"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed resize-none"
                   />
                 </div>
               </div>
 
               {/* Phone Number - Read Only */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Phone Number
                 </label>
                 <div className="relative">
@@ -605,7 +611,7 @@ export default function ProfilePage() {
                     type="tel"
                     value={profileData.phoneNumber}
                     disabled
-                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                    className="w-full py-3.5 px-4 pl-12 text-[15px] border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -613,17 +619,17 @@ export default function ProfilePage() {
           </div>
 
           {/* Bank Details Section - Editable */}
-          <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8 shadow-sm">
+          <div className="theme-card rounded-2xl p-8 shadow-sm">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Banking Information</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Banking Information</h3>
               {!isEditing && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">Click &quot;Edit Bank Details&quot; to update</p>
+                <p className="text-sm text-gray-500">Click &quot;Edit Bank Details&quot; to update</p>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Bank Account Title */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Bank Account Title
                 </label>
                 <div className="relative">
@@ -637,20 +643,20 @@ export default function ProfilePage() {
                     onChange={handleChange}
                     disabled={!isEditing}
                     className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl transition-all ${
-                      errors.bankTitle ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed' : 'bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
+                      errors.bankTitle ? 'border-red-500' : 'border-gray-200'
+                    } ${!isEditing ? 'bg-gray-50 text-gray-700 cursor-not-allowed' : 'bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
                     placeholder="e.g., Ahmed Khan"
                   />
                 </div>
                 {errors.bankTitle && (
                   <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.bankTitle}</span>
                 )}
-                <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">Name on the bank account</p>
+                <p className="text-[13px] text-gray-500 mt-1.5">Name on the bank account</p>
               </div>
 
               {/* Bank Name */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   Bank Name
                 </label>
                 <div className="relative">
@@ -663,8 +669,8 @@ export default function ProfilePage() {
                     onChange={handleChange}
                     disabled={!isEditing}
                     className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl transition-all ${
-                      errors.bankName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed' : 'bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none`}
+                      errors.bankName ? 'border-red-500' : 'border-gray-200'
+                    } ${!isEditing ? 'bg-gray-50 text-gray-700 cursor-not-allowed' : 'bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none`}
                   >
                     <option value="">Select Bank</option>
                     {(profileData.country ? getBanksForCountry(profileData.country) : getBanksForCountry('Pakistan')).map(bank => (
@@ -676,7 +682,7 @@ export default function ProfilePage() {
 
               {/* IBAN */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold theme-label mb-2">
                   IBAN Number
                 </label>
                 <div className="relative">
@@ -691,8 +697,8 @@ export default function ProfilePage() {
                     disabled={!isEditing}
                     maxLength={29}
                     className={`w-full py-3.5 px-4 pl-12 text-[15px] border-2 rounded-xl transition-all ${
-                      errors.iban ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-                    } ${!isEditing ? 'bg-gray-50 dark:bg-dark-hover text-gray-700 dark:text-gray-300 cursor-not-allowed' : 'bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
+                      errors.iban ? 'border-red-500' : 'border-gray-200'
+                    } ${!isEditing ? 'bg-gray-50 text-gray-700 cursor-not-allowed' : 'bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)]'} focus:outline-none placeholder:text-gray-400`}
                     placeholder={profileData.country ? getIbanPlaceholder(profileData.country) : 'XXXXXXXXXXXX'}
                   />
                 </div>
@@ -700,23 +706,23 @@ export default function ProfilePage() {
                   <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.iban}</span>
                 )}
                 {profileData.country && getIbanHint(profileData.country) && (
-                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1.5">{getIbanHint(profileData.country)}</p>
+                  <p className="text-[13px] text-gray-500 mt-1.5">{getIbanHint(profileData.country)}</p>
                 )}
               </div>
             </div>
 
             {/* Delete Account Section */}
-            <div className="mt-8 pt-8 border-t border-gray-300 dark:border-gray-700">
-              <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl p-6">
+            <div className="mt-8 pt-8 border-t border-gray-300">
+              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
                       Delete My Account
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    <p className="text-sm text-gray-600 mb-4">
                       This action is irreversible. Deleting your account will prevent you from logging in. You will have to sign up again.
                     </p>
                     {!showArchiveConfirm ? (
@@ -729,7 +735,7 @@ export default function ProfilePage() {
                       </button>
                     ) : (
                       <div className="space-y-3">
-                        <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                        <p className="text-sm font-medium text-red-600">
                           Are you sure you want to delete your account? This action cannot be undone.
                         </p>
                         <div className="flex gap-3">
@@ -753,7 +759,7 @@ export default function ProfilePage() {
                           <button
                             onClick={() => setShowArchiveConfirm(false)}
                             disabled={isArchiving}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                           >
                             Cancel
                           </button>
@@ -775,22 +781,22 @@ export default function ProfilePage() {
           onClick={() => setImageModalOpen(false)}
         >
           <div 
-            className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-dark-card rounded-2xl shadow-2xl overflow-hidden"
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{modalImageTitle}</h3>
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">{modalImageTitle}</h3>
               <button
                 onClick={() => setImageModalOpen(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-dark-hover rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             
             {/* Image */}
-            <div className="p-4 flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
+            <div className="p-4 flex items-center justify-center bg-gray-50">
               <img
                 src={modalImageUrl}
                 alt={modalImageTitle}

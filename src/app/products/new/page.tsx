@@ -475,12 +475,12 @@ export default function AddProductPage() {
 
   if (authLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+            <p className="mt-4 text-gray-600">Loading...</p>
           </div>
         </div>
       </div>
@@ -492,7 +492,7 @@ export default function AddProductPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-dark-bg transition-colors">
+    <div className="flex h-screen bg-gray-100 transition-colors">
       <Sidebar />
       
       <div className="flex-1 overflow-auto">
@@ -503,34 +503,34 @@ export default function AddProductPage() {
           <div className="flex items-center gap-4 mb-8">
             <button
               onClick={() => router.push('/products')}
-              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-hover transition-all"
+              className="p-2 rounded-lg hover:bg-gray-200 transition-all"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Add New Product</h2>
-              <p className="text-gray-600 dark:text-gray-400">Fill in the details to add a new product to your inventory</p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Add New Product</h2>
+              <p className="text-gray-600">Fill in the details to add a new product to your inventory</p>
             </div>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl">
-              <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+              <p className="text-sm text-red-600 font-medium">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl">
-              <p className="text-sm text-green-600 dark:text-green-400 font-medium">{success}</p>
+            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+              <p className="text-sm text-green-600 font-medium">{success}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-8">
+            <div className="bg-white border border-gray-300 rounded-2xl p-8">
               {/* Supplier Selector (for purchasers and admin) */}
               {(userRole === 'purchaser' || userRole === 'admin') && (
                 <div className="mb-6">
-                  <label htmlFor="supplier" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="supplier" className="block text-sm font-semibold text-gray-900 mb-2">
                     Supplier <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -542,8 +542,8 @@ export default function AddProductPage() {
                         setErrors(prev => ({ ...prev, supplier: '' }))
                       }
                     }}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.supplier ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                      errors.supplier ? 'border-red-500' : 'border-gray-200'
                     } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
                     required
                   >
@@ -558,7 +558,7 @@ export default function AddProductPage() {
                     <p className="mt-1 text-sm text-red-500">{errors.supplier}</p>
                   )}
                   {suppliers.length === 0 && (
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="mt-1 text-sm text-gray-500">
                       No suppliers available. <button type="button" onClick={() => router.push('/suppliers/new')} className="text-primary-blue hover:underline">Create one</button>
                     </p>
                   )}
@@ -567,7 +567,7 @@ export default function AddProductPage() {
 
               {/* Product Title */}
               <div className="mb-6">
-                <label htmlFor="title" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
                   Product Title <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -576,8 +576,8 @@ export default function AddProductPage() {
                   type="text"
                   value={formData.title}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                    errors.title ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                    errors.title ? 'border-red-500' : 'border-gray-200'
                   } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                   placeholder="e.g., Wireless Bluetooth Headphones"
                   required
@@ -590,14 +590,14 @@ export default function AddProductPage() {
 
               {/* Product Images */}
               <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Product Pictures <span className="text-red-500">*</span> (Max 5)
                 </label>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 flex-wrap">
                     {formData.images.map((image, index) => (
                       <div key={index} className="relative group">
-                        <div className="w-32 h-32 rounded-xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-dark-hover">
+                        <div className="w-32 h-32 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
                           <img
                             src={URL.createObjectURL(image)}
                             alt={`Product ${index + 1}`}
@@ -614,9 +614,9 @@ export default function AddProductPage() {
                       </div>
                     ))}
                     {formData.images.length < 5 && (
-                      <label className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">
+                      <label className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Add Image</span>
+                        <span className="text-xs text-gray-600">Add Image</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -630,7 +630,7 @@ export default function AddProductPage() {
                   {errors.images && (
                     <span className="block text-[13px] text-red-500 font-medium">{errors.images}</span>
                   )}
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-500">
                     {formData.images.length} / 5 images (maximum 5 images allowed)
                   </p>
                 </div>
@@ -638,7 +638,7 @@ export default function AddProductPage() {
 
               {/* Brand Name */}
               <div className="mb-6">
-                <label htmlFor="brandName" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <label htmlFor="brandName" className="block text-sm font-semibold text-gray-900 mb-2">
                   Brand Name <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
                 <input
@@ -647,8 +647,8 @@ export default function AddProductPage() {
                   type="text"
                   value={formData.brandName}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                    errors.brandName ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                    errors.brandName ? 'border-red-500' : 'border-gray-200'
                   } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                   placeholder="e.g., Nike, Samsung, Apple"
                 />
@@ -666,7 +666,7 @@ export default function AddProductPage() {
                     onChange={toggleVariants}
                     className="w-5 h-5 text-primary-blue border-gray-300 rounded focus:ring-primary-blue cursor-pointer"
                   />
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                  <span className="text-sm font-semibold text-gray-900">
                     This product has variants (Size, Color, ML, etc.)
                   </span>
                 </label>
@@ -678,7 +678,7 @@ export default function AddProductPage() {
               {/* Bar Code (hidden if has variants) */}
               {!formData.hasVariants && (
                 <div className="mb-6">
-                  <label htmlFor="bar_code" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="bar_code" className="block text-sm font-semibold text-gray-900 mb-2">
                     Bar Code
                   </label>
                   <input
@@ -687,8 +687,8 @@ export default function AddProductPage() {
                     type="text"
                     value={formData.bar_code}
                     onChange={handleChange}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all font-mono ${
-                      errors.bar_code ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all font-mono ${
+                      errors.bar_code ? 'border-red-500' : 'border-gray-200'
                     } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                     placeholder="e.g., PROD-001"
                   />
@@ -701,7 +701,7 @@ export default function AddProductPage() {
               {/* Selling Price (hidden if has variants) */}
               {!formData.hasVariants && (
                 <div className="mb-6">
-                  <label htmlFor="sellingPrice" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="sellingPrice" className="block text-sm font-semibold text-gray-900 mb-2">
                     Product Selling Price (Product Price + Fulfillment Cost + Margin) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -714,8 +714,8 @@ export default function AddProductPage() {
                       step="0.01"
                       value={formData.sellingPrice || ''}
                       onChange={handleChange}
-                      className={`w-full pl-16 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                        errors.sellingPrice ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                      className={`w-full pl-16 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                        errors.sellingPrice ? 'border-red-500' : 'border-gray-200'
                       } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                       placeholder="0.00"
                       required
@@ -730,7 +730,7 @@ export default function AddProductPage() {
               {/* Stock Amount (hidden if has variants) */}
               {!formData.hasVariants && (
                 <div className="mb-6">
-                  <label htmlFor="stockAmount" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="stockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
                     Stock Units <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -740,8 +740,8 @@ export default function AddProductPage() {
                     min="0"
                     value={formData.stockAmount || ''}
                     onChange={handleChange}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-dark-hover text-gray-900 dark:text-white transition-all ${
-                      errors.stockAmount ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                      errors.stockAmount ? 'border-red-500' : 'border-gray-200'
                     } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                     placeholder="0"
                     required
@@ -754,9 +754,9 @@ export default function AddProductPage() {
 
               {/* Variants Section */}
               {formData.hasVariants && (
-                <div className="mb-6 p-6 bg-gray-50 dark:bg-dark-hover rounded-xl border-2 border-gray-200 dark:border-gray-700">
+                <div className="mb-6 p-6 bg-gray-50 rounded-xl border-2 border-gray-200">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Product Variants</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Product Variants</h3>
                     <button
                       type="button"
                       onClick={addVariant}
@@ -768,19 +768,19 @@ export default function AddProductPage() {
                   </div>
 
                   {formData.variants.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                    <p className="text-sm text-gray-500 text-center py-4">
                       No variants added yet. Click &quot;Add Variant&quot; to get started.
                     </p>
                   ) : (
                     <div className="space-y-4">
                       {formData.variants.map((variant, index) => (
-                        <div key={variant.id} className="p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div key={variant.id} className="p-4 bg-white rounded-lg border border-gray-200">
                           <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-medium text-gray-900 dark:text-white">Variant {index + 1}</h4>
+                            <h4 className="font-medium text-gray-900">Variant {index + 1}</h4>
                             <button
                               type="button"
                               onClick={() => removeVariant(variant.id)}
-                              className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                              className="p-1 text-red-500 hover:bg-red-50 rounded"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -788,32 +788,32 @@ export default function AddProductPage() {
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Size</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Size</label>
                               <input
                                 type="text"
                                 value={variant.size || ''}
                                 onChange={(e) => updateVariant(variant.id, 'size', e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:outline-none"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
                                 placeholder="e.g., S, M, L, XL"
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Color</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Color</label>
                               <input
                                 type="text"
                                 value={variant.color || ''}
                                 onChange={(e) => updateVariant(variant.id, 'color', e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:outline-none"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
                                 placeholder="e.g., Red, Blue, Black"
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ML</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">ML</label>
                               <input
                                 type="text"
                                 value={variant.ml || ''}
                                 onChange={(e) => updateVariant(variant.id, 'ml', e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:outline-none"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
                                 placeholder="e.g., 250ml, 500ml"
                               />
                             </div>
@@ -821,15 +821,15 @@ export default function AddProductPage() {
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Price (PKR) *</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price (PKR) *</label>
                               <input
                                 type="number"
                                 min="0"
                                 step="0.01"
                                 value={variant.price || ''}
                                 onChange={(e) => updateVariant(variant.id, 'price', parseFloat(e.target.value) || 0)}
-                                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
-                                  errors[`variant_price_${index}`] ? 'border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-gray-900 focus:outline-none ${
+                                  errors[`variant_price_${index}`] ? 'border-red-500' : 'border-gray-200 focus:border-primary-blue'
                                 }`}
                                 placeholder="0.00"
                                 required
@@ -839,14 +839,14 @@ export default function AddProductPage() {
                               )}
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Units*</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Stock Units*</label>
                               <input
                                 type="number"
                                 min="0"
                                 value={variant.stock || ''}
                                 onChange={(e) => updateVariant(variant.id, 'stock', parseInt(e.target.value) || 0)}
-                                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:outline-none ${
-                                  errors[`variant_stock_${index}`] ? 'border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-primary-blue'
+                                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-gray-900 focus:outline-none ${
+                                  errors[`variant_stock_${index}`] ? 'border-red-500' : 'border-gray-200 focus:border-primary-blue'
                                 }`}
                                 placeholder="0"
                                 required
@@ -856,12 +856,12 @@ export default function AddProductPage() {
                               )}
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Bar Code</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Bar Code</label>
                               <input
                                 type="text"
                                 value={variant.sku || ''}
                                 onChange={(e) => updateVariant(variant.id, 'sku', e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white font-mono focus:border-primary-blue focus:outline-none"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 font-mono focus:border-primary-blue focus:outline-none"
                                 placeholder="e.g., PROD-001-RED-L"
                               />
                             </div>
@@ -877,11 +877,11 @@ export default function AddProductPage() {
               )}
 
               {/* Submit Buttons */}
-              <div className="flex gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex gap-4 pt-6 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => router.push('/products')}
-                  className="px-6 py-3 border-2 border-gray-300 dark:border-gray-700 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-dark-hover transition-all text-gray-700 dark:text-gray-300"
+                  className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-all text-gray-700"
                 >
                   Cancel
                 </button>

@@ -116,12 +116,12 @@ export default function UserSettingsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading user settings...</p>
+            <p className="mt-4 text-gray-600">Loading user settings...</p>
           </div>
         </div>
       </div>
@@ -133,7 +133,7 @@ export default function UserSettingsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-dark-bg transition-colors">
+    <div className="flex h-screen bg-gray-100 transition-colors">
       <Sidebar />
       <div className="flex-1 overflow-auto">
         <Header />
@@ -141,8 +141,8 @@ export default function UserSettingsPage() {
         <main className="p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">User Settings</h2>
-              <p className="text-gray-600 dark:text-gray-400">Manage supplier listing approval</p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">User Settings</h2>
+              <p className="text-gray-600">Manage supplier listing approval</p>
             </div>
             <div className="relative w-full max-w-md">
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
@@ -151,43 +151,43 @@ export default function UserSettingsPage() {
                 placeholder="Search by supplier ID, owner, store, or email"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-dark-card text-gray-900 dark:text-white focus:border-primary-blue focus:outline-none"
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
               />
             </div>
           </div>
 
           {error && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
               {error}
             </div>
           )}
 
-          <div className="bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-                <thead className="bg-gray-50 dark:bg-dark-hover">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Supplier ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Owner Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Store Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">City</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User Picture</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Store Picture</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Listing Approval</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Supplier ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Store Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">City</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User Picture</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Store Picture</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Listing Approval</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-dark-card divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-white divide-y divide-gray-200">
                   {filteredSuppliers.map(supplier => (
                     <tr key={supplier.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{supplier.user_id || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{supplier.owner_name || '—'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{supplier.store_name || '—'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{supplier.email || '—'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{supplier.phone_number || '—'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{supplier.city || '—'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{supplier.user_id || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{supplier.owner_name || '—'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{supplier.store_name || '—'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{supplier.email || '—'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{supplier.phone_number || '—'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{supplier.city || '—'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {supplier.user_picture_url ? (
                           <img
                             src={supplier.user_picture_url}
@@ -203,7 +203,7 @@ export default function UserSettingsPage() {
                           '—'
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {supplier.store_picture_url ? (
                           <img
                             src={supplier.store_picture_url}
@@ -219,12 +219,12 @@ export default function UserSettingsPage() {
                           '—'
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         <select
                           value={supplier.listing_approval || 'Refused'}
                           onChange={(e) => handleApprovalChange(supplier.id, e.target.value as 'Refused' | 'Approved')}
                           disabled={savingId === supplier.id}
-                          className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-hover text-gray-900 dark:text-white focus:border-primary-blue focus:outline-none"
+                          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
                         >
                           <option value="Refused">Refused</option>
                           <option value="Approved">Approved</option>
@@ -234,7 +234,7 @@ export default function UserSettingsPage() {
                   ))}
                   {filteredSuppliers.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                      <td colSpan={9} className="px-6 py-6 text-center text-sm text-gray-500">
                         No suppliers found.
                       </td>
                     </tr>
@@ -253,22 +253,22 @@ export default function UserSettingsPage() {
           onClick={() => setImageModalOpen(false)}
         >
           <div 
-            className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-dark-card rounded-2xl shadow-2xl overflow-hidden"
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{modalImageTitle}</h3>
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">{modalImageTitle}</h3>
               <button
                 onClick={() => setImageModalOpen(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-dark-hover rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             
             {/* Image */}
-            <div className="p-4 flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
+            <div className="p-4 flex items-center justify-center bg-gray-50">
               <img
                 src={modalImageUrl}
                 alt={modalImageTitle}

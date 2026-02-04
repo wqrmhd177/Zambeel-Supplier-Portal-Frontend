@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { clearSessionCookie, setSessionCookie } from '@/lib/authCookie'
 
 interface AuthState {
   isAuthenticated: boolean
@@ -47,6 +48,9 @@ export function useAuth() {
         })
         return
       }
+
+      // Ensure session cookie is set (e.g. for returning users who had no cookie yet)
+      setSessionCookie()
 
       // Set initial state from localStorage immediately (optimistic UI)
       setAuthState({
@@ -108,6 +112,7 @@ export function useAuth() {
   }, [router])
 
   const clearAuth = () => {
+    clearSessionCookie()
     localStorage.removeItem('userId')
     localStorage.removeItem('userFriendlyId')
     localStorage.removeItem('userEmail')

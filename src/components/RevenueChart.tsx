@@ -13,28 +13,28 @@ const data = [
 
 export default function RevenueChart() {
   return (
-    <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-2xl p-6 mb-8 transition-colors">
+    <div className="theme-card rounded-2xl p-6 mb-8">
       <div className="mb-6">
-        <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">Revenue Overview</h2>
-        <p className="text-gray-600 dark:text-gray-400 text-sm">Your monthly performance metrics</p>
+        <h2 className="text-xl font-bold mb-1 theme-heading">Revenue Overview</h2>
+        <p className="theme-muted text-sm">Your monthly performance metrics</p>
       </div>
       
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1a1f2e" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.15)" />
           <XAxis 
             dataKey="name" 
-            stroke="#6b7280"
+            stroke="rgba(255,255,255,0.7)"
             style={{ fontSize: '12px' }}
           />
           <YAxis 
-            stroke="#6b7280"
+            stroke="rgba(255,255,255,0.7)"
             style={{ fontSize: '12px' }}
           />
           <Tooltip 
             contentStyle={{
-              backgroundColor: '#0f1421',
-              border: '1px solid #1a1f2e',
+              backgroundColor: '#1e1b4b',
+              border: '1px solid rgba(255,255,255,0.15)',
               borderRadius: '8px',
               color: '#fff',
             }}
@@ -46,17 +46,17 @@ export default function RevenueChart() {
           <Line 
             type="monotone" 
             dataKey="Revenue" 
-            stroke="#06b6d4" 
+            stroke="#22d3ee" 
             strokeWidth={2}
-            dot={{ fill: '#06b6d4', r: 4 }}
+            dot={{ fill: '#22d3ee', r: 4 }}
             activeDot={{ r: 6 }}
           />
           <Line 
             type="monotone" 
             dataKey="Orders" 
-            stroke="#a855f7" 
+            stroke="#a78bfa" 
             strokeWidth={2}
-            dot={{ fill: '#a855f7', r: 4 }}
+            dot={{ fill: '#a78bfa', r: 4 }}
             activeDot={{ r: 6 }}
           />
         </LineChart>

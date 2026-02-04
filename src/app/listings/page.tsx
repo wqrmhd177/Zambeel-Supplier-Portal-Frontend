@@ -124,7 +124,7 @@ export default function ListingsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100 dark:bg-dark-bg">
+      <div className="flex h-screen bg-gray-100">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-primary-blue" />
@@ -134,22 +134,22 @@ export default function ListingsPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-dark-bg">
+    <div className="flex min-h-screen bg-[#f5f3ff]">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-8 overflow-y-auto bg-[#f5f3ff]">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Product Listings</h1>
+            <h1 className="text-3xl font-bold mb-8 theme-heading-gradient">Product Listings</h1>
 
             {/* Tabs */}
-            <div className="mb-6 flex gap-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="mb-6 flex gap-4 border-b border-gray-200">
               <button
                 onClick={() => setActiveTab('new')}
                 className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
                   activeTab === 'new'
                     ? 'text-primary-blue border-primary-blue'
-                    : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300'
+                    : 'text-gray-500 border-transparent hover:text-gray-700'
                 }`}
               >
                 New Listings ({allProducts.filter(p => {
@@ -162,7 +162,7 @@ export default function ListingsPage() {
                 className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
                   activeTab === 'old'
                     ? 'text-primary-blue border-primary-blue'
-                    : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300'
+                    : 'text-gray-500 border-transparent hover:text-gray-700'
                 }`}
               >
                 Old Listings ({allProducts.filter(p => {
@@ -173,8 +173,8 @@ export default function ListingsPage() {
             </div>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl">
-                <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+              <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                <p className="text-sm text-red-600 font-medium">{error}</p>
               </div>
             )}
 
@@ -182,7 +182,7 @@ export default function ListingsPage() {
             {products.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400 text-lg">
+                <p className="text-gray-600 text-lg">
                   {activeTab === 'new' 
                     ? 'No new listings to process' 
                     : 'No listings with assigned SKUs'}
@@ -374,9 +374,9 @@ function ProductListingCard({
   const variantsWithSKU = product.variants?.filter(v => v.company_sku && v.company_sku.trim() !== '').length || 0
 
   return (
-    <div className="bg-white dark:bg-dark-card border border-gray-300 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
+    <div className="theme-card rounded-xl shadow-sm overflow-hidden">
       {/* Main Product Row */}
-      <div className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+      <div className="p-4 hover:bg-white/5 transition-colors">
         <div className="flex items-center gap-4">
           {/* Product Image */}
           {(() => {
@@ -394,7 +394,7 @@ function ProductListingCard({
                 <img
                   src={imageUrl}
                   alt={product.product_title}
-                  className="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+                  className="w-16 h-16 rounded-lg object-cover border border-gray-200"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none'
                   }}
@@ -407,10 +407,10 @@ function ProductListingCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                <h3 className="text-lg font-semibold theme-heading truncate">
                   {product.product_title}
                 </h3>
-                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-4 mt-2 text-sm theme-muted">
                   <span><strong>Bar Code:</strong> <span className="font-mono">{product.bar_code}</span></span>
                   <span><strong>Price:</strong> {
                     product.variants.length > 0 && product.variants[0].variant_selling_price
@@ -423,8 +423,8 @@ function ProductListingCard({
                   <span><strong>Status:</strong> 
                     <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
                       product.status === 'active' 
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
                     }`}>
                       {product.status === 'active' ? 'Active' : 'Inactive'}
                     </span>
@@ -454,12 +454,12 @@ function ProductListingCard({
 
       {/* Expanded Variants Section */}
       {isExpanded && hasVariants && (
-        <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-hover p-6">
+        <div className="border-t border-white/20 bg-white/5 p-6">
           <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            <h4 className="text-sm font-semibold theme-heading mb-1">
               Variants ({totalVariants})
             </h4>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs theme-muted">
               Assign company SKU codes to each variant below
             </p>
           </div>
@@ -468,41 +468,41 @@ function ProductListingCard({
             {product.variants && product.variants.map((variant) => (
               <div
                 key={variant.variant_id}
-                className="bg-white dark:bg-dark-card rounded-lg p-4 border border-gray-200 dark:border-gray-700"
+                className="bg-white rounded-lg p-4 border border-gray-200"
               >
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
                     {variant.size && (
                       <div>
-                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">Size</label>
-                        <p className="text-sm text-gray-900 dark:text-white">{variant.size}</p>
+                        <label className="text-xs font-semibold text-gray-500">Size</label>
+                        <p className="text-sm text-gray-900">{variant.size}</p>
                       </div>
                     )}
                     {variant.color && (
                       <div>
-                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">Color</label>
-                        <p className="text-sm text-gray-900 dark:text-white">{variant.color}</p>
+                        <label className="text-xs font-semibold text-gray-500">Color</label>
+                        <p className="text-sm text-gray-900">{variant.color}</p>
                       </div>
                     )}
                     {variant.ml && (
                       <div>
-                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">ML</label>
-                        <p className="text-sm text-gray-900 dark:text-white">{variant.ml}</p>
+                        <label className="text-xs font-semibold text-gray-500">ML</label>
+                        <p className="text-sm text-gray-900">{variant.ml}</p>
                       </div>
                     )}
                     <div>
-                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">Variant SKU</label>
-                      <p className="text-sm font-mono text-gray-900 dark:text-white">{variant.bar_code || 'N/A'}</p>
+                      <label className="text-xs font-semibold text-gray-500">Variant SKU</label>
+                      <p className="text-sm font-mono text-gray-900">{variant.bar_code || 'N/A'}</p>
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">Price</label>
-                      <p className="text-sm text-gray-900 dark:text-white">PKR {variant.variant_selling_price.toLocaleString()}</p>
+                      <label className="text-xs font-semibold text-gray-500">Price</label>
+                      <p className="text-sm text-gray-900">PKR {variant.variant_selling_price.toLocaleString()}</p>
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">Stock</label>
+                      <label className="text-xs font-semibold text-gray-500">Stock</label>
                       <p className={`text-sm font-medium ${
                         variant.variant_stock === 0 
-                          ? 'text-red-600 dark:text-red-400' 
-                          : 'text-gray-900 dark:text-white'
+                          ? 'text-red-600' 
+                          : 'text-gray-900'
                       }`}>
                         {variant.variant_stock}
                       </p>
@@ -512,14 +512,14 @@ function ProductListingCard({
                   {/* Company SKU Input */}
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
-                      <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Company SKU
                       </label>
                       <input
                         type="text"
                         value={skuInputs[variant.variant_id] || ''}
                         onChange={(e) => handleSKUChange(variant.variant_id, e.target.value)}
-                        className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-card text-gray-900 dark:text-white text-sm font-mono focus:border-primary-blue focus:outline-none"
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-white text-gray-900 text-sm font-mono focus:border-primary-blue focus:outline-none"
                         placeholder="Enter company SKU"
                       />
                     </div>
@@ -540,7 +540,7 @@ function ProductListingCard({
 
             {/* Bulk Save Button */}
             {hasChanges && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="mt-4 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleBulkSave}
                   disabled={Object.values(isSaving).some(v => v)}
@@ -633,7 +633,7 @@ function ProductListingCard({
 
         return (
           <div 
-            className="fixed inset-0 bg-black/90 dark:bg-black/95 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
             onClick={() => setIsImageViewerOpen(false)}
           >
             <div 
