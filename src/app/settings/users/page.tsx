@@ -16,7 +16,6 @@ interface SupplierRow {
   email: string | null
   phone_number: string | null
   city: string | null
-  listing_approval: 'Refused' | 'Approved'
   user_picture_url: string | null
   store_picture_url: string | null
 }
@@ -28,7 +27,6 @@ export default function UserSettingsPage() {
   const [error, setError] = useState('')
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([])
   const [search, setSearch] = useState('')
-  const [savingId, setSavingId] = useState<string | null>(null)
   const [imageModalOpen, setImageModalOpen] = useState(false)
   const [modalImageUrl, setModalImageUrl] = useState('')
   const [modalImageTitle, setModalImageTitle] = useState('')
@@ -56,7 +54,7 @@ export default function UserSettingsPage() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, user_id, owner_name, store_name, email, phone_number, city, listing_approval, user_picture_url, store_picture_url')
+        .select('id, user_id, owner_name, store_name, email, phone_number, city, user_picture_url, store_picture_url')
         .eq('role', 'supplier')
         .order('created_at', { ascending: false })
 
@@ -72,34 +70,6 @@ export default function UserSettingsPage() {
       setError('Unexpected error fetching suppliers')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleApprovalChange = async (supplierId: string, nextValue: 'Refused' | 'Approved') => {
-    setSavingId(supplierId)
-    setError('')
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ listing_approval: nextValue, updated_at: new Date().toISOString() })
-        .eq('id', supplierId)
-
-      if (error) {
-        console.error('Error updating listing approval:', error)
-        setError(error.message || 'Failed to update approval status')
-        return
-      }
-
-      setSuppliers(prev =>
-        prev.map(s =>
-          s.id === supplierId ? { ...s, listing_approval: nextValue } : s
-        )
-      )
-    } catch (err) {
-      console.error('Unexpected error:', err)
-      setError('Unexpected error updating approval status')
-    } finally {
-      setSavingId(null)
     }
   }
 
@@ -142,7 +112,7 @@ export default function UserSettingsPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">User Settings</h2>
-              <p className="text-gray-600">Manage supplier listing approval</p>
+              <p className="text-gray-600">View and manage supplier accounts</p>
             </div>
             <div className="relative w-full max-w-md">
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
@@ -175,7 +145,6 @@ export default function UserSettingsPage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">City</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User Picture</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Store Picture</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Listing Approval</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -219,22 +188,11 @@ export default function UserSettingsPage() {
                           '—'
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        <select
-                          value={supplier.listing_approval || 'Refused'}
-                          onChange={(e) => handleApprovalChange(supplier.id, e.target.value as 'Refused' | 'Approved')}
-                          disabled={savingId === supplier.id}
-                          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
-                        >
-                          <option value="Refused">Refused</option>
-                          <option value="Approved">Approved</option>
-                        </select>
-                      </td>
                     </tr>
                   ))}
                   {filteredSuppliers.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-6 py-6 text-center text-sm text-gray-500">
+                      <td colSpan={8} className="px-6 py-6 text-center text-sm text-gray-500">
                         No suppliers found.
                       </td>
                     </tr>

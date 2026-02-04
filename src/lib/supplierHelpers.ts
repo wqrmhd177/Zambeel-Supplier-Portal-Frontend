@@ -211,25 +211,4 @@ export async function getProductCountForSupplier(supplierUserId: string): Promis
   }
 }
 
-/**
- * Check if a supplier is allowed to add products based on listing approval status
- */
-export async function canSupplierAddProducts(supplierUserId: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('listing_approval')
-      .eq('user_id', supplierUserId)
-      .single()
-
-    if (error || !data) {
-      return false
-    }
-
-    return data.listing_approval === 'Approved'
-  } catch (err) {
-    console.error('Error checking supplier listing approval:', err)
-    return false
-  }
-}
 

@@ -22,7 +22,7 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
-import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId, canSupplierAddProducts } from '@/lib/supplierHelpers'
+import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import { fetchPendingPriceRequests, PriceHistoryEntry } from '@/lib/priceHistoryHelpers'
 
@@ -50,8 +50,6 @@ export default function ProductsPage() {
   
   // Pending price changes
   const [pendingPriceChanges, setPendingPriceChanges] = useState<Map<number, PriceHistoryEntry>>(new Map())
-  const [canAddProducts, setCanAddProducts] = useState(true)
-  const [approvalChecked, setApprovalChecked] = useState(false)
 
   // Stats
   const [stats, setStats] = useState({
@@ -78,28 +76,6 @@ export default function ProductsPage() {
       fetchProducts()
     }
   }, [isAuthenticated, authLoading, router])
-
-  // Check listing approval for suppliers to gate Add Product button
-  useEffect(() => {
-    const checkApproval = async () => {
-      if (authLoading || !isAuthenticated) return
-      if (userRole !== 'supplier') {
-        setApprovalChecked(true)
-        return
-      }
-      if (!userFriendlyId) {
-        setCanAddProducts(false)
-        setApprovalChecked(true)
-        return
-      }
-
-      const allowed = await canSupplierAddProducts(userFriendlyId)
-      setCanAddProducts(allowed)
-      setApprovalChecked(true)
-    }
-
-    checkApproval()
-  }, [authLoading, isAuthenticated, userRole, userFriendlyId])
 
   // Cache extracted images for the viewer product
   const viewerImages = useMemo(() => {
@@ -503,32 +479,13 @@ export default function ProductsPage() {
               <p className="text-gray-600">Manage your product inventory</p>
             </div>
             <button
-              onClick={() => {
-                if (!canAddProducts) return
-                router.push('/products/new')
-              }}
-              disabled={!canAddProducts || !approvalChecked}
-              className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 text-white ${
-                canAddProducts
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-              title={
-                canAddProducts
-                  ? 'Add Product'
-                  : 'You are not allowed to add products yet. Please wait for administration to approve.'
-              }
+              onClick={() => router.push('/products/new')}
+              className="px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90"
             >
               <Plus className="w-5 h-5" />
               Add Product
             </button>
           </div>
-
-          {userRole === 'supplier' && approvalChecked && !canAddProducts && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
-              You are not allowed to add products yet. Please wait for administration to approve.
-            </div>
-          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
