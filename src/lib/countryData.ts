@@ -417,3 +417,52 @@ export const getIdNumberPlaceholder = (country: string): string => {
 export const getIdNumberHint = (country: string): string => {
   return getCountryData(country)?.idNumber.hint || ''
 }
+
+// Currency by country (for price display based on stock location)
+const COUNTRY_CURRENCY: Record<string, string> = {
+  Pakistan: 'PKR',
+  'United Arab Emirates': 'AED',
+  'Saudia Arabia': 'SAR',
+  Qatar: 'QAR',
+  Kuwait: 'KWD',
+  Bahrain: 'BHD',
+  Oman: 'OMR',
+  Iraq: 'IQD',
+  'United States': 'USD',
+  'United Kingdom': 'GBP',
+  'Saudi Arabia': 'SAR',
+  India: 'INR',
+  Egypt: 'EGP',
+  Turkey: 'TRY',
+  China: 'CNY',
+  Japan: 'JPY',
+  Germany: 'EUR',
+  France: 'EUR',
+  Italy: 'EUR',
+  Spain: 'EUR',
+  Netherlands: 'EUR',
+  Belgium: 'EUR',
+  Austria: 'EUR',
+  Australia: 'AUD',
+  Canada: 'CAD',
+  Malaysia: 'MYR',
+  Singapore: 'SGD',
+  Indonesia: 'IDR',
+  Thailand: 'THB',
+  Vietnam: 'VND',
+  Philippines: 'PHP',
+  Bangladesh: 'BDT',
+  Iran: 'IRR',
+  Jordan: 'JOD',
+  Lebanon: 'LBP',
+  Syria: 'SYP',
+  Yemen: 'YER',
+  Afghanistan: 'AFN',
+  Nepal: 'NPR',
+  'Sri Lanka': 'LKR',
+}
+
+export const getCurrencyForCountry = (country: string): string => {
+  if (!country || !country.trim()) return 'USD'
+  return COUNTRY_CURRENCY[country.trim()] ?? 'USD'
+}

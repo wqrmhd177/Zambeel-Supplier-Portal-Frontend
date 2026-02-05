@@ -17,6 +17,7 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { getCurrencyForUserId } from '@/lib/currencyHelpers'
 
 const PACKAGE_INCLUDES_OPTIONS = [
 'Battery','Cells','Power Adapter','Charger','Power Cable','USB Cable','Type-C Cable',
@@ -78,9 +79,10 @@ export default function AddProductPage() {
   const { isAuthenticated, isLoading: authLoading, userFriendlyId, userRole, userId } = useAuth()
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false)
   const [suppliers, setSuppliers] = useState<SupplierInfo[]>([])
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('')
+  const [priceCurrency, setPriceCurrency] = useState<string>('USD')
 
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
@@ -106,12 +108,32 @@ export default function AddProductPage() {
       router.push('/login')
       return
     }
-
-    // Fetch suppliers if user is a purchaser or admin
     if (isAuthenticated && (userRole === 'purchaser' || userRole === 'admin')) {
       fetchSuppliers()
     }
-  }, [isAuthenticated, authLoading, userRole, userId, router])
+  }, [authLoading, isAuthenticated, router])
+
+  useEffect(() => {
+    if (!showSuccessScreen) return
+    const t = setTimeout(() => router.push('/products'), 5000)
+    return () => clearTimeout(t)
+  }, [showSuccessScreen, router])
+
+  // Currency from product owner's stock location (current user when supplier, selected supplier when purchaser/admin)
+  useEffect(() => {
+    const run = async () => {
+      const ownerId = (userRole === 'purchaser' || userRole === 'admin') && selectedSupplierId
+        ? selectedSupplierId
+        : (userFriendlyId || userId)
+      if (!ownerId) {
+        setPriceCurrency('USD')
+        return
+      }
+      const currency = await getCurrencyForUserId(ownerId)
+      setPriceCurrency(currency)
+    }
+    run()
+  }, [userId, userFriendlyId, userRole, selectedSupplierId])
 
   const fetchSuppliers = async () => {
     if (userRole === 'admin') {
@@ -290,22 +312,33 @@ export default function AddProductPage() {
       newErrors.material = 'Material is required'
     }
 
-    if (formData.images.length === 0) {
-      newErrors.images = 'Please upload at least 1 product image'
-    } else if (formData.images.length > 5) {
-      newErrors.images = 'Maximum 5 images allowed'
+    const hasVariants = formData.variants.length > 0
+    const allVariantsHaveImages = hasVariants && formData.variants.every(v => v.images?.length > 0)
+    if (!hasVariants) {
+      if (formData.images.length === 0) {
+        newErrors.images = 'Please upload at least 1 product image'
+      } else if (formData.images.length > 5) {
+        newErrors.images = 'Maximum 5 images allowed'
+      }
+    } else {
+      if (formData.images.length === 0 && !allVariantsHaveImages) {
+        newErrors.images = 'Please upload at least 1 product image or add at least 1 image per variant'
+      } else if (formData.images.length > 5) {
+        newErrors.images = 'Maximum 5 images allowed'
+      }
     }
 
-    if (formData.sellingPrice <= 0) {
-      newErrors.sellingPrice = 'Selling price must be greater than 0'
+    if (!hasVariants) {
+      if (formData.sellingPrice <= 0) {
+        newErrors.sellingPrice = 'Selling price must be greater than 0'
+      }
+      if (formData.stockAmount < 0) {
+        newErrors.stockAmount = 'Stock amount cannot be negative'
+      }
     }
 
-    if (formData.stockAmount < 0) {
-      newErrors.stockAmount = 'Stock amount cannot be negative'
-    }
-
-    // Validate main size value if category requires it
-    if (shouldShowSizeValues(formData.sizeCategory)) {
+    // Validate main size value if category requires it (only when no variants)
+    if (!hasVariants && shouldShowSizeValues(formData.sizeCategory)) {
       if (isCustomInputCategory(formData.sizeCategory) || isPredefinedSizeCategory(formData.sizeCategory)) {
         if (!formData.sizeValue || !formData.sizeValue.trim()) {
           newErrors.sizeValue = 'Size value is required for this size category'
@@ -318,13 +351,8 @@ export default function AddProductPage() {
       newErrors.supplier = 'Please select a supplier'
     }
 
-    // Bar code is optional - no validation needed
-
-    if (formData.hasVariants && formData.variants.length === 0) {
-      newErrors.variants = 'Please add at least one variant'
-    }
-
-    if (formData.hasVariants) {
+    // If no variants, product is saved as single row from main form (no variant validation)
+    if (formData.variants.length > 0) {
       formData.variants.forEach((variant, index) => {
         // Validate size value if category requires it
         if (shouldShowSizeValues(variant.sizeCategory)) {
@@ -374,7 +402,7 @@ export default function AddProductPage() {
 
     setIsSaving(true)
     setError('')
-    setSuccess('')
+    setShowSuccessScreen(false)
 
     try {
       // Determine the owner ID based on user role (for image upload path)
@@ -404,9 +432,9 @@ export default function AddProductPage() {
         return urls
       }
 
-      // Upload images to Supabase Storage (main product when no variants)
+      // Upload main product images to Supabase Storage (always when user added images)
       const imageUrls: string[] = []
-      if (!formData.hasVariants && formData.images.length > 0) {
+      if (formData.images.length > 0) {
         try {
           const urls = await uploadFilesToStorage(formData.images)
           imageUrls.push(...urls)
@@ -454,13 +482,13 @@ export default function AddProductPage() {
         // Build variant rows (one row per variant - no expansion)
         const allVariantRows = formData.variants.map(variant => {
           const variantUrls = variantImageUrls[variant.id]?.length > 0 ? variantImageUrls[variant.id] : null
+          const imageForRow = variantUrls ?? (imageUrls.length > 0 ? imageUrls : null)
           return {
             ...baseProductData,
-            image: variantUrls,
+            image: imageForRow,
             size_category: variant.sizeCategory || null,
             size: variant.sizeValue || null,
             color: variant.color || null,
-            ml: null,
             variant_selling_price: variant.price,
             variant_stock: variant.stock ?? 0,
             created_at: new Date().toISOString(),
@@ -516,10 +544,7 @@ export default function AddProductPage() {
           }
         }
 
-        setSuccess('Product created successfully!')
-        setTimeout(() => {
-          router.push('/products')
-        }, 1500)
+        setShowSuccessScreen(true)
       } else {
         // Product without variants - insert one row using main form values
         const { data: insertedData, error: productError } = await supabase
@@ -530,7 +555,6 @@ export default function AddProductPage() {
             size_category: formData.sizeCategory || null,
             size: formData.sizeValue || null,
             color: formData.color || null,
-            ml: null,
             variant_selling_price: formData.sellingPrice,
             variant_stock: formData.stockAmount,
             created_at: new Date().toISOString(),
@@ -551,11 +575,7 @@ export default function AddProductPage() {
         }
 
         if (insertedData) {
-          // Images are already stored in the images JSONB column in baseProductData
-          setSuccess('Product created successfully!')
-          setTimeout(() => {
-            router.push('/products')
-          }, 1500)
+          setShowSuccessScreen(true)
         }
       }
     } catch (err) {
@@ -583,6 +603,37 @@ export default function AddProductPage() {
     return null
   }
 
+  // Success screen after product submission
+  if (showSuccessScreen) {
+    return (
+      <div className="flex h-screen bg-gray-100 transition-colors">
+        <Sidebar />
+        <div className="flex-1 overflow-auto">
+          <Header />
+          <main className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] p-6 sm:p-8">
+            <div className="max-w-xl w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-8 sm:p-10 text-center">
+              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+                <Save className="w-8 h-8 text-green-600" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Product submitted successfully</h2>
+              <p className="text-base sm:text-lg text-gray-700 leading-relaxed mb-6">
+                Thank you for listing with Zambeel. Our team will review your product and approve/refuse in 2-3 business days.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">Redirecting to products page...</p>
+              <button
+                type="button"
+                onClick={() => router.push('/products')}
+                className="px-6 py-3 bg-primary-blue text-white font-medium rounded-xl hover:opacity-90 transition-all"
+              >
+                Go to Products
+              </button>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen bg-gray-100 transition-colors">
       <Sidebar />
@@ -608,12 +659,6 @@ export default function AddProductPage() {
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
               <p className="text-sm text-red-600 font-medium">{error}</p>
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
-              <p className="text-sm text-green-600 font-medium">{success}</p>
             </div>
           )}
 
@@ -851,9 +896,12 @@ export default function AddProductPage() {
               {/* 8. Product Selling Price */}
               <div className="mb-6">
                 <label htmlFor="mainSellingPrice" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                  Product Selling Price <span className="hidden sm:inline">(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
+                  Product Selling Price <span>(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
+                <div className={`flex items-stretch rounded-xl overflow-hidden border-2 focus-within:border-primary-blue focus-within:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] ${errors.sellingPrice ? 'border-red-500' : 'border-gray-200'}`}>
+                  <div className="flex items-center justify-center min-w-[56px] sm:min-w-[64px] px-2 sm:px-3 py-3 rounded-l-xl bg-gray-100 border-r border-gray-200 text-sm font-semibold text-gray-700">
+                    {priceCurrency}
+                  </div>
                   <input
                     id="mainSellingPrice"
                     name="sellingPrice"
@@ -862,9 +910,7 @@ export default function AddProductPage() {
                     step="1"
                     value={formData.sellingPrice || ''}
                     onChange={handleChange}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                      errors.sellingPrice ? 'border-red-500' : 'border-gray-200'
-                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                    className="flex-1 min-w-0 px-4 py-3 border-0 rounded-r-xl bg-white text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none focus:ring-0"
                     placeholder="0"
                     required
                   />
@@ -1106,20 +1152,23 @@ export default function AddProductPage() {
                           {/* Variant Selling Price */}
                           <div className="mb-4 sm:mb-5">
                             <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                              Product Selling Price <span className="hidden sm:inline">(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
+                              Product Selling Price <span>(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
                             </label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={variant.price || ''}
-                              onChange={(e) => updateVariant(variant.id, 'price', Number(e.target.value) || 0)}
-                              className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                                errors[`variant_price_${index}`] ? 'border-red-500' : 'border-gray-200'
-                              } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                              placeholder="0"
-                              required
-                            />
+                            <div className={`flex items-stretch rounded-xl overflow-hidden border-2 focus-within:border-primary-blue focus-within:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] ${errors[`variant_price_${index}`] ? 'border-red-500' : 'border-gray-200'}`}>
+                              <div className="flex items-center justify-center min-w-[56px] sm:min-w-[64px] px-2 sm:px-3 py-3 rounded-l-xl bg-gray-100 border-r border-gray-200 text-sm font-semibold text-gray-700">
+                                {priceCurrency}
+                              </div>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={variant.price || ''}
+                                onChange={(e) => updateVariant(variant.id, 'price', Number(e.target.value) || 0)}
+                                className="flex-1 min-w-0 px-4 py-3 border-0 rounded-r-xl bg-white text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none focus:ring-0"
+                                placeholder="0"
+                                required
+                              />
+                            </div>
                             {errors[`variant_price_${index}`] && (
                               <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_price_${index}`]}</span>
                             )}

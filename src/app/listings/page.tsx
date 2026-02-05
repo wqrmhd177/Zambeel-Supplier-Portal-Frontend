@@ -9,6 +9,7 @@ import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { extractImages } from '@/lib/imageHelpers'
+import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 // Use GroupedProduct as the Product interface
 type Product = GroupedProduct
@@ -19,6 +20,7 @@ export default function ListingsPage() {
   const [activeTab, setActiveTab] = useState<'new' | 'old'>('new')
   const [products, setProducts] = useState<Product[]>([])
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -62,7 +64,9 @@ export default function ListingsPage() {
         // Group rows by product_id
         const groupedProducts = groupProductsByProductId(productsData)
         setAllProducts(groupedProducts)
-        
+        const ownerIds = Array.from(new Set(groupedProducts.map((p) => p.fk_owned_by).filter(Boolean)))
+        const map = await getCurrenciesForUserIds(ownerIds)
+        setCurrencyByOwnerId(map)
         // Filter products based on active tab
         if (activeTab === 'new') {
           // New Listings: Products where at least one variant doesn't have company_sku
@@ -411,11 +415,10 @@ function ProductListingCard({
                   {product.product_title}
                 </h3>
                 <div className="flex items-center gap-4 mt-2 text-sm theme-muted">
-                  <span><strong>Bar Code:</strong> <span className="font-mono">{product.bar_code}</span></span>
                   <span><strong>Price:</strong> {
                     product.variants.length > 0 && product.variants[0].variant_selling_price
-                      ? `PKR ${product.variants[0].variant_selling_price.toLocaleString()}`
-                      : 'PKR 0'
+                      ? `${currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} ${product.variants[0].variant_selling_price.toLocaleString()}`
+                      : `${currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} 0`
                   }</span>
                   {hasVariants && (
                     <span><strong>Variants:</strong> {variantsWithSKU}/{totalVariants} assigned</span>
@@ -483,19 +486,9 @@ function ProductListingCard({
                         <p className="text-sm text-gray-900">{variant.color}</p>
                       </div>
                     )}
-                    {variant.ml && (
-                      <div>
-                        <label className="text-xs font-semibold text-gray-500">ML</label>
-                        <p className="text-sm text-gray-900">{variant.ml}</p>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Variant SKU</label>
-                      <p className="text-sm font-mono text-gray-900">{variant.bar_code || 'N/A'}</p>
-                    </div>
                     <div>
                       <label className="text-xs font-semibold text-gray-500">Price</label>
-                      <p className="text-sm text-gray-900">PKR {variant.variant_selling_price.toLocaleString()}</p>
+                      <p className="text-sm text-gray-900">{currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} {variant.variant_selling_price.toLocaleString()}</p>
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-gray-500">Stock</label>

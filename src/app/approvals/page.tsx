@@ -12,12 +12,12 @@ import {
   rejectPriceChange,
   PriceHistoryEntry
 } from '@/lib/priceHistoryHelpers'
+import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 type RequestWithProduct = PriceHistoryEntry & {
   product_title?: string
   size?: string
   color?: string
-  ml?: string
   company_sku?: string
 }
 
@@ -25,6 +25,7 @@ export default function ApprovalsPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } = useAuth()
   const [requests, setRequests] = useState<RequestWithProduct[]>([])
+  const [currencyBySupplierId, setCurrencyBySupplierId] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [processingId, setProcessingId] = useState<string | null>(null)
@@ -54,6 +55,9 @@ export default function ApprovalsPage() {
     try {
       const data = await fetchRequestsByStatus(filter)
       setRequests(data)
+      const supplierIds = Array.from(new Set(data.map((r) => r.created_by_supplier_id).filter(Boolean))) as string[]
+      const map = await getCurrenciesForUserIds(supplierIds)
+      setCurrencyBySupplierId(map)
     } catch (err) {
       console.error('Error fetching requests:', err)
       setError('Failed to load approval requests')
@@ -122,7 +126,6 @@ export default function ApprovalsPage() {
     const parts = []
     if (request.size) parts.push(`Size: ${request.size}`)
     if (request.color) parts.push(`Color: ${request.color}`)
-    if (request.ml) parts.push(`${request.ml}ml`)
     return parts.length > 0 ? parts.join(', ') : 'No variants'
   }
 
@@ -326,11 +329,11 @@ export default function ApprovalsPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <span className="text-sm line-through text-gray-400">
-                                PKR {request.previous_price.toFixed(2)}
+                                {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.previous_price.toFixed(2)}
                               </span>
                               <span className="text-gray-400">→</span>
                               <span className="text-sm font-semibold text-gray-900">
-                                PKR {request.updated_price.toFixed(2)}
+                                {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.updated_price.toFixed(2)}
                               </span>
                               {request.updated_price > request.previous_price ? (
                                 <span className="text-xs text-green-600">

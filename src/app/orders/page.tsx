@@ -11,7 +11,7 @@ import {
   Phone,
   MapPin,
   Package,
-  DollarSign,
+  Banknote,
   CheckCircle,
   XCircle,
   Clock,
@@ -23,6 +23,7 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { getCurrencyForUserId, getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 interface Order {
   id: number
@@ -181,6 +182,19 @@ export default function OrdersPage() {
       setAllOrders(ordersWithPrices)
       applyFilters(ordersWithPrices)
       calculateStats(ordersWithPrices)
+
+      // Currency: current user when supplier, per-vendor when purchaser/admin
+      if (userRole === 'supplier') {
+        const id = userFriendlyId || userId
+        if (id) {
+          const currency = await getCurrencyForUserId(id)
+          setCurrentUserCurrency(currency)
+        }
+      } else if ((userRole === 'purchaser' || userRole === 'admin') && ordersWithPrices.length > 0) {
+        const vendorIds = Array.from(new Set(ordersWithPrices.map((o) => o.vendor_id).filter(Boolean)))
+        const map = await getCurrenciesForUserIds(vendorIds)
+        setCurrencyByVendorId(map)
+      }
     } catch (err) {
       console.error('Unexpected error:', err)
       setOrders([])
@@ -491,10 +505,15 @@ export default function OrdersPage() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-gray-600 text-sm mb-1">Total Revenue</p>
-                  <h3 className="text-3xl font-bold text-gray-900">PKR {stats.totalRevenue.toLocaleString()}</h3>
+                  <h3 className="text-3xl font-bold text-gray-900">
+                    {userRole === 'supplier' ? currentUserCurrency : (currencyByVendorId.size > 0 ? Array.from(currencyByVendorId.values())[0] : 'USD')} {stats.totalRevenue.toLocaleString()}
+                    {(userRole === 'purchaser' || userRole === 'admin') && currencyByVendorId.size > 1 && (
+                      <span className="text-sm font-normal text-gray-500 ml-1">(mixed currencies)</span>
+                    )}
+                  </h3>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-white" />
+                  <Banknote className="w-6 h-6 text-white" />
                 </div>
               </div>
             </div>
@@ -650,7 +669,7 @@ export default function OrdersPage() {
                           <td className="px-6 py-4">
                             <div className="text-sm font-semibold text-gray-900">
                               {order.supplier_price !== undefined && order.supplier_price !== null
-                                ? `PKR ${Number(order.supplier_price).toLocaleString()}`
+                                ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByVendorId.get(order.vendor_id) ?? 'USD')} ${Number(order.supplier_price).toLocaleString()}`
                                 : 'N/A'}
                             </div>
                           </td>

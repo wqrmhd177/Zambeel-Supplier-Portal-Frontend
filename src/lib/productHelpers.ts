@@ -15,7 +15,6 @@ export interface ProductRow {
   variant_id: number | null
   size: string | null
   color: string | null
-  ml: string | null
   variant_selling_price: number | null
   variant_stock: number | null
   company_sku: string | null
@@ -38,7 +37,6 @@ export interface VariantInfo {
   bar_code: string | null
   size: string | null
   color: string | null
-  ml: string | null
   variant_selling_price: number
   variant_stock: number
   company_sku: string | null
@@ -71,14 +69,13 @@ export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
     const product = grouped.get(row.product_id)!
 
     // If this row has variant_id, add it as a variant
-    // Products without variants still have variant_id (auto-generated), but size/color/ml are NULL
+    // Products without variants still have variant_id (auto-generated), but size/color are NULL
     if (row.variant_id) {
       product.variants.push({
         variant_id: row.variant_id,
         bar_code: row.bar_code,
         size: row.size,
         color: row.color,
-        ml: row.ml,
         variant_selling_price: row.variant_selling_price || 0,
         variant_stock: row.variant_stock || 0,
         company_sku: row.company_sku,

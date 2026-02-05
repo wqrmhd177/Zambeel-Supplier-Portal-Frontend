@@ -351,7 +351,6 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
   product_title?: string
   size?: string
   color?: string
-  ml?: string
   company_sku?: string
 }>> {
   try {
@@ -377,7 +376,7 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
     // Fetch product details for these variants
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('variant_id, product_title, size, color, ml, company_sku')
+      .select('variant_id, product_title, size, color, company_sku')
       .in('variant_id', variantIds)
     
     if (productsError) {
@@ -399,7 +398,6 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
         product_title: product?.product_title,
         size: product?.size,
         color: product?.color,
-        ml: product?.ml,
         company_sku: product?.company_sku
       }
     })
@@ -530,7 +528,6 @@ export async function fetchRequestsByStatus(
   product_title?: string
   size?: string
   color?: string
-  ml?: string
   company_sku?: string
 }>> {
   try {
@@ -561,7 +558,7 @@ export async function fetchRequestsByStatus(
     // Fetch product details for these variants
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('variant_id, product_title, size, color, ml, company_sku')
+      .select('variant_id, product_title, size, color, company_sku')
       .in('variant_id', variantIds)
     
     if (productsError) {
@@ -583,7 +580,6 @@ export async function fetchRequestsByStatus(
         product_title: product?.product_title,
         size: product?.size,
         color: product?.color,
-        ml: product?.ml,
         company_sku: product?.company_sku
       }
     })

@@ -9,13 +9,18 @@ import {
   Filter,
   Edit,
   Trash2,
-  TrendingUp,
-  AlertCircle,
   CheckCircle,
+  Clock,
   X,
   Download,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  Activity,
+  Ruler,
+  Palette,
+  Tag,
+  Box
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
@@ -24,10 +29,21 @@ import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
-import { fetchPendingPriceRequests, PriceHistoryEntry } from '@/lib/priceHistoryHelpers'
+import { fetchPendingPriceRequests, PriceHistoryEntry, createPriceHistoryEntry } from '@/lib/priceHistoryHelpers'
+import { getCurrencyForUserId, getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 // Use GroupedProduct as the Product interface
 type Product = GroupedProduct
+
+/** Display status from status + company_sku: Pending Approval, Active, or Inactive */
+function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'Inactive' {
+  const status = product.status || 'active'
+  const hasCompanySku = product.variants?.some(v => v.company_sku != null && String(v.company_sku).trim() !== '') ?? false
+  if (status === 'active' && !hasCompanySku) return 'Pending Approval'
+  if (status === 'active' && hasCompanySku) return 'Active'
+  if (status === 'inactive' && hasCompanySku) return 'Pending Approval'
+  return 'Inactive'
+}
 
 export default function ProductsPage() {
   const router = useRouter()
@@ -48,16 +64,26 @@ export default function ProductsPage() {
   const [imageLoading, setImageLoading] = useState(false)
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
   
+  // View Variants modal: edit prices only
+  const [isEditingPrices, setIsEditingPrices] = useState(false)
+  const [editedVariantPrices, setEditedVariantPrices] = useState<Map<number, number>>(new Map())
+  const [isSavingPrices, setIsSavingPrices] = useState(false)
+  const [priceSaveError, setPriceSaveError] = useState('')
+  const [priceSaveSuccess, setPriceSaveSuccess] = useState('')
+  
   // Pending price changes
   const [pendingPriceChanges, setPendingPriceChanges] = useState<Map<number, PriceHistoryEntry>>(new Map())
+
+  // Currency by stock location (current user when supplier, per-owner when purchaser/admin)
+  const [currentUserCurrency, setCurrentUserCurrency] = useState<string>('USD')
+  const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
 
   // Stats
   const [stats, setStats] = useState({
     total: 0,
+    pendingApproval: 0,
     active: 0,
     inactive: 0,
-    outOfStock: 0,
-    totalValue: 0,
   })
 
   useEffect(() => {
@@ -328,11 +354,7 @@ export default function ProductsPage() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(product => {
-        return (
-          product.product_title.toLowerCase().includes(query) ||
-          product.bar_code.toLowerCase().includes(query) ||
-          product.variants.some(v => v.bar_code?.toLowerCase().includes(query) || '')
-        )
+        return product.product_title.toLowerCase().includes(query)
       })
     }
 
@@ -348,60 +370,51 @@ export default function ProductsPage() {
 
   const calculateStats = (productsData: Product[]) => {
     const total = productsData.length
-    
-    // Calculate stats based on status and variants
+    let pendingApproval = 0
     let active = 0
     let inactive = 0
-    let outOfStock = 0
-    let totalValue = 0
 
     productsData.forEach(product => {
-      const productStatus = product.status || 'active'
-      
-      if (product.variants && product.variants.length > 0) {
-        // Product with variants
-        const variantStock = product.variants.reduce((sum, v) => sum + (v.variant_stock || 0), 0)
-        const variantValue = product.variants.reduce((sum, v) => sum + (v.variant_selling_price * (v.variant_stock || 0)), 0)
-        
-        totalValue += variantValue
-        
-        if (productStatus === 'inactive') {
-          inactive++
-        } else if (variantStock === 0) {
-          outOfStock++
-        } else {
-          active++
-        }
-      } else {
-        // Product without variants - get price and stock from first row's variant fields
-        // Since products without variants still have variant_selling_price and variant_stock
-        const productPrice = product.variants.length > 0 
-          ? product.variants[0].variant_selling_price 
-          : 0
-        const productStock = product.variants.length > 0
-          ? product.variants[0].variant_stock
-          : 0
-        const productValue = productPrice * productStock
-        totalValue += productValue
-        
-        if (productStatus === 'inactive') {
-          inactive++
-        } else if (productStock === 0) {
-          outOfStock++
-        } else {
-          active++
-        }
-      }
+      const displayStatus = getDisplayStatus(product)
+      if (displayStatus === 'Pending Approval') pendingApproval++
+      else if (displayStatus === 'Active') active++
+      else inactive++
     })
 
     setStats({
       total,
+      pendingApproval,
       active,
       inactive,
-      outOfStock,
-      totalValue,
     })
   }
+
+  // Recalculate stats when pending price changes load/update
+  useEffect(() => {
+    if (allProducts.length > 0) {
+      calculateStats(allProducts)
+    }
+  }, [pendingPriceChanges, allProducts])
+
+  // Currency: current user when supplier, per-owner when purchaser/admin
+  useEffect(() => {
+    const run = async () => {
+      if (userRole === 'supplier') {
+        const id = userFriendlyId || userId
+        if (id) {
+          const currency = await getCurrencyForUserId(id)
+          setCurrentUserCurrency(currency)
+        }
+        return
+      }
+      if ((userRole === 'purchaser' || userRole === 'admin') && allProducts.length > 0) {
+        const ownerIds = Array.from(new Set(allProducts.map((p) => p.fk_owned_by).filter(Boolean)))
+        const map = await getCurrenciesForUserIds(ownerIds)
+        setCurrencyByOwnerId(map)
+      }
+    }
+    run()
+  }, [userRole, userFriendlyId, userId, allProducts])
 
   const handleStatusChange = async (productId: number, newStatus: string) => {
     try {
@@ -435,11 +448,109 @@ export default function ProductsPage() {
     }
   }
 
+  const handleOpenModalForEditPrices = (product: Product) => {
+    setSelectedProduct(product)
+    setPriceSaveError('')
+    setPriceSaveSuccess('')
+    setIsViewModalOpen(true)
+    if (product.variants && product.variants.length > 0) {
+      setEditedVariantPrices(new Map(product.variants.map(v => [v.variant_id, v.variant_selling_price])))
+      setIsEditingPrices(true)
+    } else {
+      setEditedVariantPrices(new Map())
+      setIsEditingPrices(false)
+    }
+  }
+
+  const handleStartEditPrices = () => {
+    if (!selectedProduct) return
+    setEditedVariantPrices(new Map(selectedProduct.variants.map(v => [v.variant_id, v.variant_selling_price])))
+    setIsEditingPrices(true)
+    setPriceSaveError('')
+    setPriceSaveSuccess('')
+  }
+
+  const handleCancelEditPrices = () => {
+    setIsEditingPrices(false)
+    setEditedVariantPrices(new Map())
+    setPriceSaveError('')
+    setPriceSaveSuccess('')
+  }
+
+  const handleSavePrices = async () => {
+    if (!selectedProduct || selectedProduct.variants.length === 0) return
+    const hasAnyChange = selectedProduct.variants.some(
+      v => (editedVariantPrices.get(v.variant_id) ?? v.variant_selling_price) !== v.variant_selling_price
+    )
+    if (!hasAnyChange) {
+      handleCancelEditPrices()
+      return
+    }
+    setIsSavingPrices(true)
+    setPriceSaveError('')
+    setPriceSaveSuccess('')
+    try {
+      const productIdNum = selectedProduct.product_id
+      let hasPendingChanges = false
+      const purchaserIntId = (userRole === 'purchaser' && userId) ? await getPurchaserIntegerId(userId) : null
+
+      for (const variant of selectedProduct.variants) {
+        const newPrice = editedVariantPrices.get(variant.variant_id) ?? variant.variant_selling_price
+        const oldPrice = variant.variant_selling_price
+        const priceChanged = oldPrice !== newPrice
+
+        if (!priceChanged) continue
+
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({
+            variant_selling_price: oldPrice,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('variant_id', variant.variant_id)
+          .eq('product_id', productIdNum)
+
+        if (updateError) {
+          setPriceSaveError(updateError.message || 'Failed to save price. Please try again.')
+          setIsSavingPrices(false)
+          return
+        }
+
+        if (userFriendlyId) {
+          await createPriceHistoryEntry(
+            productIdNum,
+            variant.variant_id,
+            oldPrice,
+            newPrice,
+            userFriendlyId,
+            purchaserIntId ?? null,
+            'pending'
+          )
+          hasPendingChanges = true
+        }
+      }
+
+      setPriceSaveSuccess(hasPendingChanges ? 'Price changes submitted for approval.' : 'Prices saved.')
+      await fetchProducts()
+      setIsEditingPrices(false)
+      setEditedVariantPrices(new Map())
+    } catch (err) {
+      console.error('Error saving prices:', err)
+      setPriceSaveError('An unexpected error occurred. Please try again.')
+    } finally {
+      setIsSavingPrices(false)
+    }
+  }
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false)
+    handleCancelEditPrices()
+  }
+
   const filteredProducts = products.filter(product => {
     const status = product.status || 'active'
 
-    const matchesSearch = product.product_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.bar_code.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = product.product_title.toLowerCase().includes(searchQuery.toLowerCase())
     
     const matchesFilter = filterStatus === 'all' || status === filterStatus
 
@@ -487,8 +598,8 @@ export default function ProductsPage() {
             </button>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+          {/* Stats Cards: Total Products, Pending Approval, Active, Inactive */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
             <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
               <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
@@ -497,6 +608,18 @@ export default function ProductsPage() {
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-md">
                   <Package className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+              </div>
+            </div>
+
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
+                <div>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Pending Approval</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.pendingApproval}</h3>
+                </div>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md">
+                  <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
@@ -521,30 +644,6 @@ export default function ProductsPage() {
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center shadow-md">
                   <Package className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                </div>
-              </div>
-            </div>
-
-            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
-              <div className="flex items-start justify-between mb-3 sm:mb-4">
-                <div>
-                  <p className="theme-label text-xs sm:text-sm mb-1">Out of Stock</p>
-                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.outOfStock}</h3>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-md">
-                  <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                </div>
-              </div>
-            </div>
-
-            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg col-span-2 md:col-span-1">
-              <div className="flex items-start justify-between mb-3 sm:mb-4">
-                <div>
-                  <p className="theme-label text-xs sm:text-sm mb-1">Total Value</p>
-                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">PKR {stats.totalValue.toLocaleString()}</h3>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md">
-                  <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
@@ -622,7 +721,9 @@ export default function ProductsPage() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full min-w-[800px]">
                   <thead className="bg-white/10 border-b border-white/20">
                     <tr>
@@ -630,7 +731,6 @@ export default function ProductsPage() {
                       {(userRole === 'purchaser' || userRole === 'admin') && (
                         <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Supplier</th>
                       )}
-                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Zambeel Sku</th>
                       <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Price</th>
                       <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Stock</th>
                       <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Status</th>
@@ -651,21 +751,22 @@ export default function ProductsPage() {
                       const pendingVariants = product.variants.filter(v => pendingPriceChanges.has(v.variant_id))
                       const hasPendingChanges = pendingVariants.length > 0
                       
-                      // Display price (show old price if pending, current price otherwise)
+                      // Display price (show old price if pending, current price otherwise); currency from stock location
+                      const currency = userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(product.fk_owned_by) ?? 'USD')
                       let displayPrice = ''
                       if (hasVariants && product.variants!.length > 0) {
                         const minPrice = Math.min(...product.variants!.map(v => v.variant_selling_price))
                         const maxPrice = Math.max(...product.variants!.map(v => v.variant_selling_price))
                         // Only show range if prices are different
                         if (minPrice === maxPrice) {
-                          displayPrice = `PKR ${minPrice.toLocaleString()}`
+                          displayPrice = `${currency} ${minPrice.toLocaleString()}`
                         } else {
-                          displayPrice = `PKR ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`
+                          displayPrice = `${currency} ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`
                         }
                       } else if (product.variants.length > 0 && product.variants[0].variant_selling_price) {
-                        displayPrice = `PKR ${product.variants[0].variant_selling_price.toLocaleString()}`
+                        displayPrice = `${currency} ${product.variants[0].variant_selling_price.toLocaleString()}`
                       } else {
-                        displayPrice = 'PKR 0'
+                        displayPrice = `${currency} 0`
                       }
 
                       const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') ? supplierMap.get(product.fk_owned_by) : null
@@ -725,20 +826,6 @@ export default function ProductsPage() {
                             </td>
                           )}
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-                            {product.variants.length > 0 && product.variants[0].company_sku
-                              ? (
-                                  <span className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-200">
-                                    Approved
-                                  </span>
-                                )
-                              : (
-                                  <span className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-semibold rounded-full bg-pink-100 text-pink-800 border-2 border-pink-200 italic">
-                                    Pending
-                                  </span>
-                                )
-                            }
-                          </td>
-                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                             <div className="flex items-center gap-2">
                               <span className="text-xs sm:text-sm font-medium theme-heading whitespace-nowrap">{displayPrice}</span>
                               {hasPendingChanges && (
@@ -752,23 +839,29 @@ export default function ProductsPage() {
                             {totalStock}
                           </td>
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-                            <select
-                              value={status}
-                              onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
-                              className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-full border-2 transition-all cursor-pointer appearance-none bg-no-repeat bg-right pr-8 ${
-                                status === 'active' 
-                                  ? 'bg-green-100 text-green-800 border-green-200'
-                                  : 'bg-gray-100 text-gray-800 border-gray-200'
-                              } hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary-blue`}
-                              style={{
-                                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
-                                backgroundPosition: 'right 0.5rem center',
-                                paddingRight: '2rem'
-                              }}
-                            >
-                              <option value="active">Active</option>
-                              <option value="inactive">Inactive</option>
-                            </select>
+                            {getDisplayStatus(product) === 'Pending Approval' ? (
+                              <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                Pending Approval
+                              </span>
+                            ) : (
+                              <select
+                                value={status}
+                                onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
+                                className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-full border-2 transition-all cursor-pointer appearance-none bg-no-repeat bg-right pr-8 ${
+                                  status === 'active'
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                } hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary-blue`}
+                                style={{
+                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                                  backgroundPosition: 'right 0.5rem center',
+                                  paddingRight: '2rem'
+                                }}
+                              >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                              </select>
+                            )}
                           </td>
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-right">
                             <div className="flex items-center justify-end gap-1 sm:gap-2">
@@ -783,9 +876,9 @@ export default function ProductsPage() {
                                 <span className="sm:hidden">View</span>
                               </button>
                               <button
-                                onClick={() => router.push(`/products/edit/${product.product_id}`)}
+                                onClick={() => handleOpenModalForEditPrices(product)}
                                 className="p-1.5 sm:p-2 theme-muted hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all"
-                                title="Edit"
+                                title="Edit prices"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
@@ -803,6 +896,91 @@ export default function ProductsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile Card View */}
+              <div className="lg:hidden space-y-3">
+                {products.map((product) => {
+                  const hasVariants = product.variants && product.variants.length > 0
+                  const status = product.status || 'active'
+                  const displayStatus = getDisplayStatus(product)
+                  const images = extractImages(product.image)
+                  const imageUrl = images.length > 0 ? images[0] : undefined
+
+                  return (
+                    <div key={product.product_id} className="theme-card rounded-xl p-4 flex items-center gap-3">
+                      {/* Product Image & Title */}
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {imageUrl && (
+                          <button
+                            onClick={() => {
+                              setViewerProduct(product)
+                              setIsImageViewerOpen(true)
+                              setCurrentImageIndex(0)
+                            }}
+                            className="hover:opacity-80 transition-opacity cursor-pointer flex-shrink-0"
+                          >
+                            <img
+                              src={imageUrl}
+                              alt={product.product_title}
+                              className="w-16 h-16 rounded-lg object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none'
+                              }}
+                            />
+                          </button>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium theme-heading truncate">{product.product_title}</div>
+                          {hasVariants && (
+                            <div className="text-xs text-violet-300 mt-1">
+                              {product.variants!.length} variant{product.variants!.length > 1 ? 's' : ''}
+                            </div>
+                          )}
+                          {/* Status: Pending Approval = badge only; Active/Inactive = dropdown */}
+                          <div className="mt-2">
+                            {displayStatus === 'Pending Approval' ? (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                Pending Approval
+                              </span>
+                            ) : (
+                              <select
+                                value={status}
+                                onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
+                                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border-2 transition-all cursor-pointer appearance-none bg-no-repeat bg-right pr-6 ${
+                                  status === 'active'
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                } hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary-blue`}
+                                style={{
+                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                                  backgroundPosition: 'right 0.25rem center',
+                                  paddingRight: '1.5rem'
+                                }}
+                              >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* View Button */}
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(product)
+                          setIsViewModalOpen(true)
+                        }}
+                        className="p-3 theme-label hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all flex-shrink-0"
+                        title="View Variants"
+                      >
+                        <Eye className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              </>
             )}
           </div>
         </main>
@@ -810,19 +988,45 @@ export default function ProductsPage() {
 
       {/* View Product Modal */}
       {isViewModalOpen && selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4" onClick={() => setIsViewModalOpen(false)}>
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between z-10">
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Product Details</h2>
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-2 sm:p-4" onClick={handleCloseViewModal}>
+          <div 
+            className="rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto relative"
+            style={{
+              background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+              boxShadow: '0 0 40px rgba(124, 58, 237, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+              border: '1px solid rgba(124, 58, 237, 0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div 
+              className="sticky top-0 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between z-10 rounded-t-xl sm:rounded-t-2xl"
+              style={{
+                background: 'linear-gradient(90deg, #7c3aed 0%, #5b21b6 50%, #4f46e5 100%)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 12px rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderBottom: '1px solid rgba(124, 58, 237, 0.5)',
+              }}
+            >
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white drop-shadow-lg">Product Details</h2>
               <button
-                onClick={() => setIsViewModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                onClick={handleCloseViewModal}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all flex-shrink-0 backdrop-blur-sm"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              {priceSaveError && (
+                <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
+                  {priceSaveError}
+                </div>
+              )}
+              {priceSaveSuccess && (
+                <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/40 text-green-200 text-sm">
+                  {priceSaveSuccess}
+                </div>
+              )}
               {/* Product Image */}
               {(() => {
                 // Get first image from array
@@ -836,16 +1040,23 @@ export default function ProductsPage() {
                         setIsImageViewerOpen(true)
                         setCurrentImageIndex(0)
                       }}
-                      className="hover:opacity-80 transition-opacity cursor-pointer"
+                      className="group relative transition-all duration-300 hover:scale-105"
                     >
                       <img
                         src={imageUrl}
                         alt={selectedProduct.product_title}
-                        className="w-48 h-48 sm:w-64 sm:h-64 rounded-xl object-cover border-2 border-gray-200"
+                        className="w-48 h-48 sm:w-64 sm:h-64 rounded-xl object-cover transition-all duration-300"
+                        style={{
+                          boxShadow: '0 0 20px rgba(124, 58, 237, 0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+                          border: '2px solid rgba(124, 58, 237, 0.3)',
+                        }}
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none'
                         }}
                       />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl transition-all duration-300 flex items-center justify-center">
+                        <Eye className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-all duration-300" />
+                      </div>
                     </button>
                   </div>
                 ) : null
@@ -853,158 +1064,264 @@ export default function ProductsPage() {
 
               {/* Product Basic Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Product Title</label>
-                  <p className="text-sm sm:text-base md:text-lg font-medium text-gray-900 mt-1">{selectedProduct.product_title}</p>
+                <div 
+                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Package className="w-4 h-4 text-violet-400" />
+                    <label className="text-xs sm:text-sm font-semibold text-white/70">Product Title</label>
+                  </div>
+                  <p className="text-sm sm:text-base md:text-lg font-medium text-white">{selectedProduct.product_title}</p>
                 </div>
-                <div>
-                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Bar Code</label>
-                  <p className="text-sm sm:text-base md:text-lg font-mono text-gray-900 mt-1">{selectedProduct.bar_code}</p>
-                </div>
-                <div>
-                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Price</label>
-                  <p className="text-sm sm:text-base md:text-lg font-medium text-gray-900 mt-1">
+                <div 
+                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <label className="text-xs sm:text-sm font-semibold text-white/70 block mb-2">Price</label>
+                  <p className="text-sm sm:text-base md:text-lg font-medium text-white">
                     {selectedProduct.variants.length > 0 && selectedProduct.variants[0].variant_selling_price
-                      ? `PKR ${selectedProduct.variants[0].variant_selling_price.toLocaleString()}`
-                      : 'PKR 0'}
+                      ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} ${selectedProduct.variants[0].variant_selling_price.toLocaleString()}`
+                      : `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} 0`}
                   </p>
                 </div>
-                <div>
-                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Status</label>
-                  <p className="mt-1">
-                    <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${
-                      selectedProduct.status === 'active' 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {selectedProduct.status === 'active' ? 'Active' : 'Inactive'}
-                    </span>
-                  </p>
+                <div 
+                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-4 h-4 text-violet-400" />
+                    <label className="text-xs sm:text-sm font-semibold text-white/70">Status</label>
+                  </div>
+                  <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${
+                    getDisplayStatus(selectedProduct) === 'Active'
+                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                      : getDisplayStatus(selectedProduct) === 'Pending Approval'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
+                  }`}>
+                    {getDisplayStatus(selectedProduct)}
+                  </span>
                 </div>
               </div>
 
               {/* Variants Summary */}
               {selectedProduct.variants && selectedProduct.variants.length > 0 ? (
-                <div className="border-t border-gray-200 pt-4 sm:pt-6">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+                <div 
+                  className="pt-4 sm:pt-6 mt-4 sm:mt-6"
+                  style={{
+                    borderTop: '1px solid rgba(124, 58, 237, 0.3)',
+                  }}
+                >
+                  <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">
                     Variants Summary ({selectedProduct.variants.length})
                   </h3>
                   <div className="space-y-2 sm:space-y-3">
                     {selectedProduct.variants.map((variant, index) => (
                       <div
                         key={variant.variant_id || index}
-                        className="bg-gray-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200"
+                        className="rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all duration-300 hover:scale-[1.02] group"
+                        style={{
+                          background: variant.variant_stock === 0 
+                            ? 'linear-gradient(145deg, rgba(127,29,29,0.3) 0%, rgba(153,27,27,0.2) 100%)'
+                            : 'linear-gradient(145deg, rgba(30,27,75,0.5) 0%, rgba(45,27,105,0.3) 100%)',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                          border: variant.variant_stock === 0 
+                            ? '1px solid rgba(239,68,68,0.3)'
+                            : '1px solid rgba(255,255,255,0.08)',
+                        }}
                       >
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                           {variant.size && (
                             <div>
-                              <label className="text-xs font-semibold text-gray-500">Size</label>
-                              <p className="text-sm text-gray-900 mt-1">{variant.size}</p>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Ruler className="w-3 h-3 text-violet-400" />
+                                <label className="text-xs font-semibold text-white/70">Size</label>
+                              </div>
+                              <p className="text-sm text-white">{variant.size}</p>
                             </div>
                           )}
                           {variant.color && (
                             <div>
-                              <label className="text-xs font-semibold text-gray-500">Color</label>
-                              <p className="text-sm text-gray-900 mt-1">{variant.color}</p>
-                            </div>
-                          )}
-                          {variant.ml && (
-                            <div>
-                              <label className="text-xs font-semibold text-gray-500">ML</label>
-                              <p className="text-sm text-gray-900 mt-1">{variant.ml}</p>
-                            </div>
-                          )}
-                          {variant.bar_code && (
-                            <div>
-                              <label className="text-xs font-semibold text-gray-500">Bar Code</label>
-                              <p className="text-sm font-mono text-gray-900 mt-1">{variant.bar_code}</p>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Palette className="w-3 h-3 text-violet-400" />
+                                <label className="text-xs font-semibold text-white/70">Color</label>
+                              </div>
+                              <p className="text-sm text-white">{variant.color}</p>
                             </div>
                           )}
                           {variant.company_sku && (
                             <div>
-                              <label className="text-xs font-semibold text-gray-500">Zambeel SKU</label>
-                              <p className="text-sm font-mono text-gray-900 mt-1">{variant.company_sku}</p>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Tag className="w-3 h-3 text-violet-400" />
+                                <label className="text-xs font-semibold text-white/70">Zambeel SKU</label>
+                              </div>
+                              <p className="text-sm font-mono text-white">{variant.company_sku}</p>
                             </div>
                           )}
                           <div>
-                            <label className="text-xs font-semibold text-gray-500">Price</label>
-                            <p className="text-sm font-medium text-gray-900 mt-1">
-                              PKR {variant.variant_selling_price.toLocaleString()}
-                            </p>
+                            <label className="text-xs font-semibold text-white/70 block mb-1">Price</label>
+                            {isEditingPrices ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={editedVariantPrices.get(variant.variant_id) ?? variant.variant_selling_price}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value)
+                                  if (!Number.isNaN(val) && val >= 0) {
+                                    setEditedVariantPrices(prev => {
+                                      const next = new Map(prev)
+                                      next.set(variant.variant_id, val)
+                                      return next
+                                    })
+                                  }
+                                }}
+                                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-white">
+                                {userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} {variant.variant_selling_price.toLocaleString()}
+                              </p>
+                            )}
                           </div>
                           <div>
-                            <label className="text-xs font-semibold text-gray-500">Stock</label>
-                            <p className={`text-sm font-medium mt-1 ${
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Box className="w-3 h-3 text-violet-400" />
+                              <label className="text-xs font-semibold text-white/70">Stock</label>
+                            </div>
+                            <p className={`text-sm font-medium ${
                               variant.variant_stock === 0 
-                                ? 'text-red-600' 
-                                : 'text-gray-900'
+                                ? 'text-red-400' 
+                                : 'text-white'
                             }`}>
                               {variant.variant_stock}
+                              {variant.variant_stock === 0 && <span className="ml-1 text-xs">(Out of Stock)</span>}
                             </p>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  
-                  {/* Variants Summary Stats */}
-                  <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg sm:rounded-xl border border-blue-200">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <div>
-                        <label className="text-xs font-semibold text-blue-600">Total Variants</label>
-                        <p className="text-base sm:text-lg font-bold text-blue-900 mt-1">
-                          {selectedProduct.variants.length}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-blue-600">Total Stock</label>
-                        <p className="text-base sm:text-lg font-bold text-blue-900 mt-1">
-                          {selectedProduct.variants.reduce((sum, v) => sum + (v.variant_stock || 0), 0)}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-blue-600">Price Range</label>
-                        <p className="text-base sm:text-lg font-bold text-blue-900 mt-1">
-                          PKR {Math.min(...selectedProduct.variants.map(v => v.variant_selling_price)).toLocaleString()} - {Math.max(...selectedProduct.variants.map(v => v.variant_selling_price)).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               ) : (
-                <div className="border-t border-gray-200 pt-4 sm:pt-6">
-                  <div>
-                    <label className="text-xs sm:text-sm font-semibold text-gray-500">Stock</label>
-                    <p className={`text-sm sm:text-base md:text-lg font-medium mt-1 ${
+                <div 
+                  className="pt-4 sm:pt-6 mt-4 sm:mt-6"
+                  style={{
+                    borderTop: '1px solid rgba(124, 58, 237, 0.3)',
+                  }}
+                >
+                  <div 
+                    className="p-4 rounded-xl"
+                    style={{
+                      background: 'linear-gradient(145deg, rgba(30,27,75,0.5) 0%, rgba(45,27,105,0.3) 100%)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Box className="w-4 h-4 text-violet-400" />
+                      <label className="text-xs sm:text-sm font-semibold text-white/70">Stock</label>
+                    </div>
+                    <p className={`text-sm sm:text-base md:text-lg font-medium ${
                       (selectedProduct.variants.length > 0 ? selectedProduct.variants[0].variant_stock : 0) === 0 
-                        ? 'text-red-600' 
-                        : 'text-gray-900'
+                        ? 'text-red-400' 
+                        : 'text-white'
                     }`}>
                       {selectedProduct.variants.length > 0 ? selectedProduct.variants[0].variant_stock : 0}
                     </p>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-3 sm:mt-4">This product has no variants.</p>
+                  <p className="text-xs sm:text-sm text-white/60 mt-3 sm:mt-4 text-center">This product has no variants.</p>
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-gray-200">
-                <button
-                  onClick={() => setIsViewModalOpen(false)}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-gray-300 rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    setIsViewModalOpen(false)
-                    router.push(`/products/edit/${selectedProduct.product_id}`)
-                  }}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg sm:rounded-xl text-sm sm:text-base text-white font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                >
-                  <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Edit Product
-                </button>
+              <div 
+                className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 mt-4 sm:mt-6"
+                style={{
+                  borderTop: '1px solid rgba(124, 58, 237, 0.3)',
+                }}
+              >
+                {isEditingPrices ? (
+                  <>
+                    <button
+                      onClick={handleCancelEditPrices}
+                      disabled={isSavingPrices}
+                      className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-70"
+                      style={{
+                        background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'white',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSavePrices}
+                      disabled={isSavingPrices}
+                      className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base text-white font-semibold transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2 disabled:opacity-70"
+                      style={{
+                        background: 'linear-gradient(90deg, #7c3aed 0%, #5b21b6 50%, #4f46e5 100%)',
+                        boxShadow: '0 0 20px rgba(124, 58, 237, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                      }}
+                    >
+                      {isSavingPrices ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                          Save prices
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleCloseViewModal}
+                      className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold transition-all duration-300 hover:scale-105"
+                      style={{
+                        background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'white',
+                      }}
+                    >
+                      Close
+                    </button>
+                    {selectedProduct.variants && selectedProduct.variants.length > 0 && (
+                      <button
+                        onClick={handleStartEditPrices}
+                        className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base text-white font-semibold transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
+                        style={{
+                          background: 'linear-gradient(90deg, #7c3aed 0%, #5b21b6 50%, #4f46e5 100%)',
+                          boxShadow: '0 0 20px rgba(124, 58, 237, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                        }}
+                      >
+                        <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                        Edit prices
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>

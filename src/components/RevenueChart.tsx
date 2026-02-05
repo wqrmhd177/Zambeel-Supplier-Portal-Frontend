@@ -11,12 +11,12 @@ const data = [
   { name: 'Jun', Revenue: 0, Orders: 0 },
 ]
 
-export default function RevenueChart() {
+export default function RevenueChart({ currency = 'USD' }: { currency?: string }) {
   return (
     <div className="theme-card rounded-2xl p-6 mb-8">
       <div className="mb-6">
         <h2 className="text-xl font-bold mb-1 theme-heading">Revenue Overview</h2>
-        <p className="theme-muted text-sm">Your monthly performance metrics</p>
+        <p className="theme-muted text-sm">Your monthly performance metrics ({currency})</p>
       </div>
       
       <ResponsiveContainer width="100%" height={300}>
@@ -30,6 +30,7 @@ export default function RevenueChart() {
           <YAxis 
             stroke="rgba(255,255,255,0.7)"
             style={{ fontSize: '12px' }}
+            tickFormatter={(v) => `${currency} ${v}`}
           />
           <Tooltip 
             contentStyle={{
@@ -38,6 +39,7 @@ export default function RevenueChart() {
               borderRadius: '8px',
               color: '#fff',
             }}
+            formatter={(value: number, name: string) => [name === 'Revenue' ? `${currency} ${value.toLocaleString()}` : value, name]}
           />
           <Legend 
             wrapperStyle={{ paddingTop: '20px' }}

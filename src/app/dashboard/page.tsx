@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -9,10 +9,19 @@ import RevenueChart from '@/components/RevenueChart'
 import SupplierProfile from '@/components/SupplierProfile'
 import QuickActions from '@/components/QuickActions'
 import { useAuth } from '@/hooks/useAuth'
+import { getCurrencyForUserId } from '@/lib/currencyHelpers'
 
 export default function Dashboard() {
-  const { isAuthenticated, isLoading, userRole } = useAuth()
+  const { isAuthenticated, isLoading, userRole, userFriendlyId, userId } = useAuth()
   const router = useRouter()
+  const [currency, setCurrency] = useState<string>('USD')
+
+  useEffect(() => {
+    const id = userFriendlyId || userId
+    if (id) {
+      getCurrencyForUserId(id).then(setCurrency)
+    }
+  }, [userFriendlyId, userId])
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -50,8 +59,8 @@ export default function Dashboard() {
         <Header />
         
         <main className="p-8 bg-[#f5f3ff]">
-          <StatsCards />
-          <RevenueChart />
+          <StatsCards currency={currency} />
+          <RevenueChart currency={currency} />
           <SupplierProfile />
           <QuickActions />
         </main>

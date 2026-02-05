@@ -1,39 +1,39 @@
 'use client'
 
-import { Package, ShoppingCart, DollarSign, TrendingUp } from 'lucide-react'
+import { Package, ShoppingCart, Banknote, TrendingUp } from 'lucide-react'
 
-const stats = [
-  {
-    title: 'Total Products',
-    value: '0',
-    subtitle: 'Start selling products',
-    icon: Package,
-    color: 'from-cyan-500 to-blue-500',
-  },
-  {
-    title: 'Active Orders',
-    value: '0',
-    subtitle: 'No orders yet',
-    icon: ShoppingCart,
-    color: 'from-emerald-500 to-green-500',
-  },
-  {
-    title: 'Total Revenue',
-    value: 'PKR 0',
-    subtitle: 'This month',
-    icon: DollarSign,
-    color: 'from-purple-500 to-pink-500',
-  },
-  {
-    title: 'Growth',
-    value: '0%',
-    subtitle: 'vs. last month',
-    icon: TrendingUp,
-    color: 'from-orange-500 to-yellow-500',
-  },
-]
+export default function StatsCards({ currency = 'USD' }: { currency?: string }) {
+  const stats = [
+    {
+      title: 'Total Products',
+      value: '0',
+      subtitle: 'Start selling products',
+      icon: Package,
+      color: 'from-cyan-500 to-blue-500',
+    },
+    {
+      title: 'Active Orders',
+      value: '0',
+      subtitle: 'No orders yet',
+      icon: ShoppingCart,
+      color: 'from-emerald-500 to-green-500',
+    },
+    {
+      title: 'Total Revenue',
+      value: `${currency} 0`,
+      subtitle: 'This month',
+      icon: Banknote,
+      color: 'from-purple-500 to-pink-500',
+    },
+    {
+      title: 'Growth',
+      value: '0%',
+      subtitle: 'vs. last month',
+      icon: TrendingUp,
+      color: 'from-orange-500 to-yellow-500',
+    },
+  ]
 
-export default function StatsCards() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {stats.map((stat, index) => {
