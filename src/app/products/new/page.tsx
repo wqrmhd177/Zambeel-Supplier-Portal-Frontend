@@ -8,7 +8,9 @@ import {
   Plus, 
   X, 
   Upload,
-  Trash2
+  Trash2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
@@ -17,14 +19,29 @@ import { useAuth } from '@/hooks/useAuth'
 import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 
 const PACKAGE_INCLUDES_OPTIONS = [
-  'Battery', 'Battery Pack', 'Battery Cell', 'Rechargeable Cell', 'Power Adapter', 'Charger', 'Power Cable', 'Power Bank',
-  'USB Cable', 'Type-C Cable', 'Micro-USB Cable', 'Lightning Cable', 'HDMI Cable', 'AUX Cable', 'DC Cable', 'Extension Cable',
-  'User Manual', 'Quick Start Guide', 'Safety Instructions', 'Warranty Card', 'Adapter Plug', 'Cable Tie', 'Mounting Bracket',
-  'Clip', 'Holder', 'Stand', 'Protective Case', 'Safety Cap', 'Insulating Cover', 'Shrink Wrap', 'Poly Bag', 'Main Unit',
-  'Replacement Part', 'Accessory Kit', 'Combo Kit', 'Other',
+'Battery','Cells','Power Adapter','Charger','Power Cable','USB Cable','Type-C Cable',
+'Micro-USB Cable','Lightning Cable','HDMI Cable','AUX Cable','Warranty Card','Mounting Bracket',
+'Clip','Holder','Stand','Protective Case','Accessory Kit', 'Other',
 ]
 
-const SIZE_CATEGORY_OPTIONS = ['ML', 'Standard Size', 'Free Size', 'Inches', 'Centimeters']
+const SIZE_CATEGORY_OPTIONS = ['ML', 'Standard Size', 'Free Size', 'Inches', 'Centimeters', 'Grams', 'Kilograms', 'Size']
+
+const SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+
+// Helper function to check if size value field should be shown
+const shouldShowSizeValues = (sizeCategory: string): boolean => {
+  return !['Standard Size', 'Free Size'].includes(sizeCategory) && sizeCategory !== ''
+}
+
+// Helper function to check if size category requires custom input (numeric values)
+const isCustomInputCategory = (sizeCategory: string): boolean => {
+  return ['ML', 'Inches', 'Centimeters', 'Grams', 'Kilograms'].includes(sizeCategory)
+}
+
+// Helper function to check if size category uses predefined size options (XS, S, M, L, XL, XXL)
+const isPredefinedSizeCategory = (sizeCategory: string): boolean => {
+  return sizeCategory === 'Size'
+}
 
 const COLOR_OPTIONS = [
   'Red', 'Blue', 'Green', 'Black', 'White', 'Pink', 'Yellow', 'Orange', 
@@ -34,7 +51,7 @@ const COLOR_OPTIONS = [
 interface Variant {
   id: string
   sizeCategory: string
-  sizeValues: string[]
+  sizeValue: string
   color: string
   price: number
   stock: number
@@ -49,6 +66,9 @@ interface ProductFormData {
   sellingPrice: number
   stockAmount: number
   images: File[]
+  sizeCategory: string
+  sizeValue: string
+  color: string
   hasVariants: boolean
   variants: Variant[]
 }
@@ -70,13 +90,16 @@ export default function AddProductPage() {
     sellingPrice: 0,
     stockAmount: 0,
     images: [],
-    hasVariants: false,
+    sizeCategory: '',
+    sizeValue: '',
+    color: '',
+    hasVariants: true,
     variants: [],
   })
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [packageIncludesOtherText, setPackageIncludesOtherText] = useState('')
-  const [customSizeInputs, setCustomSizeInputs] = useState<{ [variantId: string]: string }>({})
+  const [isVariantsSectionOpen, setIsVariantsSectionOpen] = useState(false)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -190,13 +213,6 @@ export default function AddProductPage() {
     }))
   }
 
-  const toggleVariants = () => {
-    setFormData(prev => ({
-      ...prev,
-      hasVariants: !prev.hasVariants,
-      variants: !prev.hasVariants ? [] : prev.variants
-    }))
-  }
 
   const addVariant = () => {
     setFormData(prev => ({
@@ -206,7 +222,7 @@ export default function AddProductPage() {
         {
           id: crypto.randomUUID(),
           sizeCategory: '',
-          sizeValues: [],
+          sizeValue: '',
           color: '',
           price: prev.sellingPrice || 0,
           stock: 0,
@@ -226,34 +242,15 @@ export default function AddProductPage() {
   const updateVariant = (id: string, field: keyof Variant, value: string | number | string[]) => {
     setFormData(prev => ({
       ...prev,
-      variants: prev.variants.map(v =>
-        v.id === id ? { ...v, [field]: value } : v
-      )
+      variants: prev.variants.map(v => {
+        if (v.id !== id) return v
+        const next = { ...v, [field]: value }
+        if (field === 'sizeCategory') next.sizeValue = ''
+        return next
+      })
     }))
   }
 
-  const addSizeValue = (variantId: string, value: string) => {
-    if (!value.trim()) return
-    setFormData(prev => ({
-      ...prev,
-      variants: prev.variants.map(v =>
-        v.id === variantId && !v.sizeValues.includes(value.trim())
-          ? { ...v, sizeValues: [...v.sizeValues, value.trim()] }
-          : v
-      )
-    }))
-  }
-
-  const removeSizeValue = (variantId: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      variants: prev.variants.map(v =>
-        v.id === variantId
-          ? { ...v, sizeValues: v.sizeValues.filter(s => s !== value) }
-          : v
-      )
-    }))
-  }
 
   const handleVariantImageChange = (variantId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -281,6 +278,7 @@ export default function AddProductPage() {
     }))
   }
 
+
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {}
 
@@ -292,20 +290,27 @@ export default function AddProductPage() {
       newErrors.material = 'Material is required'
     }
 
-    if (!formData.hasVariants) {
-      if (formData.images.length === 0) {
-        newErrors.images = 'Please upload at least 1 product image'
-      } else if (formData.images.length > 5) {
-        newErrors.images = 'Maximum 5 images allowed'
-      }
+    if (formData.images.length === 0) {
+      newErrors.images = 'Please upload at least 1 product image'
+    } else if (formData.images.length > 5) {
+      newErrors.images = 'Maximum 5 images allowed'
     }
 
-    if (!formData.hasVariants && formData.sellingPrice <= 0) {
+    if (formData.sellingPrice <= 0) {
       newErrors.sellingPrice = 'Selling price must be greater than 0'
     }
 
-    if (!formData.hasVariants && formData.stockAmount < 0) {
+    if (formData.stockAmount < 0) {
       newErrors.stockAmount = 'Stock amount cannot be negative'
+    }
+
+    // Validate main size value if category requires it
+    if (shouldShowSizeValues(formData.sizeCategory)) {
+      if (isCustomInputCategory(formData.sizeCategory) || isPredefinedSizeCategory(formData.sizeCategory)) {
+        if (!formData.sizeValue || !formData.sizeValue.trim()) {
+          newErrors.sizeValue = 'Size value is required for this size category'
+        }
+      }
     }
 
     // For purchasers and admin, supplier selection is required
@@ -321,15 +326,15 @@ export default function AddProductPage() {
 
     if (formData.hasVariants) {
       formData.variants.forEach((variant, index) => {
-        if (!variant.sizeCategory) {
-          newErrors[`variant_sizeCategory_${index}`] = 'Size category is required'
+        // Validate size value if category requires it
+        if (shouldShowSizeValues(variant.sizeCategory)) {
+          if (isCustomInputCategory(variant.sizeCategory) || isPredefinedSizeCategory(variant.sizeCategory)) {
+            if (!variant.sizeValue || !variant.sizeValue.trim()) {
+              newErrors[`variant_sizeValue_${index}`] = 'Size value is required for this size category'
+            }
+          }
         }
-        if (!variant.sizeValues || variant.sizeValues.length === 0) {
-          newErrors[`variant_sizeValues_${index}`] = 'At least one size value is required'
-        }
-        if (!variant.color) {
-          newErrors[`variant_color_${index}`] = 'Color is required'
-        }
+        
         if (!variant.price || variant.price <= 0) {
           newErrors[`variant_price_${index}`] = 'Variant price must be greater than 0'
         }
@@ -446,28 +451,25 @@ export default function AddProductPage() {
           }
         }
 
-        // Expand variants into rows (one row per color-size combination)
-        const allVariantRows = []
-        for (const variant of formData.variants) {
+        // Build variant rows (one row per variant - no expansion)
+        const allVariantRows = formData.variants.map(variant => {
           const variantUrls = variantImageUrls[variant.id]?.length > 0 ? variantImageUrls[variant.id] : null
-          for (const sizeValue of variant.sizeValues) {
-            allVariantRows.push({
-              ...baseProductData,
-              image: variantUrls,
-              size_category: variant.sizeCategory,
-              size: sizeValue,
-              color: variant.color,
-              ml: null,
-              variant_selling_price: variant.price,
-              variant_stock: variant.stock ?? 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+          return {
+            ...baseProductData,
+            image: variantUrls,
+            size_category: variant.sizeCategory || null,
+            size: variant.sizeValue || null,
+            color: variant.color || null,
+            ml: null,
+            variant_selling_price: variant.price,
+            variant_stock: variant.stock ?? 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           }
-        }
+        })
 
         if (allVariantRows.length === 0) {
-          setError('Please add at least one variant with size values')
+          setError('Please add at least one variant')
           setIsSaving(false)
           return
         }
@@ -519,16 +521,15 @@ export default function AddProductPage() {
           router.push('/products')
         }, 1500)
       } else {
-        // Product without variants - insert one row with variant_id auto-generated
-        // variant_selling_price and variant_stock are filled, but size/color/ml are NULL
+        // Product without variants - insert one row using main form values
         const { data: insertedData, error: productError } = await supabase
           .from('products')
           .insert([{
             ...baseProductData,
             // variant_id will be auto-generated by DB
-            size_category: null,
-            size: null,
-            color: null,
+            size_category: formData.sizeCategory || null,
+            size: formData.sizeValue || null,
+            color: formData.color || null,
             ml: null,
             variant_selling_price: formData.sellingPrice,
             variant_stock: formData.stockAmount,
@@ -589,9 +590,9 @@ export default function AddProductPage() {
       <div className="flex-1 overflow-auto">
         <Header />
         
-        <main className="p-8">
+        <main className="p-4 sm:p-6 lg:p-8">
           {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-8">
             <button
               onClick={() => router.push('/products')}
               className="p-2 rounded-lg hover:bg-gray-200 transition-all"
@@ -599,8 +600,8 @@ export default function AddProductPage() {
               <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Add New Product</h2>
-              <p className="text-gray-600">Fill in the details to add a new product to your inventory</p>
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Add New Product</h2>
+              <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Fill in the details to add a new product to your inventory</p>
             </div>
           </div>
 
@@ -616,8 +617,8 @@ export default function AddProductPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="bg-white border border-gray-300 rounded-2xl p-8">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+            <div className="bg-white border border-gray-300 rounded-2xl p-4 sm:p-6 lg:p-8">
               {/* Supplier Selector (for purchasers and admin) */}
               {(userRole === 'purchaser' || userRole === 'admin') && (
                 <div className="mb-6">
@@ -768,64 +769,255 @@ export default function AddProductPage() {
                 )}
               </div>
 
-              {/* 5. Variants Toggle */}
+              {/* 5. Color */}
               <div className="mb-6">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.hasVariants}
-                    onChange={toggleVariants}
-                    className="w-5 h-5 text-primary-blue border-gray-300 rounded focus:ring-primary-blue cursor-pointer"
-                  />
-                  <span className="text-sm font-semibold text-gray-900">
-                    This product has variants (Size, Color, ML, etc.)
-                  </span>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Color <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
-                {errors.variants && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.variants}</span>
+                <select
+                  value={formData.color}
+                  onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
+                  className="w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all border-gray-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none"
+                >
+                  <option value="">Select a color</option>
+                  {COLOR_OPTIONS.map(color => (
+                    <option key={color} value={color}>{color}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 6. Size Category */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Size Category <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <select
+                  value={formData.sizeCategory}
+                  onChange={(e) => setFormData(prev => ({ ...prev, sizeCategory: e.target.value, sizeValue: '' }))}
+                  className="w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all border-gray-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none"
+                >
+                  <option value="">Select size category</option>
+                  {SIZE_CATEGORY_OPTIONS.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 7. Size Value - Conditional based on Size Category */}
+              {shouldShowSizeValues(formData.sizeCategory) && (
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Size Value (Only one size value is allowed for each variant){(isCustomInputCategory(formData.sizeCategory) || isPredefinedSizeCategory(formData.sizeCategory)) && <span className="text-red-500">*</span>}
+                  </label>
+                  
+                  {isPredefinedSizeCategory(formData.sizeCategory) ? (
+                    // For "Size" category - single select from XS, S, M, L, XL, XXL
+                    <>
+                      <p className="text-sm text-gray-500 mb-3">Select one size</p>
+                      <select
+                        value={formData.sizeValue}
+                        onChange={(e) => setFormData(prev => ({ ...prev, sizeValue: e.target.value }))}
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                          errors.sizeValue ? 'border-red-500' : 'border-gray-200'
+                        } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
+                      >
+                        <option value="">Select a size</option>
+                        {SIZE_OPTIONS.map(size => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    // For numeric categories (ML, Inches, etc) - single text input
+                    <>
+                      <p className="text-sm text-gray-500 mb-3">Enter size value (e.g., 4 for {formData.sizeCategory})</p>
+                      <input
+                        type="text"
+                        value={formData.sizeValue}
+                        onChange={(e) => setFormData(prev => ({ ...prev, sizeValue: e.target.value }))}
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                          errors.sizeValue ? 'border-red-500' : 'border-gray-200'
+                        } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                        placeholder={`e.g., 500 for ${formData.sizeCategory}`}
+                      />
+                    </>
+                  )}
+                  {errors.sizeValue && (
+                    <span className="block text-xs text-red-500 mt-1.5">{errors.sizeValue}</span>
+                  )}
+                </div>
+              )}
+
+              {/* 8. Product Selling Price */}
+              <div className="mb-6">
+                <label htmlFor="mainSellingPrice" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                  Product Selling Price <span className="hidden sm:inline">(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="mainSellingPrice"
+                    name="sellingPrice"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.sellingPrice || ''}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                      errors.sellingPrice ? 'border-red-500' : 'border-gray-200'
+                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                    placeholder="0"
+                    required
+                  />
+                </div>
+                {errors.sellingPrice && (
+                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.sellingPrice}</span>
                 )}
               </div>
 
-              {/* 6. Variants Section */}
-              {formData.hasVariants && (
-                <div className="mb-6 p-6 bg-gray-50 rounded-xl border-2 border-gray-200">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900">Product Variants</h3>
-                  </div>
+              {/* 9. Stock Available in Your Shop */}
+              <div className="mb-6">
+                <label htmlFor="mainStockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
+                  Stock Available in Your Shop <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="mainStockAmount"
+                  name="stockAmount"
+                  type="number"
+                  min="0"
+                  value={formData.stockAmount || ''}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                    errors.stockAmount ? 'border-red-500' : 'border-gray-200'
+                  } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                  placeholder="0"
+                  required
+                />
+                {errors.stockAmount && (
+                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.stockAmount}</span>
+                )}
+              </div>
 
-                  {formData.variants.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-sm text-gray-500 mb-4">
-                        No variants added yet. Click &quot;Add Another Variant&quot; to get started.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={addVariant}
-                        className="px-6 py-3 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-all flex items-center gap-2 text-sm font-medium mx-auto"
-                      >
-                        <Plus className="w-4 h-4" />
-                        ADD ANOTHER VARIANT
-                      </button>
+              {/* 10. Product Pictures */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Product Pictures (Box Pictures and Original Product Pictures) <span className="text-red-500">*</span> (Max 5)
+                </label>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+                    {formData.images.map((image, index) => (
+                      <div key={index} className="relative group">
+                        <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
+                          <img
+                            src={URL.createObjectURL(image)}
+                            alt={`Product ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {formData.images.length < 5 && (
+                      <label className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
+                        <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
+                        <span className="text-xs text-gray-600">Add Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                  {errors.images && (
+                    <span className="block text-[13px] text-red-500 font-medium">{errors.images}</span>
+                  )}
+                  <p className="text-sm text-gray-500">
+                    {formData.images.length} / 5 images (maximum 5 images allowed)
+                  </p>
+                </div>
+              </div>
+
+              {/* 11. Variants Section */}
+              {(
+                <div className="mb-6 bg-gray-50 rounded-xl border-2 border-gray-200">
+                  {!isVariantsSectionOpen ? (
+                    <div className="p-4 sm:p-6">
+                      <div className="text-center">
+                        <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
+                          Click below to add product variants
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsVariantsSectionOpen(true)
+                            if (formData.variants.length === 0) {
+                              addVariant()
+                            }
+                          }}
+                          className="px-4 sm:px-6 py-2.5 sm:py-3 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-all flex items-center gap-2 text-xs sm:text-sm font-medium mx-auto"
+                        >
+                          <Plus className="w-4 h-4" />
+                          ADD VARIANT
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-6">
+                    <>
+                      <div 
+                        className="flex items-center justify-between p-4 sm:p-6 cursor-pointer border-b border-gray-300"
+                        onClick={() => setIsVariantsSectionOpen(false)}
+                      >
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Product Variants</h3>
+                        <button
+                          type="button"
+                          className="p-2 hover:bg-gray-200 rounded-lg transition-all"
+                        >
+                          <ChevronUp className="w-5 h-5 text-gray-600" />
+                        </button>
+                      </div>
+
+                      <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-4 sm:pt-6">
+                        {formData.variants.length === 0 ? (
+                          <div className="text-center py-6 sm:py-8">
+                            <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
+                              No variants added yet. Click &quot;Add Another Variant&quot; to get started.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={addVariant}
+                              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-all flex items-center gap-2 text-xs sm:text-sm font-medium mx-auto"
+                            >
+                              <Plus className="w-4 h-4" />
+                              ADD ANOTHER VARIANT
+                            </button>
+                          </div>
+                  ) : (
+                    <div className="space-y-4 sm:space-y-6">
                       {formData.variants.map((variant, index) => (
-                        <div key={variant.id} className="p-6 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
-                          <div className="flex items-center justify-between mb-6">
-                            <h4 className="text-base font-semibold text-gray-900">Variant {index + 1}</h4>
+                        <div key={variant.id} className="p-4 sm:p-6 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
+                          <div className="flex items-center justify-between mb-4 sm:mb-6">
+                            <h4 className="text-sm sm:text-base font-semibold text-gray-900">Variant {index + 1}</h4>
                             <button
                               type="button"
                               onClick={() => removeVariant(variant.id)}
                               className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
                             >
-                              <Trash2 className="w-5 h-5" />
+                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                           </div>
 
                           {/* Color */}
-                          <div className="mb-5">
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                              Color <span className="text-red-500">*</span>
+                          <div className="mb-4 sm:mb-5">
+                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                              Color <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                             </label>
                             <select
                               value={variant.color}
@@ -845,9 +1037,9 @@ export default function AddProductPage() {
                           </div>
 
                           {/* Size Category */}
-                          <div className="mb-5">
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                              Size Category <span className="text-red-500">*</span>
+                          <div className="mb-4 sm:mb-5">
+                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                              Size Category <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                             </label>
                             <select
                               value={variant.sizeCategory}
@@ -866,77 +1058,55 @@ export default function AddProductPage() {
                             )}
                           </div>
 
-                          {/* Size Values */}
-                          <div className="mb-5">
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                              Size Values <span className="text-red-500">*</span>
-                            </label>
-                            <p className="text-sm text-gray-500 mb-3">Add size values (e.g., 4, 5, 6 for Inches or Small, Medium, Large for Standard Size)</p>
-                            
-                            {/* Combined field with tags and input */}
-                            <div className="relative">
-                              <div className="flex flex-wrap gap-2 p-3 border-2 border-gray-200 rounded-xl bg-white min-h-[56px] focus-within:border-primary-blue focus-within:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] transition-all">
-                                {/* Display selected size values as tags */}
-                                {variant.sizeValues.map((sizeVal) => (
-                                  <span
-                                    key={sizeVal}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-blue text-white rounded-lg text-sm font-medium h-fit"
-                                  >
-                                    {sizeVal}
-                                    <button
-                                      type="button"
-                                      onClick={() => removeSizeValue(variant.id, sizeVal)}
-                                      className="hover:bg-white/20 rounded-full p-0.5 transition-all"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </span>
-                                ))}
-                                
-                                {/* Input field inline with tags */}
-                                <input
-                                  type="text"
-                                  value={customSizeInputs[variant.id] || ''}
-                                  onChange={(e) => setCustomSizeInputs(prev => ({ ...prev, [variant.id]: e.target.value }))}
-                                  onKeyPress={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault()
-                                      const inputValue = customSizeInputs[variant.id] || ''
-                                      if (inputValue.trim()) {
-                                        addSizeValue(variant.id, inputValue)
-                                        setCustomSizeInputs(prev => ({ ...prev, [variant.id]: '' }))
-                                      }
-                                    }
-                                  }}
-                                  className="flex-1 min-w-[200px] outline-none text-gray-900 placeholder:text-gray-400 bg-transparent py-1.5"
-                                  placeholder={variant.sizeValues.length === 0 ? "Type a size value and press Enter or click Add" : "Add another..."}
-                                />
-                              </div>
+                          {/* Size Value - Conditional based on Size Category */}
+                          {shouldShowSizeValues(variant.sizeCategory) && (
+                            <div className="mb-4 sm:mb-5">
+                              <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                                Size Value (Only one size value is allowed for each variant){(isCustomInputCategory(variant.sizeCategory) || isPredefinedSizeCategory(variant.sizeCategory)) && <span className="text-red-500">*</span>}
+                              </label>
                               
-                              {/* Add button positioned on the right */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const inputValue = customSizeInputs[variant.id] || ''
-                                  if (inputValue.trim()) {
-                                    addSizeValue(variant.id, inputValue)
-                                    setCustomSizeInputs(prev => ({ ...prev, [variant.id]: '' }))
-                                  }
-                                }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 px-4 py-2 bg-primary-blue text-white rounded-lg font-medium hover:bg-primary-blue-dark transition-all text-sm"
-                              >
-                                Add
-                              </button>
+                              {isPredefinedSizeCategory(variant.sizeCategory) ? (
+                                // For "Size" category - single select from XS, S, M, L, XL, XXL
+                                <>
+                                  <p className="text-xs sm:text-sm text-gray-500 mb-3">Select one size</p>
+                                  <select
+                                    value={variant.sizeValue}
+                                    onChange={(e) => updateVariant(variant.id, 'sizeValue', e.target.value)}
+                                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                                      errors[`variant_sizeValue_${index}`] ? 'border-red-500' : 'border-gray-200'
+                                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
+                                  >
+                                    <option value="">Select a size</option>
+                                    {SIZE_OPTIONS.map(size => (
+                                      <option key={size} value={size}>{size}</option>
+                                    ))}
+                                  </select>
+                                </>
+                              ) : (
+                                // For numeric categories (ML, Inches, etc) - single text input
+                                <>
+                                  <p className="text-sm text-gray-500 mb-3">Enter size value (e.g., 500 for {variant.sizeCategory})</p>
+                                  <input
+                                    type="text"
+                                    value={variant.sizeValue}
+                                    onChange={(e) => updateVariant(variant.id, 'sizeValue', e.target.value)}
+                                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                                      errors[`variant_sizeValue_${index}`] ? 'border-red-500' : 'border-gray-200'
+                                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                                    placeholder={`e.g., 500 for ${variant.sizeCategory}`}
+                                  />
+                                </>
+                              )}
+                              {errors[`variant_sizeValue_${index}`] && (
+                                <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_sizeValue_${index}`]}</span>
+                              )}
                             </div>
-                            {errors[`variant_sizeValues_${index}`] && (
-                              <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_sizeValues_${index}`]}</span>
-                            )}
-                          </div>
+                          )}
 
                           {/* Variant Selling Price */}
-                          <div className="mb-5">
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                              Product Selling Price (Product Price + Fulfillment Cost + Margin) <span className="text-red-500">*</span>
+                          <div className="mb-4 sm:mb-5">
+                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                              Product Selling Price <span className="hidden sm:inline">(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
                             </label>
                             <input
                               type="number"
@@ -956,8 +1126,8 @@ export default function AddProductPage() {
                           </div>
 
                           {/* Stock Available in Your Shop (per variant) */}
-                          <div className="mb-5">
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                          <div className="mb-4 sm:mb-5">
+                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
                               Stock Available in Your Shop <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -978,13 +1148,13 @@ export default function AddProductPage() {
 
                           {/* Product Pictures (per variant) */}
                           <div className="mb-0">
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                              Product Pictures (Box Pictures and Original Product Pictures) <span className="text-red-500">*</span> (Max 5)
+                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                              Product Pictures <span className="hidden sm:inline">(Box Pictures and Original Product Pictures)</span> <span className="text-red-500">*</span> <span className="text-gray-500 text-xs">(Max 5)</span>
                             </label>
-                            <div className="flex items-center gap-4 flex-wrap">
+                            <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                               {variant.images.map((image, imgIndex) => (
                                 <div key={imgIndex} className="relative group">
-                                  <div className="w-24 h-24 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
+                                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
                                     <img
                                       src={URL.createObjectURL(image)}
                                       alt={`Variant ${index + 1} image ${imgIndex + 1}`}
@@ -994,15 +1164,15 @@ export default function AddProductPage() {
                                   <button
                                     type="button"
                                     onClick={() => removeVariantImage(variant.id, imgIndex)}
-                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                   >
                                     <X className="w-3 h-3" />
                                   </button>
                                 </div>
                               ))}
                               {variant.images.length < 5 && (
-                                <label className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
-                                  <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                                <label className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
+                                  <Upload className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 mb-0.5 sm:mb-1" />
                                   <span className="text-xs text-gray-600">Add</span>
                                   <input
                                     type="file"
@@ -1028,138 +1198,38 @@ export default function AddProductPage() {
                       <button
                         type="button"
                         onClick={addVariant}
-                        className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-primary-blue font-semibold hover:border-primary-blue hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 sm:py-4 border-2 border-dashed border-gray-300 rounded-xl text-primary-blue font-semibold hover:border-primary-blue hover:bg-blue-50 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
                       >
-                        <Plus className="w-5 h-5" />
+                        <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                         ADD ANOTHER VARIANT
                       </button>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* 7. Product Selling Price (hidden if has variants) */}
-              {!formData.hasVariants && (
-                <div className="mb-6">
-                  <label htmlFor="sellingPrice" className="block text-sm font-semibold text-gray-900 mb-2">
-                    Product Selling Price (Product Price + Fulfillment Cost + Margin) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-3.5 text-gray-500">Amount</span>
-                    <input
-                      id="sellingPrice"
-                      name="sellingPrice"
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={formData.sellingPrice || ''}
-                      onChange={handleChange}
-                      className={`w-full pl-16 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                        errors.sellingPrice ? 'border-red-500' : 'border-gray-200'
-                      } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                      placeholder="0"
-                      required
-                    />
-                  </div>
-                  {errors.sellingPrice && (
-                    <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.sellingPrice}</span>
+                      </div>
+                    </>
                   )}
-                </div>
-              )}
-
-              {/* 8. Stock Available in Your Shop (hidden if has variants) */}
-              {!formData.hasVariants && (
-                <div className="mb-6">
-                  <label htmlFor="stockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
-                    Stock Available in Your Shop <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="stockAmount"
-                    name="stockAmount"
-                    type="number"
-                    min="0"
-                    value={formData.stockAmount || ''}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                      errors.stockAmount ? 'border-red-500' : 'border-gray-200'
-                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                    placeholder="0"
-                    required
-                  />
-                  {errors.stockAmount && (
-                    <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.stockAmount}</span>
-                  )}
-                </div>
-              )}
-
-              {/* 9. Product Pictures (hidden when product has variants) */}
-              {!formData.hasVariants && (
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Product Pictures (Box Pictures and Original Product Pictures) <span className="text-red-500">*</span> (Max 5)
-                  </label>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      {formData.images.map((image, index) => (
-                        <div key={index} className="relative group">
-                          <div className="w-32 h-32 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
-                            <img
-                              src={URL.createObjectURL(image)}
-                              alt={`Product ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index)}
-                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                      {formData.images.length < 5 && (
-                        <label className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
-                          <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                          <span className="text-xs text-gray-600">Add Image</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={handleImageChange}
-                            className="hidden"
-                          />
-                        </label>
-                      )}
-                    </div>
-                    {errors.images && (
-                      <span className="block text-[13px] text-red-500 font-medium">{errors.images}</span>
-                    )}
-                    <p className="text-sm text-gray-500">
-                      {formData.images.length} / 5 images (maximum 5 images allowed)
-                    </p>
-                  </div>
                 </div>
               )}
 
               {/* Submit Buttons */}
-              <div className="flex gap-4 pt-6 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => router.push('/products')}
-                  className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-all text-gray-700"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-all text-gray-700 text-sm sm:text-base"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 sm:px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
                 >
                   {isSaving ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      <span>Saving Product...</span>
+                      <span className="hidden sm:inline">Saving Product...</span>
+                      <span className="sm:hidden">Saving...</span>
                     </>
                   ) : (
                     <>

@@ -38,6 +38,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { userRole, isLoading } = useAuth()
   const [activeItem, setActiveItem] = useState('Dashboard')
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   // Get menu items based on user role
   const getMenuItems = () => {
@@ -84,7 +85,7 @@ export default function Sidebar() {
 
   return (
     <div
-      className="w-64 flex flex-col relative"
+      className="hidden lg:flex w-64 flex-col relative"
       style={{
         background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
         boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.04), 8px 0 24px rgba(0,0,0,0.25)',

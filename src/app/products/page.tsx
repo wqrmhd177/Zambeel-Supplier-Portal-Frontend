@@ -471,105 +471,105 @@ export default function ProductsPage() {
       <div className="flex-1 overflow-auto">
         <Header />
         
-        <main className="p-8 bg-[#f5f3ff]">
+        <main className="p-4 sm:p-6 lg:p-8 bg-[#f5f3ff]">
           {/* Header Section */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
             <div>
-              <h2 className="text-3xl font-bold mb-2 theme-heading-gradient">Products</h2>
-              <p className="text-gray-600">Manage your product inventory</p>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2 theme-heading-gradient">Products</h2>
+              <p className="text-sm sm:text-base text-gray-600">Manage your product inventory</p>
             </div>
             <button
               onClick={() => router.push('/products/new')}
-              className="px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90"
+              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all flex items-center justify-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Add Product
             </button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <div className="theme-card rounded-2xl p-6 transition-all hover:shadow-lg">
-              <div className="flex items-start justify-between mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
-                  <p className="theme-label text-sm mb-1">Total Products</p>
-                  <h3 className="text-3xl font-bold theme-heading">{stats.total}</h3>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Total Products</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.total}</h3>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-md">
-                  <Package className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-md">
+                  <Package className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
 
-            <div className="theme-card rounded-2xl p-6 transition-all hover:shadow-lg">
-              <div className="flex items-start justify-between mb-4">
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
-                  <p className="theme-label text-sm mb-1">Active</p>
-                  <h3 className="text-3xl font-bold theme-heading">{stats.active}</h3>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Active</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.active}</h3>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-md">
-                  <CheckCircle className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-md">
+                  <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
 
-            <div className="theme-card rounded-2xl p-6 transition-all hover:shadow-lg">
-              <div className="flex items-start justify-between mb-4">
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
-                  <p className="theme-label text-sm mb-1">Inactive</p>
-                  <h3 className="text-3xl font-bold theme-heading">{stats.inactive}</h3>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Inactive</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.inactive}</h3>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center shadow-md">
-                  <Package className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center shadow-md">
+                  <Package className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
 
-            <div className="theme-card rounded-2xl p-6 transition-all hover:shadow-lg">
-              <div className="flex items-start justify-between mb-4">
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
-                  <p className="theme-label text-sm mb-1">Out of Stock</p>
-                  <h3 className="text-3xl font-bold theme-heading">{stats.outOfStock}</h3>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Out of Stock</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.outOfStock}</h3>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-md">
-                  <AlertCircle className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-md">
+                  <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
 
-            <div className="theme-card rounded-2xl p-6 transition-all hover:shadow-lg">
-              <div className="flex items-start justify-between mb-4">
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg col-span-2 md:col-span-1">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
-                  <p className="theme-label text-sm mb-1">Total Value</p>
-                  <h3 className="text-3xl font-bold theme-heading">PKR {stats.totalValue.toLocaleString()}</h3>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Total Value</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">PKR {stats.totalValue.toLocaleString()}</h3>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md">
-                  <TrendingUp className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md">
+                  <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
               </div>
             </div>
           </div>
 
           {/* Search and Filter Bar */}
-          <div className="theme-box rounded-2xl p-6 mb-6">
-            <div className="flex flex-col md:flex-row gap-4">
+          <div className="theme-box rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-4 top-3.5 text-white/50" size={20} />
+                <Search className="absolute left-3 sm:left-4 top-2.5 sm:top-3.5 text-white/50" size={18} />
                 <input
                   type="text"
-                  placeholder="Search products by name or bar code..."
+                  placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-white/20 rounded-xl bg-white/10 text-white focus:border-violet-400 focus:bg-white/15 focus:outline-none placeholder:text-white/50"
+                  className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-white/20 rounded-lg sm:rounded-xl bg-white/10 text-white focus:border-violet-400 focus:bg-white/15 focus:outline-none placeholder:text-white/50"
                 />
               </div>
               {(userRole === 'purchaser' || userRole === 'admin') && suppliers.length > 0 && (
                 <div className="relative">
-                  <Filter className="absolute left-4 top-3.5 text-white/50" size={20} />
+                  <Filter className="absolute left-3 sm:left-4 top-2.5 sm:top-3.5 text-white/50" size={18} />
                   <select
                     value={filterSupplier}
                     onChange={(e) => setFilterSupplier(e.target.value)}
-                    className="pl-12 pr-10 py-3 border-2 border-white/20 rounded-xl bg-white/10 text-white focus:border-violet-400 focus:outline-none appearance-none cursor-pointer [&>option]:bg-[#1e1b4b] [&>option]:text-white"
+                    className="w-full sm:w-auto pl-10 sm:pl-12 pr-8 sm:pr-10 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-white/20 rounded-lg sm:rounded-xl bg-white/10 text-white focus:border-violet-400 focus:outline-none appearance-none cursor-pointer [&>option]:bg-[#1e1b4b] [&>option]:text-white"
                   >
                     <option value="all">All Suppliers</option>
                     {suppliers.map(supplier => (
@@ -581,11 +581,11 @@ export default function ProductsPage() {
                 </div>
               )}
               <div className="relative">
-                <Filter className="absolute left-4 top-3.5 text-white/50" size={20} />
+                <Filter className="absolute left-3 sm:left-4 top-2.5 sm:top-3.5 text-white/50" size={18} />
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="pl-12 pr-10 py-3 border-2 border-white/20 rounded-xl bg-white/10 text-white focus:border-violet-400 focus:outline-none appearance-none cursor-pointer [&>option]:bg-[#1e1b4b] [&>option]:text-white"
+                  className="w-full sm:w-auto pl-10 sm:pl-12 pr-8 sm:pr-10 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-white/20 rounded-lg sm:rounded-xl bg-white/10 text-white focus:border-violet-400 focus:outline-none appearance-none cursor-pointer [&>option]:bg-[#1e1b4b] [&>option]:text-white"
                 >
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
@@ -597,16 +597,16 @@ export default function ProductsPage() {
           </div>
 
           {/* Products Table */}
-          <div className="theme-card rounded-2xl overflow-hidden">
+          <div className="theme-card rounded-xl sm:rounded-2xl overflow-hidden">
             {products.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Package className="w-8 h-8 text-white/60" />
+              <div className="p-8 sm:p-12 text-center">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <Package className="w-6 h-6 sm:w-8 sm:h-8 text-white/60" />
                 </div>
-                <h3 className="text-lg font-semibold theme-heading mb-2">
+                <h3 className="text-base sm:text-lg font-semibold theme-heading mb-2">
                   {products.length === 0 ? 'No products yet' : 'No products found'}
                 </h3>
-                <p className="theme-muted mb-6">
+                <p className="text-sm sm:text-base theme-muted mb-4 sm:mb-6">
                   {products.length === 0 
                     ? 'Get started by adding your first product' 
                     : 'Try adjusting your search or filter criteria'}
@@ -614,27 +614,27 @@ export default function ProductsPage() {
                 {products.length === 0 && (
                   <button
                     onClick={() => router.push('/products/new')}
-                    className="px-6 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-lg font-medium hover:opacity-90 transition-all text-white inline-flex items-center gap-2 shadow-lg"
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-violet-600 to-indigo-600 rounded-lg font-medium hover:opacity-90 transition-all text-white inline-flex items-center gap-2 shadow-lg"
                   >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                     Add Your First Product
                   </button>
                 )}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[800px]">
                   <thead className="bg-white/10 border-b border-white/20">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Product</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Product</th>
                       {(userRole === 'purchaser' || userRole === 'admin') && (
-                        <th className="px-6 py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Supplier</th>
+                        <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Supplier</th>
                       )}
-                      <th className="px-6 py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Zambeel Sku</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Price</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Stock</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold theme-label uppercase tracking-wider">Actions</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Zambeel Sku</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Price</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Stock</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Status</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-right text-xs font-semibold theme-label uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
@@ -672,8 +672,8 @@ export default function ProductsPage() {
 
                       return (
                         <tr key={product.product_id} className="hover:bg-white/5 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+                            <div className="flex items-center gap-2 sm:gap-3">
                               {(() => {
                                 // Use extractImages helper to handle all image formats
                                 const images = extractImages(product.image)
@@ -690,7 +690,7 @@ export default function ProductsPage() {
                                     <img
                                       src={imageUrl}
                                       alt={product.product_title}
-                                      className="w-12 h-12 rounded-lg object-cover"
+                                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover"
                                       onError={(e) => {
                                         (e.target as HTMLImageElement).style.display = 'none'
                                       }}
@@ -698,8 +698,8 @@ export default function ProductsPage() {
                                   </button>
                                 ) : null
                               })()}
-                              <div>
-                                <div className="text-sm font-medium theme-heading">{product.product_title}</div>
+                              <div className="min-w-0">
+                                <div className="text-xs sm:text-sm font-medium theme-heading truncate">{product.product_title}</div>
                                 {hasVariants && (
                                   <div className="text-xs text-violet-300 mt-1">
                                     {product.variants!.length} variant{product.variants!.length > 1 ? 's' : ''}
@@ -709,8 +709,8 @@ export default function ProductsPage() {
                             </div>
                           </td>
                           {(userRole === 'purchaser' || userRole === 'admin') && (
-                            <td className="px-6 py-4">
-                              <div className="text-sm theme-heading">
+                            <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+                              <div className="text-xs sm:text-sm theme-heading">
                                 {supplierInfo ? (
                                   <div>
                                     <div className="font-medium">{supplierInfo.store_name || supplierInfo.owner_name || 'Unnamed'}</div>
@@ -724,34 +724,34 @@ export default function ProductsPage() {
                               </div>
                             </td>
                           )}
-                          <td className="px-6 py-4">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                             {product.variants.length > 0 && product.variants[0].company_sku
                               ? (
-                                  <span className="inline-flex px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-200">
+                                  <span className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-200">
                                     Approved
                                   </span>
                                 )
                               : (
-                                  <span className="inline-flex px-3 py-1.5 text-xs font-semibold rounded-full bg-pink-100 text-pink-800 border-2 border-pink-200 italic">
+                                  <span className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-semibold rounded-full bg-pink-100 text-pink-800 border-2 border-pink-200 italic">
                                     Pending
                                   </span>
                                 )
                             }
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium theme-heading">{displayPrice}</span>
+                              <span className="text-xs sm:text-sm font-medium theme-heading whitespace-nowrap">{displayPrice}</span>
                               {hasPendingChanges && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                   Pending Approval
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm theme-heading">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm theme-heading">
                             {totalStock}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                             <select
                               value={status}
                               onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
@@ -770,26 +770,27 @@ export default function ProductsPage() {
                               <option value="inactive">Inactive</option>
                             </select>
                           </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-right">
+                            <div className="flex items-center justify-end gap-1 sm:gap-2">
                               <button
                                 onClick={() => {
                                   setSelectedProduct(product)
                                   setIsViewModalOpen(true)
                                 }}
-                                className="px-3 py-1.5 text-sm theme-label hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all font-medium"
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm theme-label hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all font-medium whitespace-nowrap"
                               >
-                                View Variants
+                                <span className="hidden sm:inline">View Variants</span>
+                                <span className="sm:hidden">View</span>
                               </button>
                               <button
                                 onClick={() => router.push(`/products/edit/${product.product_id}`)}
-                                className="p-2 theme-muted hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all"
+                                className="p-1.5 sm:p-2 theme-muted hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all"
                                 title="Edit"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                className="p-2 theme-muted hover:text-red-300 hover:bg-white/10 rounded-lg transition-all"
+                                className="p-1.5 sm:p-2 theme-muted hover:text-red-300 hover:bg-white/10 rounded-lg transition-all"
                                 title="Delete"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -809,19 +810,19 @@ export default function ProductsPage() {
 
       {/* View Product Modal */}
       {isViewModalOpen && selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsViewModalOpen(false)}>
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4" onClick={() => setIsViewModalOpen(false)}>
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between z-10">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Product Details</h2>
               <button
                 onClick={() => setIsViewModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {/* Product Image */}
               {(() => {
                 // Get first image from array
@@ -840,7 +841,7 @@ export default function ProductsPage() {
                       <img
                         src={imageUrl}
                         alt={selectedProduct.product_title}
-                        className="w-64 h-64 rounded-xl object-cover border-2 border-gray-200"
+                        className="w-48 h-48 sm:w-64 sm:h-64 rounded-xl object-cover border-2 border-gray-200"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none'
                         }}
@@ -851,27 +852,27 @@ export default function ProductsPage() {
               })()}
 
               {/* Product Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-sm font-semibold text-gray-500">Product Title</label>
-                  <p className="text-lg font-medium text-gray-900 mt-1">{selectedProduct.product_title}</p>
+                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Product Title</label>
+                  <p className="text-sm sm:text-base md:text-lg font-medium text-gray-900 mt-1">{selectedProduct.product_title}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-500">Bar Code</label>
-                  <p className="text-lg font-mono text-gray-900 mt-1">{selectedProduct.bar_code}</p>
+                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Bar Code</label>
+                  <p className="text-sm sm:text-base md:text-lg font-mono text-gray-900 mt-1">{selectedProduct.bar_code}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-500">Price</label>
-                  <p className="text-lg font-medium text-gray-900 mt-1">
+                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Price</label>
+                  <p className="text-sm sm:text-base md:text-lg font-medium text-gray-900 mt-1">
                     {selectedProduct.variants.length > 0 && selectedProduct.variants[0].variant_selling_price
                       ? `PKR ${selectedProduct.variants[0].variant_selling_price.toLocaleString()}`
                       : 'PKR 0'}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-500">Status</label>
+                  <label className="text-xs sm:text-sm font-semibold text-gray-500">Status</label>
                   <p className="mt-1">
-                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                    <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${
                       selectedProduct.status === 'active' 
                         ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
@@ -884,17 +885,17 @@ export default function ProductsPage() {
 
               {/* Variants Summary */}
               {selectedProduct.variants && selectedProduct.variants.length > 0 ? (
-                <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                <div className="border-t border-gray-200 pt-4 sm:pt-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                     Variants Summary ({selectedProduct.variants.length})
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     {selectedProduct.variants.map((variant, index) => (
                       <div
                         key={variant.variant_id || index}
-                        className="bg-gray-50 rounded-xl p-4 border border-gray-200"
+                        className="bg-gray-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200"
                       >
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                           {variant.size && (
                             <div>
                               <label className="text-xs font-semibold text-gray-500">Size</label>
@@ -947,23 +948,23 @@ export default function ProductsPage() {
                   </div>
                   
                   {/* Variants Summary Stats */}
-                  <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                    <div className="grid grid-cols-3 gap-4">
+                  <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg sm:rounded-xl border border-blue-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       <div>
                         <label className="text-xs font-semibold text-blue-600">Total Variants</label>
-                        <p className="text-lg font-bold text-blue-900 mt-1">
+                        <p className="text-base sm:text-lg font-bold text-blue-900 mt-1">
                           {selectedProduct.variants.length}
                         </p>
                       </div>
                       <div>
                         <label className="text-xs font-semibold text-blue-600">Total Stock</label>
-                        <p className="text-lg font-bold text-blue-900 mt-1">
+                        <p className="text-base sm:text-lg font-bold text-blue-900 mt-1">
                           {selectedProduct.variants.reduce((sum, v) => sum + (v.variant_stock || 0), 0)}
                         </p>
                       </div>
                       <div>
                         <label className="text-xs font-semibold text-blue-600">Price Range</label>
-                        <p className="text-lg font-bold text-blue-900 mt-1">
+                        <p className="text-base sm:text-lg font-bold text-blue-900 mt-1">
                           PKR {Math.min(...selectedProduct.variants.map(v => v.variant_selling_price)).toLocaleString()} - {Math.max(...selectedProduct.variants.map(v => v.variant_selling_price)).toLocaleString()}
                         </p>
                       </div>
@@ -971,10 +972,10 @@ export default function ProductsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="border-t border-gray-200 pt-6">
+                <div className="border-t border-gray-200 pt-4 sm:pt-6">
                   <div>
-                    <label className="text-sm font-semibold text-gray-500">Stock</label>
-                    <p className={`text-lg font-medium mt-1 ${
+                    <label className="text-xs sm:text-sm font-semibold text-gray-500">Stock</label>
+                    <p className={`text-sm sm:text-base md:text-lg font-medium mt-1 ${
                       (selectedProduct.variants.length > 0 ? selectedProduct.variants[0].variant_stock : 0) === 0 
                         ? 'text-red-600' 
                         : 'text-gray-900'
@@ -982,15 +983,15 @@ export default function ProductsPage() {
                       {selectedProduct.variants.length > 0 ? selectedProduct.variants[0].variant_stock : 0}
                     </p>
                   </div>
-                  <p className="text-sm text-gray-500 mt-4">This product has no variants.</p>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-3 sm:mt-4">This product has no variants.</p>
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-gray-200">
                 <button
                   onClick={() => setIsViewModalOpen(false)}
-                  className="px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-gray-300 rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
                 >
                   Close
                 </button>
@@ -999,9 +1000,9 @@ export default function ProductsPage() {
                     setIsViewModalOpen(false)
                     router.push(`/products/edit/${selectedProduct.product_id}`)
                   }}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl text-white font-semibold hover:opacity-90 transition-all flex items-center gap-2"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg sm:rounded-xl text-sm sm:text-base text-white font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2"
                 >
-                  <Edit className="w-5 h-5" />
+                  <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
                   Edit Product
                 </button>
               </div>
@@ -1082,11 +1083,11 @@ export default function ProductsPage() {
 
         return (
           <div 
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4"
             onClick={() => setIsImageViewerOpen(false)}
           >
             <div 
-              className="relative max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center"
+              className="relative max-w-7xl max-h-[95vh] sm:max-h-[90vh] w-full h-full flex items-center justify-center"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}
@@ -1095,10 +1096,10 @@ export default function ProductsPage() {
                   e.stopPropagation()
                   setIsImageViewerOpen(false)
                 }}
-                className="absolute top-4 right-4 z-50 p-3 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full text-white transition-colors shadow-lg"
+                className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 p-2 sm:p-3 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full text-white transition-colors shadow-lg"
                 aria-label="Close"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
 
               {/* Previous Button */}
@@ -1108,24 +1109,24 @@ export default function ProductsPage() {
                     e.stopPropagation()
                     handlePrevious()
                   }}
-                  className="absolute left-4 z-50 p-3 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full text-white transition-colors shadow-lg"
+                  className="absolute left-2 sm:left-4 z-50 p-2 sm:p-3 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full text-white transition-colors shadow-lg"
                   aria-label="Previous image"
                 >
-                  <ChevronLeft className="w-6 h-6" />
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
 
               {/* Image */}
-              <div className="relative max-w-full max-h-full flex items-center justify-center pointer-events-none">
+              <div className="relative max-w-full max-h-full flex items-center justify-center pointer-events-none px-12 sm:px-16">
                 {imageLoading && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
                   </div>
                 )}
                 <img
                   src={currentImage}
                   alt={`${viewerProduct.product_title} - Image ${currentImageIndex + 1}`}
-                  className={`max-w-full max-h-[90vh] object-contain rounded-lg transition-opacity duration-200 ${
+                  className={`max-w-full max-h-[80vh] sm:max-h-[90vh] object-contain rounded-lg transition-opacity duration-200 ${
                     imageLoading ? 'opacity-0' : 'opacity-100'
                   }`}
                   draggable={false}
@@ -1142,16 +1143,16 @@ export default function ProductsPage() {
                     e.stopPropagation()
                     handleNext()
                   }}
-                  className="absolute right-4 z-50 p-3 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full text-white transition-colors shadow-lg"
+                  className="absolute right-2 sm:right-4 z-50 p-2 sm:p-3 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full text-white transition-colors shadow-lg"
                   aria-label="Next image"
                 >
-                  <ChevronRight className="w-6 h-6" />
+                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
 
               {/* Image Counter */}
               {hasMultipleImages && (
-                <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 bg-black/50 backdrop-blur-sm rounded-full text-white text-sm font-medium shadow-lg">
+                <div className="absolute bottom-16 sm:bottom-20 left-1/2 transform -translate-x-1/2 z-50 px-3 sm:px-4 py-1.5 sm:py-2 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs sm:text-sm font-medium shadow-lg">
                   {currentImageIndex + 1} / {viewerImages.length}
                 </div>
               )}
@@ -1159,10 +1160,10 @@ export default function ProductsPage() {
               {/* Download Button */}
               <button
                 onClick={handleDownload}
-                className="absolute bottom-4 right-4 z-50 px-4 py-2 bg-primary-blue hover:bg-primary-blue-dark rounded-lg text-white transition-colors flex items-center gap-2 font-medium shadow-lg"
+                className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-50 px-3 sm:px-4 py-2 bg-primary-blue hover:bg-primary-blue-dark rounded-lg text-white transition-colors flex items-center gap-2 text-xs sm:text-sm font-medium shadow-lg"
               >
-                <Download className="w-5 h-5" />
-                Download
+                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Download</span>
               </button>
             </div>
           </div>
