@@ -199,6 +199,7 @@ export default function ListingsPage() {
                     key={product.product_id}
                     product={product}
                     onSKUUpdate={handleSKUUpdate}
+                    currencyByOwnerId={currencyByOwnerId}
                   />
                 ))}
               </div>
@@ -213,10 +214,12 @@ export default function ListingsPage() {
 // Product Listing Card Component
 function ProductListingCard({ 
   product, 
-  onSKUUpdate 
+  onSKUUpdate,
+  currencyByOwnerId
 }: { 
   product: Product
   onSKUUpdate: (variantId: number, companySKU: string) => Promise<boolean>
+  currencyByOwnerId: Map<string, string>
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [skuInputs, setSkuInputs] = useState<{ [key: number]: string }>({})
