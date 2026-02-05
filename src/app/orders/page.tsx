@@ -51,6 +51,8 @@ export default function OrdersPage() {
   const [filterSupplier, setFilterSupplier] = useState<string>('all')
   const [suppliers, setSuppliers] = useState<SupplierInfo[]>([])
   const [supplierMap, setSupplierMap] = useState<Map<string, SupplierInfo>>(new Map())
+  const [currentUserCurrency, setCurrentUserCurrency] = useState<string>('USD')
+  const [currencyByVendorId, setCurrencyByVendorId] = useState<Map<string, string>>(new Map())
 
   // Stats
   const [stats, setStats] = useState({
