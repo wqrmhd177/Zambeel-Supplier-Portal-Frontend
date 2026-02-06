@@ -246,7 +246,7 @@ export default function Login() {
 
   return (
     <div className="flex flex-col min-h-screen w-full bg-gray-50">
-      {/* Top bar - 3D futuristic purple strip */}
+      {/* Top bar - 3D futuristic violet/purple strip */}
       <header
         className="relative flex-shrink-0 flex items-center justify-between px-4 sm:px-6 h-20 sm:h-24 w-full text-white overflow-hidden"
         style={{
@@ -256,7 +256,7 @@ export default function Login() {
             'inset 0 -2px 0 rgba(0,0,0,0.2)',
             '0 0 40px rgba(124, 58, 237, 0.25)',
           ].join(', '),
-          borderBottom: '2px solid rgba(34, 211, 238, 0.6)',
+          borderBottom: '2px solid rgba(139, 92, 246, 0.6)',
         }}
       >
         {/* Futuristic top edge highlight */}
@@ -268,8 +268,8 @@ export default function Login() {
         <div
           className="absolute inset-x-0 bottom-0 h-0.5 pointer-events-none w-full"
           style={{
-            background: 'linear-gradient(90deg, rgba(34, 211, 238, 0.7), rgba(34, 211, 238, 0.9), rgba(34, 211, 238, 0.7))',
-            boxShadow: '0 0 16px rgba(34, 211, 238, 0.6)',
+            background: 'linear-gradient(90deg, rgba(99, 102, 241, 0.7), rgba(99, 102, 241, 0.9), rgba(99, 102, 241, 0.7))',
+            boxShadow: '0 0 16px rgba(99, 102, 241, 0.6)',
           }}
         />
         <div className="relative z-10 flex items-center justify-center w-full">
@@ -288,7 +288,7 @@ export default function Login() {
         className="w-full flex-shrink-0 pointer-events-none"
         style={{
           height: '12px',
-          background: 'linear-gradient(180deg, #3b0764 0%, rgba(59, 7, 100, 0.4) 40%, transparent 100%)',
+          background: 'linear-gradient(180deg, #5b21b6 0%, rgba(91, 33, 182, 0.4) 40%, transparent 100%)',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         }}
       />
@@ -296,7 +296,7 @@ export default function Login() {
       {/* Main content: Left panel + Right panel */}
       <div className="flex flex-1 flex-col md:flex-row min-h-0">
       {/* Left Panel - Branding */}
-      <div className="hidden md:flex md:flex-1 bg-gradient-to-br from-purple-50/50 via-white to-primary-blue/5 p-6 md:p-10 lg:p-16 flex-col justify-center relative border-r border-gray-200">
+      <div className="hidden md:flex md:flex-1 bg-gradient-to-br from-violet-50/50 via-white to-indigo-50/50 p-6 md:p-10 lg:p-16 flex-col justify-center relative border-r border-gray-200">
         <div className="relative z-10 max-w-[600px] animate-slide-in-left">
           <div className="flex items-center gap-3 mb-8 md:mb-12 lg:mb-16">
             <div className="h-10 w-auto md:h-12 flex items-center shrink-0">
@@ -309,7 +309,7 @@ export default function Login() {
             <h2 className="text-xl md:text-2xl lg:text-3xl font-bold leading-tight text-gray-900 mb-4 md:mb-6 tracking-tight">
             Your Business from Offline to Online Starts Here
               <br />
-              <span className="text-primary-blue animate-come-and-go inline-block">
+              <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent animate-come-and-go inline-block">
                 in the Pakistan, GCC Market and many more
               </span>
             </h2>
@@ -327,7 +327,7 @@ export default function Login() {
                 key={code}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/80 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-default group"
               >
-                <span className="text-xs font-bold text-gray-700 tracking-wide uppercase group-hover:text-primary-blue transition-colors">
+                <span className="text-xs font-bold text-gray-700 tracking-wide uppercase group-hover:text-violet-600 transition-colors">
                   {initials}
                 </span>
                 <div className="rounded-md overflow-hidden border border-gray-200">
@@ -351,12 +351,12 @@ export default function Login() {
       {/* Right Panel - Login Form */}
       <div className="flex-1 bg-gray-50 flex items-center justify-center p-6 sm:p-8 md:p-10 lg:p-16">
         <div className="w-full max-w-[480px] mr-8 lg:mr-16 animate-slide-in-right">
-          {/* Form card with blue border on all sides */}
-          <div className="relative flex flex-col bg-white rounded-2xl shadow-xl border-4 border-primary-blue p-6 sm:p-8 md:p-10">
+          {/* Form card with indigo border on all sides */}
+          <div className="relative flex flex-col bg-white rounded-2xl shadow-xl border-4 border-indigo-500 p-6 sm:p-8 md:p-10">
           <div className="text-center mb-8 md:mb-10">
             {/* Mobile Logo - Only visible on mobile */}
             <div className="md:hidden flex items-center justify-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-primary-blue/10 rounded-xl flex items-center justify-center text-primary-blue">
+              <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center text-violet-600">
                 <Package size={24} strokeWidth={2} />
               </div>
               <h1 className="text-xl font-bold text-gray-900 tracking-tight">Zambeel Supplier Portal</h1>
@@ -379,8 +379,8 @@ export default function Login() {
 
           {/* Popup for account status messages (refused / pending) */}
           {popupMessage && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog">
-              <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8 border-2 border-primary-blue/20">
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog">
+              <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8 border-2 border-indigo-500/20">
                 <button
                   type="button"
                   onClick={() => setPopupMessage(null)}
@@ -390,14 +390,14 @@ export default function Login() {
                   <X size={20} />
                 </button>
                 <div className="flex items-start gap-3 pr-8">
-                  <AlertCircle className="flex-shrink-0 w-8 h-8 text-primary-blue mt-0.5" />
+                  <AlertCircle className="flex-shrink-0 w-8 h-8 text-violet-600 mt-0.5" />
                   <p className="text-sm md:text-base text-gray-700 leading-relaxed">{popupMessage}</p>
                 </div>
                 <div className="mt-6 flex justify-end">
                   <button
                     type="button"
                     onClick={() => setPopupMessage(null)}
-                    className="py-2.5 px-5 text-sm font-semibold text-white bg-primary-blue rounded-xl hover:bg-primary-blue/90 transition-colors"
+                    className="py-2.5 px-5 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl hover:opacity-90 transition-all"
                   >
                     OK
                   </button>
@@ -416,7 +416,7 @@ export default function Login() {
                 <input
                   id="email"
                   type="email"
-                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-violet-500 focus:shadow-[0_0_0_4px_rgba(139,92,246,0.1)] focus:outline-none placeholder:text-gray-400"
                   placeholder="supplier@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -434,7 +434,7 @@ export default function Login() {
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                  className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-violet-500 focus:shadow-[0_0_0_4px_rgba(139,92,246,0.1)] focus:outline-none placeholder:text-gray-400"
                   placeholder={isSignUp ? 'Create a password' : 'Enter your password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -443,7 +443,7 @@ export default function Login() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 md:right-4 p-1 text-gray-400 hover:text-primary-blue transition-colors flex items-center justify-center"
+                  className="absolute right-3 md:right-4 p-1 text-gray-400 hover:text-violet-600 transition-colors flex items-center justify-center"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
@@ -462,7 +462,7 @@ export default function Login() {
                   <input
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
-                    className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                    className="w-full py-3 md:py-3.5 px-3 md:px-4 pl-10 md:pl-12 text-sm md:text-[15px] border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all duration-200 focus:border-violet-500 focus:shadow-[0_0_0_4px_rgba(139,92,246,0.1)] focus:outline-none placeholder:text-gray-400"
                     placeholder="Re-enter your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -471,7 +471,7 @@ export default function Login() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3 md:right-4 p-1 text-gray-400 hover:text-primary-blue transition-colors flex items-center justify-center"
+                    className="absolute right-3 md:right-4 p-1 text-gray-400 hover:text-violet-600 transition-colors flex items-center justify-center"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
@@ -487,7 +487,7 @@ export default function Login() {
                   <input type="checkbox" className="w-4 h-4 md:w-[18px] md:h-[18px] border-2 border-gray-300 rounded cursor-pointer accent-purple-600 focus:ring-2 focus:ring-purple-500/30" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="text-xs md:text-sm text-primary-blue font-semibold hover:text-primary-blue-dark transition-colors py-2 px-1 -m-1 rounded hover:bg-primary-blue/5">
+                <a href="#" className="text-xs md:text-sm text-violet-600 font-semibold hover:text-indigo-700 transition-colors py-2 px-1 -m-1 rounded hover:bg-violet-50">
                   Forgot password?
                 </a>
               </div>
@@ -497,8 +497,8 @@ export default function Login() {
               type="submit"
               className={`w-full py-3.5 md:py-4 px-4 md:px-6 text-sm md:text-base font-semibold text-white rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
                 isLoading
-                  ? 'opacity-70 cursor-not-allowed bg-primary-blue shadow-lg'
-                  : 'bg-primary-blue shadow-[0_4px_14px_rgba(74,159,245,0.4)] hover:bg-primary-blue/90 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(74,159,245,0.5)] active:translate-y-0'
+                  ? 'opacity-70 cursor-not-allowed bg-gradient-to-r from-violet-600 to-indigo-600 shadow-lg'
+                  : 'bg-gradient-to-r from-violet-600 to-indigo-600 shadow-[0_4px_14px_rgba(139,92,246,0.4)] hover:opacity-90 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(139,92,246,0.5)] active:translate-y-0'
               }`}
               disabled={isLoading}
             >
@@ -535,7 +535,7 @@ export default function Login() {
                       setPassword('')
                       setConfirmPassword('')
                     }}
-                    className="text-primary-blue font-semibold hover:text-primary-blue-dark hover:underline transition-colors inline-block py-2 px-1 -m-1 rounded hover:bg-primary-blue/5"
+                    className="text-violet-600 font-semibold hover:text-indigo-700 hover:underline transition-colors inline-block py-2 px-1 -m-1 rounded hover:bg-violet-50"
                   >
                     Sign in
                   </a>
@@ -553,7 +553,7 @@ export default function Login() {
                       setPassword('')
                       setConfirmPassword('')
                     }}
-                    className="text-primary-blue font-semibold hover:text-primary-blue-dark hover:underline transition-colors inline-block py-2 px-1 -m-1 rounded hover:bg-primary-blue/5"
+                    className="text-violet-600 font-semibold hover:text-indigo-700 hover:underline transition-colors inline-block py-2 px-1 -m-1 rounded hover:bg-violet-50"
                   >
                     Sign up as a supplier
                   </a>
