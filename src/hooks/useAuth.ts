@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { clearSessionCookie, setSessionCookie } from '@/lib/authCookie'
+import { clearSessionCookie, setSessionCookie, isSessionIdle, updateLastActivity } from '@/lib/authCookie'
 
 interface AuthState {
   isAuthenticated: boolean
@@ -49,6 +49,18 @@ export function useAuth() {
         return
       }
 
+      // Check for idle timeout (12 hours of inactivity)
+      if (isSessionIdle()) {
+        console.log('Session expired due to inactivity, logging out...')
+        clearAuth()
+        // Use window.location for full page reload to preserve query params
+        window.location.href = '/login?reason=timeout'
+        return
+      }
+
+      // Update last activity timestamp (user is active on this page load)
+      updateLastActivity()
+
       // Ensure session cookie is set (e.g. for returning users who had no cookie yet)
       setSessionCookie()
 
@@ -66,7 +78,7 @@ export function useAuth() {
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, archived, role')
+          .select('id, user_id, email, archived, role, account_approval, onboarded')
           .eq('id', authData.userId)
           .single()
 
@@ -86,8 +98,28 @@ export function useAuth() {
           return
         }
 
-        // User exists and is not deleted, update with fresh data from database
+        // Security check: For suppliers who have completed onboarding, enforce account approval status
         const userRole = data.role || 'supplier'
+        if (userRole === 'supplier' && data.onboarded === true) {
+          const accountApproval = data.account_approval
+          
+          if (accountApproval === 'Refused') {
+            console.log('Account has been refused, logging out...')
+            clearAuth()
+            router.push('/login?reason=refused')
+            return
+          }
+          
+          if (accountApproval !== 'Approved') {
+            // Status is 'Wait' or null - pending approval
+            console.log('Account approval is pending, logging out...')
+            clearAuth()
+            router.push('/login?reason=pending')
+            return
+          }
+        }
+
+        // User exists and is not deleted, update with fresh data from database
         localStorage.setItem('userRole', userRole)
         
         // Only update if role changed

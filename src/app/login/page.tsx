@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { setSessionCookie } from '@/lib/authCookie'
+import { setSessionCookie, updateLastActivity } from '@/lib/authCookie'
 
 export default function Login() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isSignUp, setIsSignUp] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,6 +18,23 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [popupMessage, setPopupMessage] = useState<string | null>(null)
+
+  // Handle redirect messages from security checks
+  useEffect(() => {
+    const reason = searchParams.get('reason')
+    console.log('Login page reason:', reason) // Debug log
+    
+    if (reason === 'refused') {
+      setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
+      setIsSignUp(false)
+    } else if (reason === 'pending') {
+      setPopupMessage('Your account approval is pending. Please wait for admin approval to access the portal.')
+      setIsSignUp(false)
+    } else if (reason === 'timeout') {
+      setPopupMessage('Your session has expired due to inactivity. Please sign in again to continue.')
+      setIsSignUp(false)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,18 +94,13 @@ export default function Login() {
               localStorage.setItem('isLoggedIn', 'true')
               localStorage.setItem('userRole', restoredUser.role || 'supplier')
               setSessionCookie()
+              updateLastActivity() // Initialize activity tracking
               localStorage.removeItem('isOnboarded') // Clear onboarding flag
               localStorage.removeItem('supplierInfo') // Clear old supplier info
               
-              // Check user role and redirect accordingly
-              const userRole = restoredUser.role || 'supplier'
-              if (userRole === 'admin') {
-                router.push('/dashboard')
-              } else if (userRole === 'agent') {
-                router.push('/listings')
-              } else {
-                router.push('/onboarding')
-              }
+              // Restored accounts always go to onboarding (onboarded was reset to false)
+              // Account approval will be checked after they complete onboarding
+              router.push('/onboarding')
               setIsLoading(false)
               return
             }
@@ -135,6 +148,7 @@ export default function Login() {
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', data.role || 'supplier')
           setSessionCookie()
+          updateLastActivity() // Initialize activity tracking
           
           // Check user role and redirect accordingly
           const userRole = data.role || 'supplier'
@@ -186,39 +200,48 @@ export default function Login() {
             return
           }
 
-          // Password matches - login successful
-          localStorage.setItem('userId', existingUser.id)
-          localStorage.setItem('userFriendlyId', existingUser.user_id || '')
-          localStorage.setItem('userEmail', email)
-          localStorage.setItem('isLoggedIn', 'true')
-          localStorage.setItem('userRole', existingUser.role || 'supplier')
-          setSessionCookie()
-          
-          // Check user role and redirect accordingly
+          // Check user role and approval status BEFORE setting session
           const userRole = existingUser.role || 'supplier'
-          if (userRole === 'admin') {
-            router.push('/dashboard')
-          } else if (userRole === 'agent') {
-            router.push('/listings')
-          } else if (existingUser.onboarded) {
-            // Check account approval status for suppliers
+          
+          // For suppliers who have completed onboarding, check account approval status
+          if (userRole === 'supplier' && existingUser.onboarded) {
             const accountApproval = existingUser.account_approval
             
-            if (accountApproval === 'Approved') {
-              router.push('/dashboard')
-            } else if (accountApproval === 'Refused') {
+            if (accountApproval === 'Refused') {
               setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
               setError('')
               setIsLoading(false)
               return
-            } else {
-              // Status is 'Wait' or null
+            }
+            
+            if (accountApproval !== 'Approved') {
+              // Status is 'Wait' or null - pending approval
               setPopupMessage('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
               setError('')
               setIsLoading(false)
               return
             }
+          }
+
+          // Password matches and approval check passed - set session and login
+          localStorage.setItem('userId', existingUser.id)
+          localStorage.setItem('userFriendlyId', existingUser.user_id || '')
+          localStorage.setItem('userEmail', email)
+          localStorage.setItem('isLoggedIn', 'true')
+          localStorage.setItem('userRole', userRole)
+          setSessionCookie()
+          updateLastActivity() // Initialize activity tracking
+          
+          // Redirect based on role
+          if (userRole === 'admin') {
+            router.push('/dashboard')
+          } else if (userRole === 'agent') {
+            router.push('/listings')
+          } else if (existingUser.onboarded) {
+            // Supplier with approved account (already checked above)
+            router.push('/dashboard')
           } else {
+            // Supplier who hasn't completed onboarding yet
             router.push('/onboarding')
           }
           setIsLoading(false)
@@ -531,7 +554,10 @@ export default function Login() {
                       e.preventDefault()
                       setIsSignUp(false)
                       setError('')
-                      setPopupMessage(null)
+                      // Don't clear popup if it's from a redirect reason
+                      if (!searchParams.get('reason')) {
+                        setPopupMessage(null)
+                      }
                       setPassword('')
                       setConfirmPassword('')
                     }}
@@ -549,7 +575,10 @@ export default function Login() {
                       e.preventDefault()
                       setIsSignUp(true)
                       setError('')
-                      setPopupMessage(null)
+                      // Don't clear popup if it's from a redirect reason
+                      if (!searchParams.get('reason')) {
+                        setPopupMessage(null)
+                      }
                       setPassword('')
                       setConfirmPassword('')
                     }}
