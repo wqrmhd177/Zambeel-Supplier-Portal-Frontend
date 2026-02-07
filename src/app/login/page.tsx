@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { setSessionCookie, updateLastActivity } from '@/lib/authCookie'
 
-export default function Login() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSignUp, setIsSignUp] = useState(true)
@@ -22,8 +22,6 @@ export default function Login() {
   // Handle redirect messages from security checks
   useEffect(() => {
     const reason = searchParams.get('reason')
-    console.log('Login page reason:', reason) // Debug log
-    
     if (reason === 'refused') {
       setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
       setIsSignUp(false)
@@ -595,5 +593,21 @@ export default function Login() {
       </div>
       </div>
     </div>
+  )
+}
+
+function LoginFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50/30">
+      <div className="animate-pulse text-violet-600 font-medium">Loading...</div>
+    </div>
+  )
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginPageContent />
+    </Suspense>
   )
 }
