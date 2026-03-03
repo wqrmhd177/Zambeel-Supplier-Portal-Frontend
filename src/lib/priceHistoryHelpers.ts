@@ -519,6 +519,27 @@ export async function getPendingRequestCount(): Promise<number> {
 }
 
 /**
+ * Get count of price change requests with status 'pending'
+ * Used for sidebar badge
+ */
+export async function getPendingApprovalsCount(): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('price_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+    if (error) {
+      console.error('Error fetching pending approvals count:', error)
+      return 0
+    }
+    return count ?? 0
+  } catch (err) {
+    console.error('Unexpected error fetching pending approvals count:', err)
+    return 0
+  }
+}
+
+/**
  * Fetch all price requests with a specific status
  * Used for filtering in the approvals page
  */

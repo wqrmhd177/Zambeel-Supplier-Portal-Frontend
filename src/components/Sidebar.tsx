@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { clearSessionCookie } from '@/lib/authCookie'
+import { getPendingListingsCount } from '@/lib/productHelpers'
+import { getPendingApprovalsCount } from '@/lib/priceHistoryHelpers'
 
 const supplierMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -13,8 +15,8 @@ const supplierMenuItems = [
 ]
 
 const agentMenuItems = [
-  { icon: List, label: 'Listings', path: '/listings' },
-  { icon: CheckCircle, label: 'Approvals', path: '/approvals' },
+  { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
+  { icon: CheckCircle, label: 'Approvals', path: '/approvals', showPendingCount: true as const },
 ]
 
 const adminMenuItems = [
@@ -22,7 +24,7 @@ const adminMenuItems = [
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
-  { icon: List, label: 'Listings', path: '/listings' },
+  { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
   { icon: Settings, label: 'User Settings', path: '/settings/users' },
 ]
 
@@ -39,6 +41,19 @@ export default function Sidebar() {
   const { userRole, isLoading } = useAuth()
   const [activeItem, setActiveItem] = useState('Dashboard')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [listingPendingCount, setListingPendingCount] = useState<number | null>(null)
+  const [approvalsPendingCount, setApprovalsPendingCount] = useState<number | null>(null)
+
+  // Fetch pending counts for Listings and Approvals when user is agent or admin
+  useEffect(() => {
+    if (!userRole) return
+    if (userRole === 'agent' || userRole === 'admin') {
+      getPendingListingsCount().then(setListingPendingCount)
+    }
+    if (userRole === 'agent') {
+      getPendingApprovalsCount().then(setApprovalsPendingCount)
+    }
+  }, [userRole])
 
   // Get menu items based on user role
   const getMenuItems = () => {
@@ -125,7 +140,10 @@ export default function Sidebar() {
           menuItems.map((item) => {
             const Icon = item.icon
             const isActive = activeItem === item.label
-            
+            const showCount = 'showPendingCount' in item && item.showPendingCount
+            const count = item.label === 'Listings' ? listingPendingCount : item.label === 'Approvals' ? approvalsPendingCount : null
+            const displayLabel = showCount && count !== null ? `${item.label} (${count})` : item.label
+
             return (
               <button
                 key={item.label}
@@ -148,7 +166,7 @@ export default function Sidebar() {
                   />
                 )}
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium">{item.label}</span>
+                <span className="font-medium">{displayLabel}</span>
               </button>
             )
           })

@@ -2,6 +2,8 @@
 // Since products with multiple variants now have multiple rows,
 // we need to group them together for display
 
+import { supabase } from '@/lib/supabase'
+
 export interface ProductRow {
   product_id: number
   product_title: string
@@ -84,4 +86,28 @@ export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
   })
 
   return Array.from(grouped.values())
+}
+
+/**
+ * Get count of products that have at least one variant without company_sku (pending listings).
+ * Used for sidebar badge on Listings.
+ */
+export async function getPendingListingsCount(): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('product_id')
+      .or('company_sku.is.null,company_sku.eq.')
+
+    if (error) {
+      console.error('Error fetching pending listings count:', error)
+      return 0
+    }
+    if (!data || data.length === 0) return 0
+    const distinctProductIds = new Set(data.map((r) => r.product_id))
+    return distinctProductIds.size
+  } catch (err) {
+    console.error('Unexpected error fetching pending listings count:', err)
+    return 0
+  }
 }
