@@ -58,7 +58,7 @@ export default function SuppliersPage() {
         // Admin can see all suppliers
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, owner_name, store_name, phone_number, city, onboarded, created_at')
+          .select('id, user_id, email, owner_name, store_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
         
