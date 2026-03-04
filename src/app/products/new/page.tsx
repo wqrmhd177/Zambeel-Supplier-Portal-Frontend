@@ -142,11 +142,11 @@ export default function AddProductPage() {
       // Both admin and purchaser can see all active suppliers in the system
       const { data, error } = await supabase
         .from('users')
-        .select('id, user_id, email, owner_name, store_name, phone_number, city, onboarded, created_at')
+        .select('id, user_id, email, owner_name, store_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
         .eq('role', 'supplier')
         .eq('archived', false)
         .eq('account_approval', 'Approved')
-        .order('store_name', { ascending: true })
+        .order('shop_name_on_zambeel', { ascending: true })
       
       if (!error && data) {
         setSuppliers(data)
@@ -159,6 +159,7 @@ export default function AddProductPage() {
     if (!supplierSearch) return true
     const searchLower = supplierSearch.toLowerCase()
     return (
+      (supplier.shop_name_on_zambeel?.toLowerCase().includes(searchLower)) ||
       (supplier.store_name?.toLowerCase().includes(searchLower)) ||
       (supplier.owner_name?.toLowerCase().includes(searchLower)) ||
       (supplier.email?.toLowerCase().includes(searchLower)) ||
@@ -166,13 +167,9 @@ export default function AddProductPage() {
     )
   })
   
-  // Get selected supplier display name (prioritize store name)
+  // Get selected supplier display name (show only shop_name_on_zambeel)
   const selectedSupplier = suppliers.find(s => s.user_id === selectedSupplierId)
-  const getSupplierDisplayName = (supplier: SupplierInfo | undefined) => {
-    if (!supplier) return ''
-    return supplier.store_name || supplier.owner_name || supplier.email || `Supplier ${supplier.user_id}`
-  }
-  const selectedSupplierDisplay = getSupplierDisplayName(selectedSupplier)
+  const selectedSupplierDisplay = selectedSupplier?.shop_name_on_zambeel || ''
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -685,7 +682,7 @@ export default function AddProductPage() {
                       <input
                         type="text"
                         id="supplier"
-                        placeholder="Search by store name, email, or ID..."
+                        placeholder="Search store name..."
                         value={selectedSupplierId && !showSupplierDropdown ? selectedSupplierDisplay : supplierSearch}
                         onChange={(e) => {
                           setSupplierSearch(e.target.value)
@@ -736,12 +733,7 @@ export default function AddProductPage() {
                                 }`}
                               >
                                 <div className="font-medium">
-                                  {supplier.store_name || supplier.owner_name || `Supplier ${supplier.user_id}`}
-                                </div>
-                                <div className={`text-sm ${
-                                  selectedSupplierId === supplier.user_id ? 'text-white/80' : 'text-gray-500'
-                                }`}>
-                                  ID: {supplier.user_id}{supplier.email ? ` • ${supplier.email}` : ''}
+                                  {supplier.shop_name_on_zambeel || 'No store name'}
                                 </div>
                               </div>
                             ))
