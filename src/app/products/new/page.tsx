@@ -83,6 +83,7 @@ export default function AddProductPage() {
   const [suppliers, setSuppliers] = useState<SupplierInfo[]>([])
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('')
   const [priceCurrency, setPriceCurrency] = useState<string>('USD')
+  const [supplierSearch, setSupplierSearch] = useState<string>('')
 
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
@@ -136,12 +137,14 @@ export default function AddProductPage() {
   }, [userId, userFriendlyId, userRole, selectedSupplierId])
 
   const fetchSuppliers = async () => {
-    if (userRole === 'admin') {
-      // Admin can see all suppliers
+    if (userRole === 'admin' || userRole === 'purchaser') {
+      // Both admin and purchaser can see all active suppliers in the system
       const { data, error } = await supabase
         .from('users')
         .select('id, user_id, email, owner_name, store_name, phone_number, city, onboarded, created_at')
         .eq('role', 'supplier')
+        .eq('archived', false)
+        .eq('account_approval', 'Approved')
         .order('created_at', { ascending: false })
       
       if (!error && data) {
@@ -150,22 +153,20 @@ export default function AddProductPage() {
           setSelectedSupplierId(data[0].user_id)
         }
       }
-    } else if (userRole === 'purchaser' && userId) {
-      // Purchaser sees only their suppliers
-      // Get purchaser's integer ID first
-      const purchaserIntId = await getPurchaserIntegerId(userId)
-      if (purchaserIntId) {
-        const supplierList = await fetchSuppliersForPurchaser(purchaserIntId)
-        setSuppliers(supplierList)
-        if (supplierList.length > 0 && !selectedSupplierId) {
-          setSelectedSupplierId(supplierList[0].user_id)
-        }
-      } else {
-        console.error('Failed to get purchaser integer ID')
-        setSuppliers([])
-      }
     }
   }
+  
+  // Filter suppliers based on search
+  const filteredSuppliers = suppliers.filter(supplier => {
+    if (!supplierSearch) return true
+    const searchLower = supplierSearch.toLowerCase()
+    return (
+      (supplier.store_name?.toLowerCase().includes(searchLower)) ||
+      (supplier.owner_name?.toLowerCase().includes(searchLower)) ||
+      (supplier.email?.toLowerCase().includes(searchLower)) ||
+      (supplier.user_id?.toLowerCase().includes(searchLower))
+    )
+  })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -671,6 +672,18 @@ export default function AddProductPage() {
                   <label htmlFor="supplier" className="block text-sm font-semibold text-gray-900 mb-2">
                     Supplier <span className="text-red-500">*</span>
                   </label>
+                  
+                  {/* Search Bar */}
+                  {suppliers.length > 0 && (
+                    <input
+                      type="text"
+                      placeholder="Search suppliers by name, email, or ID..."
+                      value={supplierSearch}
+                      onChange={(e) => setSupplierSearch(e.target.value)}
+                      className="w-full px-4 py-2 mb-2 border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
+                    />
+                  )}
+                  
                   <select
                     id="supplier"
                     value={selectedSupplierId}
@@ -686,9 +699,9 @@ export default function AddProductPage() {
                     required
                   >
                     <option value="">Select a supplier</option>
-                    {suppliers.map(supplier => (
+                    {filteredSuppliers.map(supplier => (
                       <option key={supplier.user_id} value={supplier.user_id}>
-                        {supplier.store_name || supplier.owner_name || supplier.email}
+                        {supplier.store_name || supplier.owner_name || supplier.email} (ID: {supplier.user_id})
                       </option>
                     ))}
                   </select>
@@ -697,7 +710,12 @@ export default function AddProductPage() {
                   )}
                   {suppliers.length === 0 && (
                     <p className="mt-1 text-sm text-gray-500">
-                      No suppliers available. <button type="button" onClick={() => router.push('/suppliers/new')} className="text-primary-blue hover:underline">Create one</button>
+                      No active suppliers available. <button type="button" onClick={() => router.push('/suppliers/new')} className="text-primary-blue hover:underline">Create one</button>
+                    </p>
+                  )}
+                  {suppliers.length > 0 && filteredSuppliers.length === 0 && (
+                    <p className="mt-1 text-sm text-gray-500">
+                      No suppliers match your search. Try different keywords.
                     </p>
                   )}
                 </div>

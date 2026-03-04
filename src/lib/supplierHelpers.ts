@@ -81,11 +81,13 @@ export interface PurchaserSupplier {
  */
 export async function fetchSuppliersForPurchaser(purchaserId: number): Promise<SupplierInfo[]> {
   try {
+    // Purchasers can see ALL active suppliers in the system (not just their assigned ones)
     const { data, error } = await supabase
       .from('users')
       .select('id, user_id, email, owner_name, store_name, phone_number, city, onboarded, created_at')
-      .eq('purchaser_id', purchaserId)
       .eq('role', 'supplier')
+      .eq('archived', false)
+      .eq('account_approval', 'Approved')
       .order('created_at', { ascending: false })
 
     if (error) {
