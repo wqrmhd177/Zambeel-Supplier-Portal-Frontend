@@ -64,7 +64,7 @@ export interface SupplierInfo {
   user_id: string
   email: string
   owner_name: string | null
-  store_name: string | null
+  shop_name: string | null
   shop_name_on_zambeel: string | null
   phone_number: string | null
   city: string | null
@@ -85,7 +85,7 @@ export async function fetchSuppliersForPurchaser(purchaserId: number): Promise<S
     // Purchasers can see ALL active suppliers in the system (not just their assigned ones)
     const { data, error } = await supabase
       .from('users')
-      .select('id, user_id, email, owner_name, store_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+      .select('id, user_id, email, owner_name, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
       .eq('role', 'supplier')
       .eq('archived', false)
       .eq('account_approval', 'Approved')
@@ -176,7 +176,7 @@ export async function getSupplierByUserId(userId: string): Promise<SupplierInfo 
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, user_id, email, owner_name, store_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+      .select('id, user_id, email, owner_name, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
       .eq('user_id', userId)
       .eq('role', 'supplier')
       .single()

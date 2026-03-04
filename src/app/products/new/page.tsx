@@ -142,7 +142,7 @@ export default function AddProductPage() {
       // Both admin and purchaser can see all active suppliers in the system
       const { data, error } = await supabase
         .from('users')
-        .select('id, user_id, email, owner_name, store_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+        .select('id, user_id, email, owner_name, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
         .eq('role', 'supplier')
         .eq('archived', false)
         .eq('account_approval', 'Approved')
@@ -160,7 +160,7 @@ export default function AddProductPage() {
     const searchLower = supplierSearch.toLowerCase()
     return (
       (supplier.shop_name_on_zambeel?.toLowerCase().includes(searchLower)) ||
-      (supplier.store_name?.toLowerCase().includes(searchLower)) ||
+      (supplier.shop_name?.toLowerCase().includes(searchLower)) ||
       (supplier.owner_name?.toLowerCase().includes(searchLower)) ||
       (supplier.email?.toLowerCase().includes(searchLower)) ||
       (supplier.user_id?.toLowerCase().includes(searchLower))
