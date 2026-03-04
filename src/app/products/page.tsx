@@ -1150,7 +1150,9 @@ export default function ProductsPage() {
                                 <Ruler className="w-3 h-3 text-violet-400" />
                                 <label className="text-xs font-semibold text-white/70">Size</label>
                               </div>
-                              <p className="text-sm text-white">{variant.size}</p>
+                              <p className="text-sm text-white">
+                                {variant.size}{variant.size_category ? ` ${variant.size_category}` : ''}
+                              </p>
                             </div>
                           )}
                           {variant.color && (

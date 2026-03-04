@@ -480,7 +480,9 @@ function ProductListingCard({
                     {variant.size && (
                       <div>
                         <label className="text-xs font-semibold text-gray-500">Size</label>
-                        <p className="text-sm text-gray-900">{variant.size}</p>
+                        <p className="text-sm text-gray-900">
+                          {variant.size}{variant.size_category ? ` ${variant.size_category}` : ''}
+                        </p>
                       </div>
                     )}
                     {variant.color && (
