@@ -146,13 +146,10 @@ export default function AddProductPage() {
         .eq('role', 'supplier')
         .eq('archived', false)
         .eq('account_approval', 'Approved')
-        .order('created_at', { ascending: false })
+        .order('store_name', { ascending: true })
       
       if (!error && data) {
         setSuppliers(data)
-        if (data.length > 0 && !selectedSupplierId) {
-          setSelectedSupplierId(data[0].user_id)
-        }
       }
     }
   }
@@ -169,11 +166,13 @@ export default function AddProductPage() {
     )
   })
   
-  // Get selected supplier display name
+  // Get selected supplier display name (prioritize store name)
   const selectedSupplier = suppliers.find(s => s.user_id === selectedSupplierId)
-  const selectedSupplierDisplay = selectedSupplier 
-    ? (selectedSupplier.store_name || selectedSupplier.owner_name || selectedSupplier.email)
-    : ''
+  const getSupplierDisplayName = (supplier: SupplierInfo | undefined) => {
+    if (!supplier) return ''
+    return supplier.store_name || supplier.owner_name || supplier.email || `Supplier ${supplier.user_id}`
+  }
+  const selectedSupplierDisplay = getSupplierDisplayName(selectedSupplier)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -686,13 +685,16 @@ export default function AddProductPage() {
                       <input
                         type="text"
                         id="supplier"
-                        placeholder="Type to search suppliers..."
+                        placeholder="Search by store name, email, or ID..."
                         value={selectedSupplierId && !showSupplierDropdown ? selectedSupplierDisplay : supplierSearch}
                         onChange={(e) => {
                           setSupplierSearch(e.target.value)
                           setShowSupplierDropdown(true)
                           if (selectedSupplierId) {
                             setSelectedSupplierId('')
+                          }
+                          if (errors.supplier) {
+                            setErrors(prev => ({ ...prev, supplier: '' }))
                           }
                         }}
                         onFocus={() => setShowSupplierDropdown(true)}
@@ -734,12 +736,12 @@ export default function AddProductPage() {
                                 }`}
                               >
                                 <div className="font-medium">
-                                  {supplier.store_name || supplier.owner_name || supplier.email}
+                                  {supplier.store_name || supplier.owner_name || `Supplier ${supplier.user_id}`}
                                 </div>
                                 <div className={`text-sm ${
                                   selectedSupplierId === supplier.user_id ? 'text-white/80' : 'text-gray-500'
                                 }`}>
-                                  ID: {supplier.user_id} • {supplier.email}
+                                  ID: {supplier.user_id}{supplier.email ? ` • ${supplier.email}` : ''}
                                 </div>
                               </div>
                             ))
