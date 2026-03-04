@@ -16,6 +16,7 @@ export interface ProductRow {
   // Variant fields (nullable for products without variants)
   variant_id: number | null
   size: string | null
+  size_category: string | null
   color: string | null
   variant_selling_price: number | null
   variant_stock: number | null
@@ -38,6 +39,7 @@ export interface VariantInfo {
   variant_id: number
   bar_code: string | null
   size: string | null
+  size_category: string | null
   color: string | null
   variant_selling_price: number
   variant_stock: number
@@ -77,6 +79,7 @@ export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
         variant_id: row.variant_id,
         bar_code: row.bar_code,
         size: row.size,
+        size_category: row.size_category,
         color: row.color,
         variant_selling_price: row.variant_selling_price || 0,
         variant_stock: row.variant_stock || 0,
