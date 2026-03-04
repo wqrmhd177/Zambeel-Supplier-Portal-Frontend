@@ -84,6 +84,7 @@ export default function AddProductPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('')
   const [priceCurrency, setPriceCurrency] = useState<string>('USD')
   const [supplierSearch, setSupplierSearch] = useState<string>('')
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState<boolean>(false)
 
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
@@ -167,6 +168,12 @@ export default function AddProductPage() {
       (supplier.user_id?.toLowerCase().includes(searchLower))
     )
   })
+  
+  // Get selected supplier display name
+  const selectedSupplier = suppliers.find(s => s.user_id === selectedSupplierId)
+  const selectedSupplierDisplay = selectedSupplier 
+    ? (selectedSupplier.store_name || selectedSupplier.owner_name || selectedSupplier.email)
+    : ''
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -668,55 +675,90 @@ export default function AddProductPage() {
             <div className="bg-white border border-gray-300 rounded-2xl p-4 sm:p-6 lg:p-8">
               {/* Supplier Selector (for purchasers and admin) */}
               {(userRole === 'purchaser' || userRole === 'admin') && (
-                <div className="mb-6">
+                <div className="mb-6 relative">
                   <label htmlFor="supplier" className="block text-sm font-semibold text-gray-900 mb-2">
                     Supplier <span className="text-red-500">*</span>
                   </label>
                   
-                  {/* Search Bar */}
-                  {suppliers.length > 0 && (
-                    <input
-                      type="text"
-                      placeholder="Search suppliers by name, email, or ID..."
-                      value={supplierSearch}
-                      onChange={(e) => setSupplierSearch(e.target.value)}
-                      className="w-full px-4 py-2 mb-2 border-2 border-gray-200 rounded-xl bg-white text-gray-900 transition-all focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
-                    />
-                  )}
-                  
-                  <select
-                    id="supplier"
-                    value={selectedSupplierId}
-                    onChange={(e) => {
-                      setSelectedSupplierId(e.target.value)
-                      if (errors.supplier) {
-                        setErrors(prev => ({ ...prev, supplier: '' }))
-                      }
-                    }}
-                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                      errors.supplier ? 'border-red-500' : 'border-gray-200'
-                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
-                    required
-                  >
-                    <option value="">Select a supplier</option>
-                    {filteredSuppliers.map(supplier => (
-                      <option key={supplier.user_id} value={supplier.user_id}>
-                        {supplier.store_name || supplier.owner_name || supplier.email} (ID: {supplier.user_id})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.supplier && (
-                    <p className="mt-1 text-sm text-red-500">{errors.supplier}</p>
-                  )}
-                  {suppliers.length === 0 && (
+                  {suppliers.length > 0 ? (
+                    <div className="relative">
+                      {/* Single Searchable Input Field */}
+                      <input
+                        type="text"
+                        id="supplier"
+                        placeholder="Type to search suppliers..."
+                        value={selectedSupplierId && !showSupplierDropdown ? selectedSupplierDisplay : supplierSearch}
+                        onChange={(e) => {
+                          setSupplierSearch(e.target.value)
+                          setShowSupplierDropdown(true)
+                          if (selectedSupplierId) {
+                            setSelectedSupplierId('')
+                          }
+                        }}
+                        onFocus={() => setShowSupplierDropdown(true)}
+                        onBlur={() => {
+                          setTimeout(() => setShowSupplierDropdown(false), 200)
+                        }}
+                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                          errors.supplier ? 'border-red-500' : 'border-gray-200'
+                        } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                        autoComplete="off"
+                        required
+                      />
+                      
+                      {/* Dropdown Icon */}
+                      <ChevronDown 
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" 
+                        size={20} 
+                      />
+                      
+                      {/* Dropdown List */}
+                      {showSupplierDropdown && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                          {filteredSuppliers.length > 0 ? (
+                            filteredSuppliers.map(supplier => (
+                              <div
+                                key={supplier.user_id}
+                                onClick={() => {
+                                  setSelectedSupplierId(supplier.user_id)
+                                  setSupplierSearch('')
+                                  setShowSupplierDropdown(false)
+                                  if (errors.supplier) {
+                                    setErrors(prev => ({ ...prev, supplier: '' }))
+                                  }
+                                }}
+                                className={`px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
+                                  selectedSupplierId === supplier.user_id
+                                    ? 'bg-primary-blue text-white'
+                                    : 'hover:bg-gray-50 text-gray-900'
+                                }`}
+                              >
+                                <div className="font-medium">
+                                  {supplier.store_name || supplier.owner_name || supplier.email}
+                                </div>
+                                <div className={`text-sm ${
+                                  selectedSupplierId === supplier.user_id ? 'text-white/80' : 'text-gray-500'
+                                }`}>
+                                  ID: {supplier.user_id} • {supplier.email}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-4 py-3 text-sm text-gray-500">
+                              No suppliers match your search
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                     <p className="mt-1 text-sm text-gray-500">
                       No active suppliers available. <button type="button" onClick={() => router.push('/suppliers/new')} className="text-primary-blue hover:underline">Create one</button>
                     </p>
                   )}
-                  {suppliers.length > 0 && filteredSuppliers.length === 0 && (
-                    <p className="mt-1 text-sm text-gray-500">
-                      No suppliers match your search. Try different keywords.
-                    </p>
+                  
+                  {errors.supplier && (
+                    <p className="mt-1 text-sm text-red-500">{errors.supplier}</p>
                   )}
                 </div>
               )}
