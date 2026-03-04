@@ -715,28 +715,31 @@ export default function AddProductPage() {
                       {showSupplierDropdown && (
                         <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                           {filteredSuppliers.length > 0 ? (
-                            filteredSuppliers.map(supplier => (
-                              <div
-                                key={supplier.user_id}
-                                onClick={() => {
-                                  setSelectedSupplierId(supplier.user_id)
-                                  setSupplierSearch('')
-                                  setShowSupplierDropdown(false)
-                                  if (errors.supplier) {
-                                    setErrors(prev => ({ ...prev, supplier: '' }))
-                                  }
-                                }}
-                                className={`px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
-                                  selectedSupplierId === supplier.user_id
-                                    ? 'bg-primary-blue text-white'
-                                    : 'hover:bg-gray-50 text-gray-900'
-                                }`}
-                              >
-                                <div className="font-medium">
-                                  {supplier.shop_name_on_zambeel || 'No store name'}
+                            filteredSuppliers.map(supplier => {
+                              // Skip suppliers without shop_name_on_zambeel
+                              if (!supplier.shop_name_on_zambeel) return null
+                              
+                              return (
+                                <div
+                                  key={supplier.user_id}
+                                  onClick={() => {
+                                    setSelectedSupplierId(supplier.user_id)
+                                    setSupplierSearch('')
+                                    setShowSupplierDropdown(false)
+                                    if (errors.supplier) {
+                                      setErrors(prev => ({ ...prev, supplier: '' }))
+                                    }
+                                  }}
+                                  className={`px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
+                                    selectedSupplierId === supplier.user_id
+                                      ? 'bg-primary-blue text-white'
+                                      : 'hover:bg-gray-50 text-gray-900'
+                                  }`}
+                                >
+                                  {supplier.shop_name_on_zambeel}
                                 </div>
-                              </div>
-                            ))
+                              )
+                            })
                           ) : (
                             <div className="px-4 py-3 text-sm text-gray-500">
                               No suppliers match your search
