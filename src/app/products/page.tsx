@@ -265,7 +265,7 @@ export default function ProductsPage() {
         // Fetch all suppliers for filter dropdown
         const { data: supplierData, error: supplierError } = await supabase
           .from('users')
-          .select('id, user_id, email, owner_name, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+          .select('id, user_id, email, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
 
@@ -673,7 +673,7 @@ export default function ProductsPage() {
                     <option value="all">All Suppliers</option>
                     {suppliers.map(supplier => (
                       <option key={supplier.user_id} value={supplier.user_id}>
-                        {supplier.shop_name || supplier.owner_name || supplier.email}
+                        {supplier.shop_name_on_zambeel || supplier.shop_name || supplier.email}
                       </option>
                     ))}
                   </select>
@@ -814,10 +814,7 @@ export default function ProductsPage() {
                               <div className="text-xs sm:text-sm theme-heading">
                                 {supplierInfo ? (
                                   <div>
-                                    <div className="font-medium">{supplierInfo.shop_name || supplierInfo.owner_name || 'Unnamed'}</div>
-                                    {supplierInfo.shop_name && supplierInfo.owner_name && (
-                                      <div className="text-xs theme-muted">{supplierInfo.owner_name}</div>
-                                    )}
+                                    <div className="font-medium">{supplierInfo.shop_name_on_zambeel || supplierInfo.shop_name || 'Unnamed'}</div>
                                   </div>
                                 ) : (
                                   <span className="text-gray-400">Unknown</span>
