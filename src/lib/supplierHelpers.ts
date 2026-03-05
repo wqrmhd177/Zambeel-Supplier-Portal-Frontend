@@ -65,6 +65,7 @@ export interface SupplierInfo {
   email: string
   shop_name: string | null
   shop_name_on_zambeel: string | null
+  country: string | null
   phone_number: string | null
   city: string | null
   onboarded: boolean
@@ -78,16 +79,33 @@ export interface PurchaserSupplier {
 
 /**
  * Fetch all suppliers managed by a purchaser
+ * Purchasers only see suppliers from their own country
  */
 export async function fetchSuppliersForPurchaser(purchaserId: number): Promise<SupplierInfo[]> {
   try {
-    // Purchasers can see ALL active suppliers in the system (not just their assigned ones)
+    // Get purchaser's country first
+    const { data: purchaserData, error: purchaserError } = await supabase
+      .from('users')
+      .select('country')
+      .eq('id', purchaserId)
+      .eq('role', 'purchaser')
+      .single()
+    
+    if (purchaserError || !purchaserData?.country) {
+      console.error('Error fetching purchaser country:', purchaserError)
+      return []
+    }
+    
+    const purchaserCountry = purchaserData.country
+    
+    // Fetch suppliers from the same country only
     const { data, error } = await supabase
       .from('users')
-      .select('id, user_id, email, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+      .select('id, user_id, email, shop_name, shop_name_on_zambeel, country, phone_number, city, onboarded, created_at')
       .eq('role', 'supplier')
       .eq('archived', false)
       .eq('account_approval', 'Approved')
+      .eq('country', purchaserCountry)
       .order('shop_name_on_zambeel', { ascending: true })
 
     if (error) {
@@ -175,7 +193,7 @@ export async function getSupplierByUserId(userId: string): Promise<SupplierInfo 
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, user_id, email, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+      .select('id, user_id, email, shop_name, shop_name_on_zambeel, country, phone_number, city, onboarded, created_at')
       .eq('user_id', userId)
       .eq('role', 'supplier')
       .single()

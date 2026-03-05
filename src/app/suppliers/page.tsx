@@ -58,7 +58,7 @@ export default function SuppliersPage() {
         // Admin can see all suppliers
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, shop_name, shop_name_on_zambeel, phone_number, city, onboarded, created_at')
+          .select('id, user_id, email, shop_name, shop_name_on_zambeel, country, phone_number, city, onboarded, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
         
@@ -181,7 +181,7 @@ export default function SuppliersPage() {
                     className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white inline-flex items-center gap-2"
                   >
                     <Plus className="w-5 h-5" />
-                    Add Your First Supplier
+                    Add Supplier
                   </button>
                 )}
               </div>
