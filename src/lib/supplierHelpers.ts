@@ -87,7 +87,7 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
       .select('country, stock_location_country')
       .eq('id', purchaserUuid)
       .eq('role', 'purchaser')
-      .single()
+      .single<{ country: string | null; stock_location_country: string | null }>()
     
     if (purchaserError) {
       console.error('Error fetching purchaser country:', purchaserError)
