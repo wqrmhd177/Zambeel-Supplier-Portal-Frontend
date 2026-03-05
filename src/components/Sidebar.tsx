@@ -191,9 +191,9 @@ export default function Sidebar() {
           </div>
           <span className="text-sm font-semibold text-white">Zambeel WhatsApp Support</span>
         </div>
-        <a href="https://wa.me/971568472271" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-white/90 hover:text-white text-sm transition-colors">
+        <a href="https://wa.me/923054094932" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-white/90 hover:text-white text-sm transition-colors">
           <Phone className="w-4 h-4" />
-          <span>+971 56 847 2271</span>
+          <span>+92-305-4094932</span>
         </a>
       </div>
 

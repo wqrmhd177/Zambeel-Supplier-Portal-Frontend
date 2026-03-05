@@ -7,28 +7,34 @@ import { supabase } from '@/lib/supabase'
 export default function Header() {
   const router = useRouter()
   const [ownerName, setOwnerName] = useState('')
+  const [shopName, setShopName] = useState('')
 
   useEffect(() => {
-    const fetchOwnerName = async () => {
+    const fetchUserData = async () => {
       const userId = localStorage.getItem('userId')
       if (!userId) return
 
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('owner_name')
+          .select('owner_name, shop_name_on_zambeel')
           .eq('id', userId)
           .single()
 
-        if (data && data.owner_name) {
-          setOwnerName(data.owner_name)
+        if (data) {
+          if (data.owner_name) {
+            setOwnerName(data.owner_name)
+          }
+          if (data.shop_name_on_zambeel) {
+            setShopName(data.shop_name_on_zambeel)
+          }
         }
       } catch (err) {
-        console.error('Error fetching owner name:', err)
+        console.error('Error fetching user data:', err)
       }
     }
 
-    fetchOwnerName()
+    fetchUserData()
   }, [])
 
   const handleViewProfile = () => {
@@ -56,15 +62,17 @@ export default function Header() {
 
         <button
           onClick={handleViewProfile}
-          className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm md:text-base font-medium transition-all text-white relative overflow-hidden whitespace-nowrap flex-shrink-0"
+          className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm md:text-base font-medium transition-all text-white relative overflow-hidden flex-shrink-0 flex flex-col items-center justify-center gap-0.5"
           style={{
             background: 'linear-gradient(90deg, #7c3aed 0%, #5b21b6 50%, #4f46e5 100%)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 3px 10px rgba(0,0,0,0.3)',
             border: '1px solid rgba(255,255,255,0.1)',
           }}
         >
-          <span className="hidden sm:inline">View Profile</span>
-          <span className="sm:hidden">Profile</span>
+          {shopName && (
+            <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">{shopName}</span>
+          )}
+          <span className="text-xs whitespace-nowrap">View Profile</span>
         </button>
       </div>
     </header>
