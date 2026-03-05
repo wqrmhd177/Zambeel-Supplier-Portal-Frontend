@@ -113,7 +113,7 @@ export default function AddProductPage() {
     if (isAuthenticated && (userRole === 'purchaser' || userRole === 'admin')) {
       fetchSuppliers()
     }
-  }, [authLoading, isAuthenticated, router])
+  }, [authLoading, isAuthenticated, userRole, userId, router])
 
   useEffect(() => {
     if (!showSuccessScreen) return
@@ -138,8 +138,8 @@ export default function AddProductPage() {
   }, [userId, userFriendlyId, userRole, selectedSupplierId])
 
   const fetchSuppliers = async () => {
-    if (userRole === 'admin' || userRole === 'purchaser') {
-      // Both admin and purchaser can see all active suppliers in the system
+    if (userRole === 'admin') {
+      // Admin can see all active suppliers in the system
       const { data, error } = await supabase
         .from('users')
         .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
@@ -147,10 +147,14 @@ export default function AddProductPage() {
         .eq('archived', false)
         .eq('account_approval', 'Approved')
         .order('shop_name_on_zambeel', { ascending: true })
-      
+
       if (!error && data) {
         setSuppliers(data)
       }
+    } else if (userRole === 'purchaser' && userId) {
+      // Purchaser can only see suppliers from their own country
+      const supplierList = await fetchSuppliersForPurchaser(userId)
+      setSuppliers(supplierList)
     }
   }
   
