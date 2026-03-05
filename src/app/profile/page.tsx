@@ -64,21 +64,7 @@ export default function ProfilePage() {
       try {
         const { data, error: fetchError } = await supabase
           .from('users')
-          .select(`
-            user_id,
-            full_name,
-            owner_name,
-            email,
-            phone_number,
-            shop_name_on_zambeel,
-            pickup_address,
-            pickup_city,
-            bank_title,
-            bank_name,
-            iban,
-            user_picture_url,
-            archived
-          `)
+          .select('*')
           .eq('id', userId)
           .single()
 
@@ -95,7 +81,7 @@ export default function ProfilePage() {
         }
 
         if (data) {
-          const row = data as { archived?: boolean }
+          const row = data as Record<string, unknown>
           if (row.archived === true) {
             setError('This account has been deleted. You will be logged out.')
             localStorage.clear()
@@ -104,17 +90,17 @@ export default function ProfilePage() {
           }
 
           setProfileData({
-            userId: data.user_id != null ? String(data.user_id) : '',
-            fullName: data.full_name || data.owner_name || '',
-            email: data.email || '',
-            phoneNumber: data.phone_number || '',
-            shopNameOnZambeel: data.shop_name_on_zambeel || '',
-            pickupAddress: data.pickup_address || '',
-            pickupCity: data.pickup_city || '',
-            bankTitle: data.bank_title || '',
-            bankName: data.bank_name || '',
-            iban: data.iban || '',
-            nicPictureUrl: data.user_picture_url || ''
+            userId: row.user_id != null ? String(row.user_id) : '',
+            fullName: (row.full_name || row.owner_name || '') as string,
+            email: (row.email || '') as string,
+            phoneNumber: (row.phone_number || '') as string,
+            shopNameOnZambeel: (row.shop_name_on_zambeel || '') as string,
+            pickupAddress: (row.pickup_address || '') as string,
+            pickupCity: (row.pickup_city || '') as string,
+            bankTitle: (row.bank_title || '') as string,
+            bankName: (row.bank_name || '') as string,
+            iban: (row.iban || '') as string,
+            nicPictureUrl: (row.user_picture_url || '') as string
           })
         }
       } catch (err) {
@@ -177,11 +163,14 @@ export default function ProfilePage() {
           )}
 
           {/* 1. Basic Information */}
-          <div className="theme-card rounded-2xl p-8 shadow-sm mb-6 bg-white border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <User className="w-5 h-5 text-gray-600" />
-              Basic Information
-            </h3>
+          <div className="rounded-2xl shadow-sm mb-6 overflow-hidden border border-gray-200">
+            <div className="px-6 py-4 bg-gradient-to-r from-[#1e1b4b] to-[#2d1b69]">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <User className="w-5 h-5 text-white" />
+                Basic Information
+              </h3>
+            </div>
+            <div className="p-8 bg-white">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">User ID</label>
@@ -241,14 +230,18 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
           {/* 2. Business Information - no inventory country */}
-          <div className="theme-card rounded-2xl p-8 shadow-sm mb-6 bg-white border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <Store className="w-5 h-5 text-gray-600" />
-              Business Information
-            </h3>
+          <div className="rounded-2xl shadow-sm mb-6 overflow-hidden border border-gray-200">
+            <div className="px-6 py-4 bg-gradient-to-r from-[#1e1b4b] to-[#2d1b69]">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Store className="w-5 h-5 text-white" />
+                Business Information
+              </h3>
+            </div>
+            <div className="p-8 bg-white">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Shop Name on Zambeel</label>
@@ -293,14 +286,18 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
           {/* 3. Banking Information - read-only */}
-          <div className="theme-card rounded-2xl p-8 shadow-sm mb-6 bg-white border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <Landmark className="w-5 h-5 text-gray-600" />
-              Banking Information
-            </h3>
+          <div className="rounded-2xl shadow-sm mb-6 overflow-hidden border border-gray-200">
+            <div className="px-6 py-4 bg-gradient-to-r from-[#1e1b4b] to-[#2d1b69]">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Landmark className="w-5 h-5 text-white" />
+                Banking Information
+              </h3>
+            </div>
+            <div className="p-8 bg-white">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Bank Account Title</label>
@@ -345,14 +342,18 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
           {/* 4. Attachments - NIC Picture only */}
-          <div className="theme-card rounded-2xl p-8 shadow-sm bg-white border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <FileImage className="w-5 h-5 text-gray-600" />
-              Attachments
-            </h3>
+          <div className="rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+            <div className="px-6 py-4 bg-gradient-to-r from-[#1e1b4b] to-[#2d1b69]">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <FileImage className="w-5 h-5 text-white" />
+                Attachments
+              </h3>
+            </div>
+            <div className="p-8 bg-white">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">NIC Picture</label>
               {profileData.nicPictureUrl ? (
@@ -378,6 +379,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+            </div>
             </div>
           </div>
         </main>
