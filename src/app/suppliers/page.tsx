@@ -58,7 +58,7 @@ export default function SuppliersPage() {
         // Admin can see all suppliers
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, shop_name, shop_name_on_zambeel, country, phone_number, city, onboarded, created_at')
+          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, city, onboarded, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
         
@@ -101,8 +101,7 @@ export default function SuppliersPage() {
   const filteredSuppliers = suppliers.filter(supplier => {
     const query = searchQuery.toLowerCase()
     return (
-      (supplier.shop_name?.toLowerCase().includes(query) || '') ||
-      (supplier.shop_name?.toLowerCase().includes(query) || '') ||
+      (supplier.shop_name_on_zambeel?.toLowerCase().includes(query) || '') ||
       (supplier.email?.toLowerCase().includes(query) || '') ||
       (supplier.phone_number?.toLowerCase().includes(query) || '')
     )
@@ -195,7 +194,7 @@ export default function SuppliersPage() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          {supplier.shop_name_on_zambeel || supplier.shop_name || 'Unnamed Store'}
+                          {supplier.shop_name_on_zambeel || 'Unnamed Store'}
                         </h3>
                       </div>
                       <div className="flex items-center gap-2">
