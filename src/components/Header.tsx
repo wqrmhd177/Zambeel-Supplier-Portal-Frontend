@@ -28,6 +28,7 @@ export default function Header() {
 
         if (error) {
           console.error('Header: Error fetching user data:', error)
+          console.error('Header: Error details:', JSON.stringify(error, null, 2))
           return
         }
 
