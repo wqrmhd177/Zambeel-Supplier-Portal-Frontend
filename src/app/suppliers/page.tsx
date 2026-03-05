@@ -70,12 +70,8 @@ export default function SuppliersPage() {
         }
         supplierList = data || []
       } else if (userId) {
-        // Purchaser sees only their suppliers
-        // Get purchaser's integer ID
-        const purchaserIntId = await getPurchaserIntegerId(userId)
-        if (purchaserIntId) {
-          supplierList = await fetchSuppliersForPurchaser(purchaserIntId)
-        }
+        // Purchaser sees only suppliers from their country
+        supplierList = await fetchSuppliersForPurchaser(userId)
       }
       
       // Get product count for each supplier
@@ -169,20 +165,11 @@ export default function SuppliersPage() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   {suppliers.length === 0 ? 'No suppliers yet' : 'No suppliers found'}
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600">
                   {suppliers.length === 0 
                     ? 'Get started by adding your first supplier' 
                     : 'Try adjusting your search criteria'}
                 </p>
-                {suppliers.length === 0 && (
-                  <button
-                    onClick={() => router.push('/suppliers/new')}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white inline-flex items-center gap-2"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Add Supplier
-                  </button>
-                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

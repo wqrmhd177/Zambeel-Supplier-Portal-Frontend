@@ -79,13 +79,13 @@ export interface PurchaserSupplier {
  * Fetch all suppliers managed by a purchaser
  * Purchasers only see suppliers from their own country
  */
-export async function fetchSuppliersForPurchaser(purchaserId: number): Promise<SupplierInfo[]> {
+export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise<SupplierInfo[]> {
   try {
-    // Get purchaser's country first
+    // Get purchaser's country first using UUID
     const { data: purchaserData, error: purchaserError } = await supabase
       .from('users')
       .select('country')
-      .eq('id', purchaserId)
+      .eq('id', purchaserUuid)
       .eq('role', 'purchaser')
       .single()
     
