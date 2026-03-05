@@ -133,7 +133,7 @@ export default function OrdersPage() {
         // Fetch all suppliers for filter
         const { data: supplierData, error: supplierError } = await supabase
           .from('users')
-          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, created_at')
+          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
 

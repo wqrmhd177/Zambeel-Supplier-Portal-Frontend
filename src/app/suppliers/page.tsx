@@ -58,7 +58,7 @@ export default function SuppliersPage() {
         // Admin can see all suppliers
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, created_at')
+          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
         
@@ -186,11 +186,13 @@ export default function SuppliersPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          supplier.onboarded
+                          supplier.account_approval === 'Approved'
                             ? 'bg-green-100 text-green-800'
+                            : supplier.account_approval === 'Rejected'
+                            ? 'bg-red-100 text-red-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {supplier.onboarded ? 'Onboarded' : 'Pending'}
+                          {supplier.account_approval || 'Pending'}
                         </span>
                       </div>
                     </div>

@@ -67,6 +67,7 @@ export interface SupplierInfo {
   country: string | null
   phone_number: string | null
   onboarded: boolean
+  account_approval: string | null
   created_at: string
 }
 
@@ -107,7 +108,7 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
     // Fetch suppliers from the same country only
     const { data, error } = await supabase
       .from('users')
-      .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, created_at')
+      .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
       .eq('role', 'supplier')
       .eq('archived', false)
       .eq('account_approval', 'Approved')
@@ -201,7 +202,7 @@ export async function getSupplierByUserId(userId: string): Promise<SupplierInfo 
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, created_at')
+      .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
       .eq('user_id', userId)
       .eq('role', 'supplier')
       .single()

@@ -142,7 +142,7 @@ export default function AddProductPage() {
       // Both admin and purchaser can see all active suppliers in the system
       const { data, error } = await supabase
         .from('users')
-        .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, created_at')
+        .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
         .eq('role', 'supplier')
         .eq('archived', false)
         .eq('account_approval', 'Approved')
