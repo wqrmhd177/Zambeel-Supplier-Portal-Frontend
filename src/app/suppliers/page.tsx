@@ -58,7 +58,7 @@ export default function SuppliersPage() {
         // Admin can see all suppliers
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, city, onboarded, created_at')
+          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, created_at')
           .eq('role', 'supplier')
           .order('created_at', { ascending: false })
         
@@ -219,12 +219,6 @@ export default function SuppliersPage() {
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Phone className="w-4 h-4" />
                           <span>{supplier.phone_number}</span>
-                        </div>
-                      )}
-                      {supplier.city && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <MapPin className="w-4 h-4" />
-                          <span>{supplier.city}</span>
                         </div>
                       )}
                     </div>
