@@ -34,7 +34,8 @@ import {
   getIbanHint,
   getIdNumberLabel,
   getIdNumberPlaceholder,
-  getIdNumberHint
+  getIdNumberHint,
+  getCurrencyForCountry
 } from '@/lib/countryData'
 import {
   formatIDNumber,
@@ -531,6 +532,9 @@ export default function SupplierOnboarding() {
         return
       }
 
+      // Calculate currency based on stock location country (with fallback to country)
+      const userCurrency = getCurrencyForCountry(formData.stockLocationCountry || formData.country || '')
+
       const { data, error: updateError } = await supabase
         .from('users')
         .update({
@@ -545,6 +549,7 @@ export default function SupplierOnboarding() {
           category: formData.category || null,
           shop_name_on_zambeel: formData.shopNameOnZambeel || null,
           stock_location_country: formData.stockLocationCountry || null,
+          currency: userCurrency,
           return_address: formData.returnAddress || null,
           return_city: formData.returnCity === 'Other' ? formData.customReturnCity : formData.returnCity,
           payment_method: formData.paymentMethod || null,
