@@ -12,7 +12,12 @@ export default function Header() {
   useEffect(() => {
     const fetchUserData = async () => {
       const userId = localStorage.getItem('userId')
-      if (!userId) return
+      console.log('Header: Fetching user data for userId:', userId)
+      
+      if (!userId) {
+        console.log('Header: No userId found in localStorage')
+        return
+      }
 
       try {
         const { data, error } = await supabase
@@ -21,16 +26,26 @@ export default function Header() {
           .eq('id', userId)
           .single()
 
+        if (error) {
+          console.error('Header: Error fetching user data:', error)
+          return
+        }
+
+        console.log('Header: User data fetched:', data)
+
         if (data) {
           if (data.owner_name) {
             setOwnerName(data.owner_name)
           }
           if (data.shop_name_on_zambeel) {
+            console.log('Header: Setting shop name:', data.shop_name_on_zambeel)
             setShopName(data.shop_name_on_zambeel)
+          } else {
+            console.log('Header: No shop_name_on_zambeel found in data')
           }
         }
       } catch (err) {
-        console.error('Error fetching user data:', err)
+        console.error('Header: Exception fetching user data:', err)
       }
     }
 
