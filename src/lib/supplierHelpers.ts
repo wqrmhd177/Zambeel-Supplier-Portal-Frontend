@@ -84,17 +84,25 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
     // Get purchaser's country first using UUID
     const { data: purchaserData, error: purchaserError } = await supabase
       .from('users')
-      .select('country')
+      .select('country, stock_location_country')
       .eq('id', purchaserUuid)
       .eq('role', 'purchaser')
       .single()
     
-    if (purchaserError || !purchaserData?.country) {
+    if (purchaserError) {
       console.error('Error fetching purchaser country:', purchaserError)
       return []
     }
     
-    const purchaserCountry = purchaserData.country
+    // Use country or stock_location_country (fallback)
+    const purchaserCountry = purchaserData?.country || purchaserData?.stock_location_country
+    
+    if (!purchaserCountry) {
+      console.error('Purchaser has no country set')
+      return []
+    }
+    
+    console.log('Fetching suppliers for purchaser country:', purchaserCountry)
     
     // Fetch suppliers from the same country only
     const { data, error } = await supabase
@@ -110,6 +118,8 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
       console.error('Error fetching suppliers:', error)
       return []
     }
+    
+    console.log('Found suppliers:', data?.length || 0, data)
 
     return data || []
   } catch (err) {
