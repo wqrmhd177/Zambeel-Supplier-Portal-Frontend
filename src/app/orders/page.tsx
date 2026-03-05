@@ -82,15 +82,12 @@ export default function OrdersPage() {
 
       if (userRole === 'purchaser' && userId) {
         // For purchasers: fetch orders from their suppliers
-        const purchaserIntId = await getPurchaserIntegerId(userId)
-        if (purchaserIntId) {
-          // Get supplier user_ids for this purchaser
-          const supplierList = await fetchSuppliersForPurchaser(purchaserIntId)
-          setSuppliers(supplierList)
-          
-          const supplierIds = supplierList.map(s => s.user_id).filter(Boolean)
-          
-          if (supplierIds.length > 0) {
+        const supplierList = await fetchSuppliersForPurchaser(userId)
+        setSuppliers(supplierList)
+        
+        const supplierIds = supplierList.map(s => s.user_id).filter(Boolean)
+        
+        if (supplierIds.length > 0) {
             const { data, error } = await supabase
               .from('orders')
               .select('*')
@@ -108,15 +105,14 @@ export default function OrdersPage() {
             ordersData = data || []
           }
 
-          // Create supplier map
-          const map = new Map<string, SupplierInfo>()
-          supplierList.forEach(s => {
-            if (s.user_id) {
-              map.set(s.user_id, s)
-            }
-          })
-          setSupplierMap(map)
-        }
+        // Create supplier map
+        const map = new Map<string, SupplierInfo>()
+        supplierList.forEach(s => {
+          if (s.user_id) {
+            map.set(s.user_id, s)
+          }
+        })
+        setSupplierMap(map)
       } else if (userRole === 'admin') {
         // For admin: fetch all orders
         const { data, error } = await supabase

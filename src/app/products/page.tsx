@@ -227,24 +227,24 @@ export default function ProductsPage() {
 
       if (userRole === 'purchaser' && userId) {
         // For purchasers: fetch products from all their suppliers
-        // Get purchaser's integer ID
+        // Get purchaser's integer ID for products
         const purchaserIntId = await getPurchaserIntegerId(userId)
         if (purchaserIntId) {
           productsData = await fetchProductsForPurchaser(purchaserIntId)
-          
-          // Also fetch suppliers for filter dropdown
-          const supplierList = await fetchSuppliersForPurchaser(purchaserIntId)
-          setSuppliers(supplierList)
-          
-          // Create map for quick lookup
-          const map = new Map<string, SupplierInfo>()
-          supplierList.forEach(s => {
-            if (s.user_id) {
-              map.set(s.user_id, s)
-            }
-          })
-          setSupplierMap(map)
         }
+        
+        // Fetch suppliers from same country for filter dropdown
+        const supplierList = await fetchSuppliersForPurchaser(userId)
+        setSuppliers(supplierList)
+        
+        // Create map for quick lookup
+        const map = new Map<string, SupplierInfo>()
+        supplierList.forEach(s => {
+          if (s.user_id) {
+            map.set(s.user_id, s)
+          }
+        })
+        setSupplierMap(map)
       } else if (userRole === 'admin') {
         // For admin: fetch all products from all suppliers
         const { data, error: productsError } = await supabase
