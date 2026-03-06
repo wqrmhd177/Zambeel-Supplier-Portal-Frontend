@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Package, 
@@ -55,6 +55,7 @@ export default function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const purchaserFilterInitialized = useRef(false)
   const [filterSupplier, setFilterSupplier] = useState<string>('all') // For purchasers
   const [suppliers, setSuppliers] = useState<SupplierInfo[]>([]) // For purchasers
   const [supplierMap, setSupplierMap] = useState<Map<string, SupplierInfo>>(new Map()) // Map user_id to supplier info
@@ -104,6 +105,15 @@ export default function ProductsPage() {
       fetchProducts()
     }
   }, [isAuthenticated, authLoading, router])
+
+  // Default status filter for purchaser: show Active products (same-country active products)
+  useEffect(() => {
+    if (authLoading || !userRole) return
+    if (userRole === 'purchaser' && !purchaserFilterInitialized.current) {
+      purchaserFilterInitialized.current = true
+      setFilterStatus('active')
+    }
+  }, [authLoading, userRole])
 
   // Cache extracted images for the viewer product
   const viewerImages = useMemo(() => {
@@ -228,14 +238,8 @@ export default function ProductsPage() {
       let productsData: any[] = []
 
       if (userRole === 'purchaser' && userId) {
-        // For purchasers: fetch products from all their suppliers
-        // Get purchaser's integer ID for products
-        const purchaserIntId = await getPurchaserIntegerId(userId)
-        if (purchaserIntId) {
-          productsData = await fetchProductsForPurchaser(purchaserIntId)
-        }
-        
-        // Fetch suppliers from same country for filter dropdown
+        // For purchasers: fetch products from suppliers in the same country only
+        productsData = await fetchProductsForPurchaser(userId)
         const supplierList = await fetchSuppliersForPurchaser(userId)
         setSuppliers(supplierList)
         
@@ -337,19 +341,9 @@ export default function ProductsPage() {
       filtered = filtered.filter(p => p.fk_owned_by === filterSupplier)
     }
 
-    // Apply status filter
+    // Apply status filter (Pending Approval = pending, Active = active, Inactive = inactive)
     if (filterStatus !== 'all') {
-      if (filterStatus === 'out_of_stock') {
-        filtered = filtered.filter(product => {
-          const hasVariants = product.variants && product.variants.length > 0
-          if (hasVariants) {
-            return product.variants!.every(v => (v.variant_stock || 0) === 0)
-          }
-          return (product.variants[0]?.variant_stock || 0) === 0
-        })
-      } else {
-        filtered = filtered.filter(p => p.status === filterStatus)
-      }
+      filtered = filtered.filter(p => (p.status || 'active') === filterStatus)
     }
 
     // Apply search filter
@@ -371,16 +365,17 @@ export default function ProductsPage() {
   }, [filterStatus, filterSupplier, searchQuery])
 
   const calculateStats = (productsData: Product[]) => {
+    // For purchaser: productsData is already from same-country suppliers only. All four stats use this same set.
     const total = productsData.length
     let pendingApproval = 0
     let active = 0
     let inactive = 0
 
     productsData.forEach(product => {
-      const displayStatus = getDisplayStatus(product)
-      if (displayStatus === 'Pending Approval') pendingApproval++
-      else if (displayStatus === 'Active') active++
-      else inactive++
+      const status = (product.status || 'active') as string
+      if (status === 'pending') pendingApproval++
+      else if (status === 'active') active++
+      else inactive++ // inactive, rejected, or any other
     })
 
     setStats({
@@ -689,9 +684,9 @@ export default function ProductsPage() {
                   className="w-full sm:w-auto pl-10 sm:pl-12 pr-8 sm:pr-10 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-white/20 rounded-lg sm:rounded-xl bg-white/10 text-white focus:border-violet-400 focus:outline-none appearance-none cursor-pointer [&>option]:bg-[#1e1b4b] [&>option]:text-white"
                 >
                   <option value="all">All Status</option>
+                  <option value="pending">Pending Approval</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
-                  <option value="out_of_stock">Out of Stock</option>
                 </select>
               </div>
             </div>

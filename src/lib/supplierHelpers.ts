@@ -130,33 +130,23 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
 }
 
 /**
- * Fetch all products from suppliers managed by a purchaser
+ * Fetch all products from suppliers in the purchaser's country.
+ * Purchaser only sees products from suppliers in the same country (e.g. UAE purchaser → UAE suppliers' products).
  */
-export async function fetchProductsForPurchaser(purchaserId: number) {
+export async function fetchProductsForPurchaser(purchaserUuid: string) {
   try {
-    // First, get all supplier user_ids for this purchaser
-    const { data: suppliers, error: suppliersError } = await supabase
-      .from('users')
-      .select('user_id')
-      .eq('purchaser_id', purchaserId)
-      .eq('role', 'supplier')
-
-    if (suppliersError || !suppliers) {
-      console.error('Error fetching suppliers for purchaser:', suppliersError)
+    const supplierList = await fetchSuppliersForPurchaser(purchaserUuid)
+    if (supplierList.length === 0) {
       return []
     }
 
-    if (suppliers.length === 0) {
-      return []
-    }
+    const supplierUserIds = supplierList.map(s => s.user_id).filter(Boolean)
+    if (supplierUserIds.length === 0) return []
 
-    const supplierIds = suppliers.map(s => s.user_id).filter(Boolean)
-
-    // Fetch products from all these suppliers
     const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*')
-      .in('fk_owned_by', supplierIds)
+      .in('fk_owned_by', supplierUserIds)
       .order('created_at', { ascending: false })
 
     if (productsError) {
