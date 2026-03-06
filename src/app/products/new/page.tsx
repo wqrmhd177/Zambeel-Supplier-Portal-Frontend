@@ -460,7 +460,7 @@ export default function AddProductPage() {
           : null,
         fk_owned_by: ownerId,
         image: imageUrls.length > 0 ? imageUrls : null,
-        status: 'active',
+        status: 'pending',
       }
 
       if (formData.hasVariants && formData.variants.length > 0) {

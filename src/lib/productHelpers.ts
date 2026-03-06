@@ -10,7 +10,7 @@ export interface ProductRow {
   image: string | string[] | null // JSONB: can be array of URLs or single string (backward compatibility)
   bar_code: string
   fk_owned_by: string
-  status: 'active' | 'inactive'
+  status: 'pending' | 'active' | 'inactive'
   created_at: string
   updated_at: string
   // Variant fields (nullable for products without variants)
@@ -29,7 +29,7 @@ export interface GroupedProduct {
   image: string | string[] | null // JSONB: can be array of URLs or single string (backward compatibility)
   bar_code: string
   fk_owned_by: string
-  status: 'active' | 'inactive'
+  status: 'pending' | 'active' | 'inactive'
   created_at: string
   updated_at: string
   variants: VariantInfo[]
@@ -92,7 +92,7 @@ export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
 }
 
 /**
- * Get count of products that have at least one variant without company_sku (pending listings).
+ * Get count of "New Products" for agent listings: status is pending and at least one variant has no company_sku.
  * Used for sidebar badge on Listings.
  */
 export async function getPendingListingsCount(): Promise<number> {
@@ -100,6 +100,7 @@ export async function getPendingListingsCount(): Promise<number> {
     const { data, error } = await supabase
       .from('products')
       .select('product_id')
+      .eq('status', 'pending')
       .or('company_sku.is.null,company_sku.eq.')
 
     if (error) {

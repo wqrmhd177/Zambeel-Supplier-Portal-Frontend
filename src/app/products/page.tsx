@@ -39,6 +39,7 @@ type Product = GroupedProduct
 function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'Inactive' {
   const status = product.status || 'active'
   const hasCompanySku = product.variants?.some(v => v.company_sku != null && String(v.company_sku).trim() !== '') ?? false
+  if (status === 'pending') return 'Pending Approval'
   if (status === 'active' && !hasCompanySku) return 'Pending Approval'
   if (status === 'active' && hasCompanySku) return 'Active'
   if (status === 'inactive' && hasCompanySku) return 'Pending Approval'

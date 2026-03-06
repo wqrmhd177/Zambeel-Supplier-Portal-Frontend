@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, List, Loader2, ChevronDown, ChevronUp, Eye, X, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Package, List, Loader2, ChevronDown, ChevronUp, Eye, X, Download, ChevronLeft, ChevronRight, Check, XCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -17,12 +17,26 @@ type Product = GroupedProduct
 export default function ListingsPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, userRole } = useAuth()
-  const [activeTab, setActiveTab] = useState<'new' | 'old'>('new')
-  const [products, setProducts] = useState<Product[]>([])
+  const [activeTab, setActiveTab] = useState<'new' | 'approved' | 'rejected'>('new')
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const products = useMemo(() => {
+    const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive'
+    const allSKU = (p: Product) =>
+      p.variants.length > 0 && p.variants.every((v: VariantInfo) => v.company_sku && String(v.company_sku).trim() !== '')
+    const someMissingSKU = (p: Product) =>
+      p.variants.length === 0 || p.variants.some((v: VariantInfo) => !v.company_sku || String(v.company_sku).trim() === '')
+    if (activeTab === 'new') {
+      return allProducts.filter((p) => st(p) === 'pending' && someMissingSKU(p))
+    }
+    if (activeTab === 'approved') {
+      return allProducts.filter((p) => allSKU(p) && st(p) === 'active')
+    }
+    return allProducts.filter((p) => st(p) === 'inactive')
+  }, [allProducts, activeTab])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -41,7 +55,7 @@ export default function ListingsPage() {
         fetchProducts()
       }
     }
-  }, [isAuthenticated, authLoading, userRole, router, activeTab])
+  }, [isAuthenticated, authLoading, userRole, router])
 
   const fetchProducts = async () => {
     setIsLoading(true)
@@ -61,38 +75,11 @@ export default function ListingsPage() {
       }
 
       if (productsData) {
-        // Group rows by product_id
         const groupedProducts = groupProductsByProductId(productsData)
         setAllProducts(groupedProducts)
         const ownerIds = Array.from(new Set(groupedProducts.map((p) => p.fk_owned_by).filter(Boolean)))
         const map = await getCurrenciesForUserIds(ownerIds)
         setCurrencyByOwnerId(map)
-        // Filter products based on active tab
-        if (activeTab === 'new') {
-          // New Listings: Products where at least one variant doesn't have company_sku
-          // OR products without variants (variant_id is null) that don't have company_sku
-          const newProducts = groupedProducts.filter((product) => {
-            if (product.variants.length === 0) {
-              // Product without variants - check if it has company_sku in any row
-              // Since we grouped, we need to check the original data
-              // For now, products without variants are considered "new" if they exist
-              return true
-            }
-            return product.variants.some((v: VariantInfo) => !v.company_sku || v.company_sku.trim() === '')
-          })
-          setProducts(newProducts)
-        } else {
-          // Old Listings: Products where all variants have company_sku
-          const oldProducts = groupedProducts.filter((product) => {
-            if (product.variants.length === 0) {
-              // Products without variants - check original rows
-              // For now, skip products without variants in old listings
-              return false
-            }
-            return product.variants.every((v: VariantInfo) => v.company_sku && v.company_sku.trim() !== '')
-          })
-          setProducts(oldProducts)
-        }
       }
     } catch (err) {
       console.error('Unexpected error:', err)
@@ -104,7 +91,6 @@ export default function ListingsPage() {
 
   const handleSKUUpdate = async (variantId: number, companySKU: string) => {
     try {
-      // Update the products table directly (variant_id is now a column in products table)
       const { error } = await supabase
         .from('products')
         .update({ company_sku: companySKU.trim() || null })
@@ -115,14 +101,31 @@ export default function ListingsPage() {
         alert('Failed to update company SKU. Please try again.')
         return false
       }
-
-      // Refresh products to update the view
       fetchProducts()
       return true
     } catch (err) {
       console.error('Unexpected error:', err)
       alert('An unexpected error occurred')
       return false
+    }
+  }
+
+  const handleStatusChange = async (productId: number, newStatus: 'active' | 'inactive') => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ status: newStatus })
+        .eq('product_id', productId)
+
+      if (error) {
+        console.error('Error updating product status:', error)
+        alert('Failed to update status. Please try again.')
+        return
+      }
+      fetchProducts()
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      alert('An unexpected error occurred')
     }
   }
 
@@ -147,34 +150,48 @@ export default function ListingsPage() {
             <h1 className="text-3xl font-bold mb-8 theme-heading-gradient">Product Listings</h1>
 
             {/* Tabs */}
-            <div className="mb-6 flex gap-4 border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab('new')}
-                className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
-                  activeTab === 'new'
-                    ? 'text-primary-blue border-primary-blue'
-                    : 'text-gray-500 border-transparent hover:text-gray-700'
-                }`}
-              >
-                New Listings ({allProducts.filter(p => {
-                  if (p.variants.length === 0) return true // Products without variants
-                  return p.variants.some(v => !v.company_sku || v.company_sku.trim() === '')
-                }).length})
-              </button>
-              <button
-                onClick={() => setActiveTab('old')}
-                className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
-                  activeTab === 'old'
-                    ? 'text-primary-blue border-primary-blue'
-                    : 'text-gray-500 border-transparent hover:text-gray-700'
-                }`}
-              >
-                Old Listings ({allProducts.filter(p => {
-                  if (p.variants.length === 0) return false
-                  return p.variants.every(v => v.company_sku && v.company_sku.trim() !== '')
-                }).length})
-              </button>
-            </div>
+            {(() => {
+              const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive'
+              const allSKU = (p: Product) => p.variants.length > 0 && p.variants.every(v => v.company_sku && String(v.company_sku).trim() !== '')
+              const someMissingSKU = (p: Product) => p.variants.length === 0 || p.variants.some(v => !v.company_sku || String(v.company_sku).trim() === '')
+              const newCount = allProducts.filter(p => st(p) === 'pending' && someMissingSKU(p)).length
+              const approvedCount = allProducts.filter(p => allSKU(p) && st(p) === 'active').length
+              const rejectedCount = allProducts.filter(p => st(p) === 'inactive').length
+              return (
+                <div className="mb-6 flex gap-4 border-b border-gray-200">
+                  <button
+                    onClick={() => setActiveTab('new')}
+                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                      activeTab === 'new'
+                        ? 'text-primary-blue border-primary-blue'
+                        : 'text-gray-500 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    New Products ({newCount})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('approved')}
+                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                      activeTab === 'approved'
+                        ? 'text-primary-blue border-primary-blue'
+                        : 'text-gray-500 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    Approved Products ({approvedCount})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('rejected')}
+                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                      activeTab === 'rejected'
+                        ? 'text-primary-blue border-primary-blue'
+                        : 'text-gray-500 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    Rejected Products ({rejectedCount})
+                  </button>
+                </div>
+              )
+            })()}
 
             {error && (
               <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
@@ -187,9 +204,11 @@ export default function ListingsPage() {
               <div className="text-center py-12">
                 <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600 text-lg">
-                  {activeTab === 'new' 
-                    ? 'No new listings to process' 
-                    : 'No listings with assigned SKUs'}
+                  {activeTab === 'new'
+                    ? 'No new products to process'
+                    : activeTab === 'approved'
+                      ? 'No approved products'
+                      : 'No rejected products'}
                 </p>
               </div>
             ) : (
@@ -199,6 +218,7 @@ export default function ListingsPage() {
                     key={product.product_id}
                     product={product}
                     onSKUUpdate={handleSKUUpdate}
+                    onStatusChange={handleStatusChange}
                     currencyByOwnerId={currencyByOwnerId}
                   />
                 ))}
@@ -212,13 +232,15 @@ export default function ListingsPage() {
 }
 
 // Product Listing Card Component
-function ProductListingCard({ 
-  product, 
+function ProductListingCard({
+  product,
   onSKUUpdate,
+  onStatusChange,
   currencyByOwnerId
-}: { 
+}: {
   product: Product
   onSKUUpdate: (variantId: number, companySKU: string) => Promise<boolean>
+  onStatusChange: (productId: number, newStatus: 'active' | 'inactive') => Promise<void>
   currencyByOwnerId: Map<string, string>
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -426,18 +448,39 @@ function ProductListingCard({
                   {hasVariants && (
                     <span><strong>Variants:</strong> {variantsWithSKU}/{totalVariants} assigned</span>
                   )}
-                  <span><strong>Status:</strong> 
+                  <span><strong>Status:</strong>
                     <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-                      product.status === 'active' 
+                      product.status === 'active'
                         ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
+                        : product.status === 'pending'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-red-100 text-red-800'
                     }`}>
-                      {product.status === 'active' ? 'Active' : 'Inactive'}
+                      {product.status === 'active' ? 'Approved' : product.status === 'pending' ? 'Pending' : 'Rejected'}
                     </span>
                   </span>
                 </div>
               </div>
 
+              {/* Approve / Reject */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => onStatusChange(product.product_id, 'active')}
+                  disabled={hasVariants && variantsWithSKU < totalVariants}
+                  title={hasVariants && variantsWithSKU < totalVariants ? 'Assign SKU to all variants first' : 'Approve product'}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  <Check className="w-4 h-4" />
+                  Approve
+                </button>
+                <button
+                  onClick={() => onStatusChange(product.product_id, 'inactive')}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Reject
+                </button>
+              </div>
               {/* View Variants Button */}
               {hasVariants && (
                 <button
