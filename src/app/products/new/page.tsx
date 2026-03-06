@@ -314,10 +314,6 @@ export default function AddProductPage() {
       newErrors.title = 'Product title is required'
     }
 
-    if (!formData.material.trim()) {
-      newErrors.material = 'Material is required'
-    }
-
     const hasVariants = formData.variants.length > 0
     const allVariantsHaveImages = hasVariants && formData.variants.every(v => v.images?.length > 0)
     if (!hasVariants) {
@@ -787,7 +783,7 @@ export default function AddProductPage() {
               {/* 2. Material */}
               <div className="mb-6">
                 <label htmlFor="material" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Material <span className="text-red-500">*</span>
+                  Material <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
                 <input
                   id="material"
@@ -799,7 +795,6 @@ export default function AddProductPage() {
                     errors.material ? 'border-red-500' : 'border-gray-200'
                   } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
                   placeholder="e.g., Plastic, Metal, Wood"
-                  required
                 />
                 {errors.material && (
                   <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.material}</span>
