@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, List, Loader2, ChevronDown, ChevronUp, Eye, X, Download, ChevronLeft, ChevronRight, Check, XCircle } from 'lucide-react'
+import { Package, List, Loader2, ChevronDown, ChevronUp, Eye, X, Download, ChevronLeft, ChevronRight, Check, XCircle, PauseCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -17,7 +17,7 @@ type Product = GroupedProduct
 export default function ListingsPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, userRole } = useAuth()
-  const [activeTab, setActiveTab] = useState<'new' | 'approved' | 'rejected'>('new')
+  const [activeTab, setActiveTab] = useState<'new' | 'approved' | 'inactive' | 'rejected'>('new')
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
@@ -27,18 +27,16 @@ export default function ListingsPage() {
     const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive' | 'rejected'
     const allSKU = (p: Product) =>
       p.variants.length > 0 && p.variants.every((v: VariantInfo) => v.company_sku && String(v.company_sku).trim() !== '')
-    const someMissingSKU = (p: Product) =>
-      p.variants.length === 0 || p.variants.some((v: VariantInfo) => !v.company_sku || String(v.company_sku).trim() === '')
     if (activeTab === 'new') {
-      // New Products: status is 'pending' in Supabase (new products get this by default)
       return allProducts.filter((p) => st(p) === 'pending')
     }
     if (activeTab === 'approved') {
-      // Approved: SKU assigned and agent marked status 'active'
       return allProducts.filter((p) => allSKU(p) && st(p) === 'active')
     }
-    // Rejected: agent marked status 'rejected' or legacy 'inactive'
-    return allProducts.filter((p) => st(p) === 'rejected' || st(p) === 'inactive')
+    if (activeTab === 'inactive') {
+      return allProducts.filter((p) => st(p) === 'inactive')
+    }
+    return allProducts.filter((p) => st(p) === 'rejected')
   }, [allProducts, activeTab])
 
   useEffect(() => {
@@ -113,7 +111,7 @@ export default function ListingsPage() {
     }
   }
 
-  const handleStatusChange = async (productId: number, newStatus: 'active' | 'rejected') => {
+  const handleStatusChange = async (productId: number, newStatus: 'active' | 'inactive' | 'rejected') => {
     try {
       const { error } = await supabase
         .from('products')
@@ -158,9 +156,10 @@ export default function ListingsPage() {
               const allSKU = (p: Product) => p.variants.length > 0 && p.variants.every(v => v.company_sku && String(v.company_sku).trim() !== '')
               const newCount = allProducts.filter(p => st(p) === 'pending').length
               const approvedCount = allProducts.filter(p => allSKU(p) && st(p) === 'active').length
-              const rejectedCount = allProducts.filter(p => st(p) === 'rejected' || st(p) === 'inactive').length
+              const inactiveCount = allProducts.filter(p => st(p) === 'inactive').length
+              const rejectedCount = allProducts.filter(p => st(p) === 'rejected').length
               return (
-                <div className="mb-6 flex gap-4 border-b border-gray-200">
+                <div className="mb-6 flex gap-4 border-b border-gray-200 flex-wrap">
                   <button
                     onClick={() => setActiveTab('new')}
                     className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
@@ -180,6 +179,16 @@ export default function ListingsPage() {
                     }`}
                   >
                     Approved Products ({approvedCount})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('inactive')}
+                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                      activeTab === 'inactive'
+                        ? 'text-primary-blue border-primary-blue'
+                        : 'text-gray-500 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    Inactive Products ({inactiveCount})
                   </button>
                   <button
                     onClick={() => setActiveTab('rejected')}
@@ -210,7 +219,9 @@ export default function ListingsPage() {
                     ? 'No new products to process'
                     : activeTab === 'approved'
                       ? 'No approved products'
-                      : 'No rejected products'}
+                      : activeTab === 'inactive'
+                        ? 'No inactive products'
+                        : 'No rejected products'}
                 </p>
               </div>
             ) : (
@@ -219,6 +230,7 @@ export default function ListingsPage() {
                   <ProductListingCard
                     key={product.product_id}
                     product={product}
+                    activeTab={activeTab}
                     onSKUUpdate={handleSKUUpdate}
                     onStatusChange={handleStatusChange}
                     currencyByOwnerId={currencyByOwnerId}
@@ -236,13 +248,15 @@ export default function ListingsPage() {
 // Product Listing Card Component
 function ProductListingCard({
   product,
+  activeTab,
   onSKUUpdate,
   onStatusChange,
   currencyByOwnerId
 }: {
   product: Product
+  activeTab: 'new' | 'approved' | 'inactive' | 'rejected'
   onSKUUpdate: (variantId: number, companySKU: string) => Promise<boolean>
-  onStatusChange: (productId: number, newStatus: 'active' | 'rejected') => Promise<void>
+  onStatusChange: (productId: number, newStatus: 'active' | 'inactive' | 'rejected') => Promise<void>
   currencyByOwnerId: Map<string, string>
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -456,32 +470,57 @@ function ProductListingCard({
                         ? 'bg-green-100 text-green-800'
                         : product.status === 'pending'
                           ? 'bg-amber-100 text-amber-800'
-                          : 'bg-red-100 text-red-800'
+                          : product.status === 'inactive'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-red-100 text-red-800'
                     }`}>
-                      {product.status === 'active' ? 'Approved' : product.status === 'pending' ? 'Pending' : 'Rejected'}
+                      {product.status === 'active' ? 'Approved' : product.status === 'pending' ? 'Pending' : product.status === 'inactive' ? 'Inactive' : 'Rejected'}
                     </span>
                   </span>
                 </div>
               </div>
 
-              {/* Approve / Reject */}
+              {/* New: Approve + Reject | Approved: Inactive only | Inactive: Active only */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={() => onStatusChange(product.product_id, 'active')}
-                  disabled={hasVariants && variantsWithSKU < totalVariants}
-                  title={hasVariants && variantsWithSKU < totalVariants ? 'Assign SKU to all variants first' : 'Approve product'}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-                >
-                  <Check className="w-4 h-4" />
-                  Approve
-                </button>
-                <button
-                  onClick={() => onStatusChange(product.product_id, 'rejected')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-                >
-                  <XCircle className="w-4 h-4" />
-                  Reject
-                </button>
+                {activeTab === 'new' && (
+                  <>
+                    <button
+                      onClick={() => onStatusChange(product.product_id, 'active')}
+                      disabled={hasVariants && variantsWithSKU < totalVariants}
+                      title={hasVariants && variantsWithSKU < totalVariants ? 'Assign SKU to all variants first' : 'Approve product'}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                    >
+                      <Check className="w-4 h-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => onStatusChange(product.product_id, 'rejected')}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject
+                    </button>
+                  </>
+                )}
+                {activeTab === 'approved' && (
+                  <button
+                    onClick={() => onStatusChange(product.product_id, 'inactive')}
+                    title="Move to Inactive products"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                  >
+                    <PauseCircle className="w-4 h-4" />
+                    Inactive
+                  </button>
+                )}
+                {activeTab === 'inactive' && (
+                  <button
+                    onClick={() => onStatusChange(product.product_id, 'active')}
+                    title="Activate product"
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                  >
+                    Active
+                  </button>
+                )}
               </div>
               {/* View Variants Button */}
               {hasVariants && (
