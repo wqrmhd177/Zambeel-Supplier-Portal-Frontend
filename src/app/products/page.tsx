@@ -42,7 +42,8 @@ function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'In
   if (status === 'pending') return 'Pending Approval'
   if (status === 'active' && !hasCompanySku) return 'Pending Approval'
   if (status === 'active' && hasCompanySku) return 'Active'
-  if (status === 'inactive' && hasCompanySku) return 'Pending Approval'
+  if ((status === 'inactive' || status === 'rejected') && hasCompanySku) return 'Pending Approval'
+  if (status === 'inactive' || status === 'rejected') return 'Inactive'
   return 'Inactive'
 }
 

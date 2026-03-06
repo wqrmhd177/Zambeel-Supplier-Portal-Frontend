@@ -24,18 +24,21 @@ export default function ListingsPage() {
   const [error, setError] = useState('')
 
   const products = useMemo(() => {
-    const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive'
+    const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive' | 'rejected'
     const allSKU = (p: Product) =>
       p.variants.length > 0 && p.variants.every((v: VariantInfo) => v.company_sku && String(v.company_sku).trim() !== '')
     const someMissingSKU = (p: Product) =>
       p.variants.length === 0 || p.variants.some((v: VariantInfo) => !v.company_sku || String(v.company_sku).trim() === '')
     if (activeTab === 'new') {
-      return allProducts.filter((p) => st(p) === 'pending' && someMissingSKU(p))
+      // New Products: status is 'pending' in Supabase (new products get this by default)
+      return allProducts.filter((p) => st(p) === 'pending')
     }
     if (activeTab === 'approved') {
+      // Approved: SKU assigned and agent marked status 'active'
       return allProducts.filter((p) => allSKU(p) && st(p) === 'active')
     }
-    return allProducts.filter((p) => st(p) === 'inactive')
+    // Rejected: agent marked status 'rejected' or legacy 'inactive'
+    return allProducts.filter((p) => st(p) === 'rejected' || st(p) === 'inactive')
   }, [allProducts, activeTab])
 
   useEffect(() => {
@@ -110,7 +113,7 @@ export default function ListingsPage() {
     }
   }
 
-  const handleStatusChange = async (productId: number, newStatus: 'active' | 'inactive') => {
+  const handleStatusChange = async (productId: number, newStatus: 'active' | 'rejected') => {
     try {
       const { error } = await supabase
         .from('products')
@@ -151,12 +154,11 @@ export default function ListingsPage() {
 
             {/* Tabs */}
             {(() => {
-              const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive'
+              const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive' | 'rejected'
               const allSKU = (p: Product) => p.variants.length > 0 && p.variants.every(v => v.company_sku && String(v.company_sku).trim() !== '')
-              const someMissingSKU = (p: Product) => p.variants.length === 0 || p.variants.some(v => !v.company_sku || String(v.company_sku).trim() === '')
-              const newCount = allProducts.filter(p => st(p) === 'pending' && someMissingSKU(p)).length
+              const newCount = allProducts.filter(p => st(p) === 'pending').length
               const approvedCount = allProducts.filter(p => allSKU(p) && st(p) === 'active').length
-              const rejectedCount = allProducts.filter(p => st(p) === 'inactive').length
+              const rejectedCount = allProducts.filter(p => st(p) === 'rejected' || st(p) === 'inactive').length
               return (
                 <div className="mb-6 flex gap-4 border-b border-gray-200">
                   <button
@@ -240,7 +242,7 @@ function ProductListingCard({
 }: {
   product: Product
   onSKUUpdate: (variantId: number, companySKU: string) => Promise<boolean>
-  onStatusChange: (productId: number, newStatus: 'active' | 'inactive') => Promise<void>
+  onStatusChange: (productId: number, newStatus: 'active' | 'rejected') => Promise<void>
   currencyByOwnerId: Map<string, string>
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -474,7 +476,7 @@ function ProductListingCard({
                   Approve
                 </button>
                 <button
-                  onClick={() => onStatusChange(product.product_id, 'inactive')}
+                  onClick={() => onStatusChange(product.product_id, 'rejected')}
                   className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
                 >
                   <XCircle className="w-4 h-4" />
