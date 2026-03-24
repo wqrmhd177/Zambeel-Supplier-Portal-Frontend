@@ -199,6 +199,9 @@ function LoginPageContent() {
         }
 
         const users = (matchingUsers as any[] | null)?.filter(Boolean) || []
+        // #region agent log
+        fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H1',location:'login/page.tsx:users-fetched',message:'Fetched matching users for login',data:{count:users.length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (users.length === 0) {
           setError('Account not found. Please sign up first to create an account.')
           setIsLoading(false)
@@ -246,6 +249,9 @@ function LoginPageContent() {
         const passwordMatchedPool = pool.filter(
           (u) => typeof u.password === 'string' && u.password === password
         )
+        // #region agent log
+        fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H1',location:'login/page.tsx:pool-selection',message:'Prepared candidate pools',data:{candidatesCount:candidates.length,poolCount:pool.length,passwordMatchedCount:passwordMatchedPool.length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         const existingUser = pickBest(passwordMatchedPool.length > 0 ? passwordMatchedPool : pool)
 
         if (existingUser) {
@@ -269,6 +275,9 @@ function LoginPageContent() {
           const onboarded = existingUser.onboarded === true || String(existingUser.onboarded || '').trim().toLowerCase() === 'true'
           const profileSubmitted = hasSubmittedOnboarding(existingUser)
           const { isApproved, isRefused } = getApprovalFlags(existingUser.account_approval)
+          // #region agent log
+          fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H2',location:'login/page.tsx:selected-user-flags',message:'Computed selected user flags',data:{selectedId:existingUser.id,role:userRole,onboarded,profileSubmitted,isApproved,isRefused,approvalRaw:String(existingUser.account_approval||'')},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           
           // For suppliers who have completed onboarding, check account approval status
           if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
@@ -299,17 +308,29 @@ function LoginPageContent() {
           
           // Redirect based on role
         if (userRole === 'admin') {
+            // #region agent log
+            fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-admin',message:'Redirecting after login',data:{target:'/dashboard'},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
           router.push('/dashboard')
         } else if (userRole === 'agent') {
+            // #region agent log
+            fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-agent',message:'Redirecting after login',data:{target:'/listings'},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
           router.push('/listings')
         } else if (
           userRole === 'supplier' &&
           (onboarded || isApproved || profileSubmitted)
         ) {
           // Supplier with approved account (treat as fully onboarded even if onboarded flag is false)
+            // #region agent log
+            fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-supplier-dashboard',message:'Redirecting supplier to dashboard',data:{target:'/dashboard',onboarded,isApproved,profileSubmitted},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
           router.push('/dashboard')
         } else {
           // Supplier who hasn't completed onboarding and is not approved yet
+            // #region agent log
+            fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-onboarding',message:'Redirecting supplier to onboarding',data:{target:'/onboarding',onboarded,isApproved,profileSubmitted,role:userRole},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
           router.push('/onboarding')
         }
           setIsLoading(false)

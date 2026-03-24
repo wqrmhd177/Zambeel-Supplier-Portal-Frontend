@@ -116,10 +116,13 @@ export function useAuth() {
         // Security check: normalize flags for robust handling across DB value formats.
         const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
         const profileSubmitted = hasSubmittedOnboarding(data)
+        const userRole = String(data.role || 'supplier').trim().toLowerCase()
         const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
+        // #region agent log
+        fetch('http://127.0.0.1:7756/ingest/0c97606a-7195-44e5-871e-555d45712b4d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6669e'},body:JSON.stringify({sessionId:'b6669e',runId:'auth-guard',hypothesisId:'H4',location:'useAuth.ts:security-check-flags',message:'Auth guard evaluated supplier status',data:{userId:data.id,role:userRole,onboarded,profileSubmitted,isApproved,isRefused,approvalRaw:String(data.account_approval||'')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         // For suppliers who have completed onboarding, enforce account approval status.
-        const userRole = String(data.role || 'supplier').trim().toLowerCase()
         if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
           if (isRefused) {
             console.log('Account has been refused, logging out...')
