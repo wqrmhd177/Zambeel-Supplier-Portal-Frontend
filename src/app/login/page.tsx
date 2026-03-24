@@ -199,9 +199,6 @@ function LoginPageContent() {
         }
 
         const users = (matchingUsers as any[] | null)?.filter(Boolean) || []
-        // #region agent log
-        fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H1',location:'login/page.tsx:users-fetched',message:'Fetched matching users for login',data:{count:users.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (users.length === 0) {
           setError('Account not found. Please sign up first to create an account.')
           setIsLoading(false)
@@ -249,9 +246,6 @@ function LoginPageContent() {
         const passwordMatchedPool = pool.filter(
           (u) => typeof u.password === 'string' && u.password === password
         )
-        // #region agent log
-        fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H1',location:'login/page.tsx:pool-selection',message:'Prepared candidate pools',data:{candidatesCount:candidates.length,poolCount:pool.length,passwordMatchedCount:passwordMatchedPool.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         const existingUser = pickBest(passwordMatchedPool.length > 0 ? passwordMatchedPool : pool)
 
         if (existingUser) {
@@ -275,10 +269,7 @@ function LoginPageContent() {
           const onboarded = existingUser.onboarded === true || String(existingUser.onboarded || '').trim().toLowerCase() === 'true'
           const profileSubmitted = hasSubmittedOnboarding(existingUser)
           const { isApproved, isRefused } = getApprovalFlags(existingUser.account_approval)
-          // #region agent log
-          fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H2',location:'login/page.tsx:selected-user-flags',message:'Computed selected user flags',data:{selectedId:existingUser.id,role:userRole,onboarded,profileSubmitted,isApproved,isRefused,approvalRaw:String(existingUser.account_approval||'')},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-          
+
           // For suppliers who have completed onboarding, check account approval status
           if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
             if (isRefused) {
@@ -308,22 +299,13 @@ function LoginPageContent() {
           
           // Redirect based on role
           if (userRole === 'admin' || userRole === 'purchaser' || userRole === 'supplier') {
-            // #region agent log
-            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-existing-user-dashboard',message:'Redirecting existing user after login',data:{target:'/dashboard',role:userRole},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-          router.push('/dashboard')
-        } else if (userRole === 'agent') {
-            // #region agent log
-            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-agent',message:'Redirecting after login',data:{target:'/listings'},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-          router.push('/listings')
-        } else {
-            // Unknown role fallback for existing users
-            // #region agent log
-            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-unknown-role-dashboard',message:'Redirecting unknown role to dashboard fallback',data:{target:'/dashboard',role:userRole},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             router.push('/dashboard')
-        }
+          } else if (userRole === 'agent') {
+            router.push('/listings')
+          } else {
+            // Unknown role fallback for existing users
+            router.push('/dashboard')
+          }
           setIsLoading(false)
         }
       }

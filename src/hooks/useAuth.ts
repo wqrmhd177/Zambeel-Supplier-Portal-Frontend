@@ -118,9 +118,6 @@ export function useAuth() {
         const profileSubmitted = hasSubmittedOnboarding(data)
         const userRole = String(data.role || 'supplier').trim().toLowerCase()
         const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
-        // #region agent log
-        fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'auth-guard',hypothesisId:'H4',location:'useAuth.ts:security-check-flags',message:'Auth guard evaluated supplier status',data:{userId:data.id,role:userRole,onboarded,profileSubmitted,isApproved,isRefused,approvalRaw:String(data.account_approval||'')},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
 
         // For suppliers who have completed onboarding, enforce account approval status.
         if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
