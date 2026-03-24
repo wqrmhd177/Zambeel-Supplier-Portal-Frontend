@@ -33,7 +33,7 @@ export function useAuth() {
         userEmail: localStorage.getItem('userEmail'),
         isLoggedIn: localStorage.getItem('isLoggedIn'),
         userFriendlyId: localStorage.getItem('userFriendlyId'),
-        userRole: localStorage.getItem('userRole'),
+        userRole: String(localStorage.getItem('userRole') || 'supplier').trim().toLowerCase(),
       }
 
       // If no auth data in localStorage, user is not authenticated
@@ -98,19 +98,23 @@ export function useAuth() {
           return
         }
 
-        // Security check: For suppliers who have completed onboarding, enforce account approval status
-        const userRole = data.role || 'supplier'
-        if (userRole === 'supplier' && data.onboarded === true) {
-          const accountApproval = data.account_approval
-          
-          if (accountApproval === 'Refused') {
+        // Security check: normalize flags for robust handling across DB value formats.
+        const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
+        const approvalNormalized = String(data.account_approval || '').trim().toLowerCase()
+        const isApproved = approvalNormalized === 'approved'
+        const isRefused = approvalNormalized === 'refused'
+
+        // For suppliers who have completed onboarding, enforce account approval status.
+        const userRole = String(data.role || 'supplier').trim().toLowerCase()
+        if (userRole === 'supplier' && onboarded) {
+          if (isRefused) {
             console.log('Account has been refused, logging out...')
             clearAuth()
             router.push('/login?reason=refused')
             return
           }
           
-          if (accountApproval !== 'Approved') {
+          if (!isApproved) {
             // Status is 'Wait' or null - pending approval
             console.log('Account approval is pending, logging out...')
             clearAuth()

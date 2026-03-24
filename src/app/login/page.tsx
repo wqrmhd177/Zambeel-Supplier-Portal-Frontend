@@ -91,7 +91,7 @@ function LoginPageContent() {
               localStorage.setItem('userFriendlyId', restoredUser.user_id || '')
               localStorage.setItem('userEmail', emailNormalized)
               localStorage.setItem('isLoggedIn', 'true')
-              localStorage.setItem('userRole', restoredUser.role || 'supplier')
+              localStorage.setItem('userRole', String(restoredUser.role || 'supplier').trim().toLowerCase())
               setSessionCookie()
               updateLastActivity() // Initialize activity tracking
               localStorage.removeItem('isOnboarded') // Clear onboarding flag
@@ -145,12 +145,12 @@ function LoginPageContent() {
           localStorage.setItem('userFriendlyId', data.user_id || '')
           localStorage.setItem('userEmail', emailNormalized)
           localStorage.setItem('isLoggedIn', 'true')
-          localStorage.setItem('userRole', data.role || 'supplier')
+          localStorage.setItem('userRole', String(data.role || 'supplier').trim().toLowerCase())
           setSessionCookie()
           updateLastActivity() // Initialize activity tracking
           
           // Check user role and redirect accordingly
-          const userRole = data.role || 'supplier'
+          const userRole = String(data.role || 'supplier').trim().toLowerCase()
           if (userRole === 'admin') {
             router.push('/dashboard')
           } else if (userRole === 'agent') {
@@ -225,7 +225,7 @@ function LoginPageContent() {
           }
 
           // Check user role and approval status BEFORE setting session
-          const userRole = existingUser.role || 'supplier'
+          const userRole = String(existingUser.role || 'supplier').trim().toLowerCase()
 
           const onboarded = existingUser.onboarded === true || existingUser.onboarded === 'true'
           const approvalNormalized = String(existingUser.account_approval || '').trim().toLowerCase()

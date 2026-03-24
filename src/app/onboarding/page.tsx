@@ -151,6 +151,33 @@ export default function SupplierOnboarding() {
     }
   }, [authLoading, isAuthenticated, router])
 
+  // If an approved/onboarded supplier lands on onboarding, send them to dashboard.
+  useEffect(() => {
+    const guardOnboardingForApprovedUsers = async () => {
+      if (authLoading || !isAuthenticated) return
+      const currentUserId = localStorage.getItem('userId')
+      if (!currentUserId) return
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('role, onboarded, account_approval')
+        .eq('id', currentUserId)
+        .maybeSingle()
+
+      if (error || !data) return
+
+      const role = String(data.role || 'supplier').trim().toLowerCase()
+      const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
+      const isApproved = String(data.account_approval || '').trim().toLowerCase() === 'approved'
+
+      if (role === 'supplier' && (onboarded || isApproved)) {
+        router.push('/dashboard')
+      }
+    }
+
+    guardOnboardingForApprovedUsers()
+  }, [authLoading, isAuthenticated, router])
+
   const [formData, setFormData] = useState<FormData>({
     ownerName: '',
     country: '',
