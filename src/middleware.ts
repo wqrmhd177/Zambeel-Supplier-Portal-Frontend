@@ -20,6 +20,13 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 export function middleware(request: NextRequest) {
+  const host = request.nextUrl.hostname.toLowerCase()
+  if (host === 'supplier-portal.zm.vercel.app') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.hostname = 'supplier-portal-zm.vercel.app'
+    return NextResponse.redirect(redirectUrl)
+  }
+
   const { pathname } = request.nextUrl
 
   if (!isProtectedPath(pathname)) {
