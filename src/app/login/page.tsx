@@ -19,6 +19,14 @@ function LoginPageContent() {
   const [error, setError] = useState('')
   const [popupMessage, setPopupMessage] = useState<string | null>(null)
 
+  const getApprovalFlags = (value: unknown) => {
+    const normalized = String(value || '').trim().toLowerCase()
+    // Be tolerant to values like "Approved ", "approved_by_admin", "Refused by team".
+    const isApproved = normalized === 'approved' || normalized.includes('approved')
+    const isRefused = normalized === 'refused' || normalized.includes('refus')
+    return { normalized, isApproved, isRefused }
+  }
+
   // Handle redirect messages from security checks
   useEffect(() => {
     const reason = searchParams.get('reason')
@@ -193,8 +201,7 @@ function LoginPageContent() {
           const getPriority = (u: any) => {
             const role = String(u.role || 'supplier').trim().toLowerCase()
             const onboarded = u.onboarded === true || String(u.onboarded || '').trim().toLowerCase() === 'true'
-            const approvalNormalized = String(u.account_approval || '').trim().toLowerCase()
-            const approved = approvalNormalized === 'approved'
+            const { isApproved } = getApprovalFlags(u.account_approval)
             const updatedOrCreated = Math.max(Date.parse(u.updated_at || '') || 0, Date.parse(u.created_at || '') || 0)
 
             // IMPORTANT:
@@ -202,7 +209,7 @@ function LoginPageContent() {
             // approved/onboarded supplier records.
             return {
               isSupplier: role === 'supplier' ? 1 : 0,
-              isApproved: approved ? 1 : 0,
+              isApproved: isApproved ? 1 : 0,
               isOnboarded: onboarded ? 1 : 0,
               updatedOrCreated,
             }
@@ -237,15 +244,11 @@ function LoginPageContent() {
           // Check user role and approval status BEFORE setting session
           const userRole = String(existingUser.role || 'supplier').trim().toLowerCase()
 
-          const onboarded = existingUser.onboarded === true || existingUser.onboarded === 'true'
-          const approvalNormalized = String(existingUser.account_approval || '').trim().toLowerCase()
-          const isApproved = approvalNormalized === 'approved'
-          const isRefused = approvalNormalized === 'refused'
+          const onboarded = existingUser.onboarded === true || String(existingUser.onboarded || '').trim().toLowerCase() === 'true'
+          const { isApproved, isRefused } = getApprovalFlags(existingUser.account_approval)
           
           // For suppliers who have completed onboarding, check account approval status
           if (userRole === 'supplier' && onboarded) {
-            const accountApproval = String(existingUser.account_approval || '').trim()
-            
             if (isRefused) {
               setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
               setError('')

@@ -168,7 +168,8 @@ export default function SupplierOnboarding() {
 
       const role = String(data.role || 'supplier').trim().toLowerCase()
       const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
-      const isApproved = String(data.account_approval || '').trim().toLowerCase() === 'approved'
+      const approvalNormalized = String(data.account_approval || '').trim().toLowerCase()
+      const isApproved = approvalNormalized === 'approved' || approvalNormalized.includes('approved')
 
       if (role === 'supplier' && (onboarded || isApproved)) {
         router.push('/dashboard')

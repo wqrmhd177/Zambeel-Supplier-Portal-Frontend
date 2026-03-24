@@ -26,6 +26,13 @@ export function useAuth() {
   })
 
   useEffect(() => {
+    const getApprovalFlags = (value: unknown) => {
+      const normalized = String(value || '').trim().toLowerCase()
+      const isApproved = normalized === 'approved' || normalized.includes('approved')
+      const isRefused = normalized === 'refused' || normalized.includes('refus')
+      return { isApproved, isRefused }
+    }
+
     const checkAuth = async () => {
       // Read all localStorage values in one batch
       const authData = {
@@ -100,9 +107,7 @@ export function useAuth() {
 
         // Security check: normalize flags for robust handling across DB value formats.
         const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
-        const approvalNormalized = String(data.account_approval || '').trim().toLowerCase()
-        const isApproved = approvalNormalized === 'approved'
-        const isRefused = approvalNormalized === 'refused'
+        const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
 
         // For suppliers who have completed onboarding, enforce account approval status.
         const userRole = String(data.role || 'supplier').trim().toLowerCase()
