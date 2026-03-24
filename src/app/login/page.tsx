@@ -22,7 +22,12 @@ function LoginPageContent() {
   const getApprovalFlags = (value: unknown) => {
     const normalized = String(value || '').trim().toLowerCase()
     // Be tolerant to values like "Approved ", "approved_by_admin", "Refused by team".
-    const isApproved = normalized === 'approved' || normalized.includes('approved')
+    const isApproved =
+      normalized === 'approved' ||
+      normalized.includes('approved') ||
+      normalized.startsWith('approv') ||
+      normalized === 'accept' ||
+      normalized.includes('accept')
     const isRefused = normalized === 'refused' || normalized.includes('refus')
     return { normalized, isApproved, isRefused }
   }
@@ -224,7 +229,13 @@ function LoginPageContent() {
             return pb.updatedOrCreated - pa.updatedOrCreated
           })[0]
         }
-        const existingUser = pickBest(candidates.length ? candidates : users)
+        const pool = candidates.length ? candidates : users
+        // IMPORTANT: avoid selecting the wrong duplicate user row by first narrowing
+        // to rows that match entered password.
+        const passwordMatchedPool = pool.filter(
+          (u) => typeof u.password === 'string' && u.password === password
+        )
+        const existingUser = pickBest(passwordMatchedPool.length > 0 ? passwordMatchedPool : pool)
 
         if (existingUser) {
           // Check if account is deleted
