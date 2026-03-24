@@ -190,22 +190,32 @@ function LoginPageContent() {
         // - newest updated/created as last tie-breaker
         const candidates = users.filter(u => u.archived !== true)
         const pickBest = (arr: any[]) => {
-          const score = (u: any) => {
-            const role = u.role || 'supplier'
-            const onboarded = u.onboarded === true || u.onboarded === 'true'
+          const getPriority = (u: any) => {
+            const role = String(u.role || 'supplier').trim().toLowerCase()
+            const onboarded = u.onboarded === true || String(u.onboarded || '').trim().toLowerCase() === 'true'
             const approvalNormalized = String(u.account_approval || '').trim().toLowerCase()
             const approved = approvalNormalized === 'approved'
-            const supplierPreferred = role === 'supplier'
-            const updated = Date.parse(u.updated_at || '') || 0
-            const created = Date.parse(u.created_at || '') || 0
-            return (
-              (supplierPreferred ? 1000000 : 0) +
-              (onboarded ? 200000 : 0) +
-              (approved ? 100000 : 0) +
-              Math.max(updated, created)
-            )
+            const updatedOrCreated = Math.max(Date.parse(u.updated_at || '') || 0, Date.parse(u.created_at || '') || 0)
+
+            // IMPORTANT:
+            // Keep status priority separate from timestamp so "newest" does not override
+            // approved/onboarded supplier records.
+            return {
+              isSupplier: role === 'supplier' ? 1 : 0,
+              isApproved: approved ? 1 : 0,
+              isOnboarded: onboarded ? 1 : 0,
+              updatedOrCreated,
+            }
           }
-          return arr.slice().sort((a, b) => score(b) - score(a))[0]
+
+          return arr.slice().sort((a, b) => {
+            const pa = getPriority(a)
+            const pb = getPriority(b)
+            if (pb.isSupplier !== pa.isSupplier) return pb.isSupplier - pa.isSupplier
+            if (pb.isApproved !== pa.isApproved) return pb.isApproved - pa.isApproved
+            if (pb.isOnboarded !== pa.isOnboarded) return pb.isOnboarded - pa.isOnboarded
+            return pb.updatedOrCreated - pa.updatedOrCreated
+          })[0]
         }
         const existingUser = pickBest(candidates.length ? candidates : users)
 
