@@ -6,31 +6,86 @@ import { CheckCircle, XCircle, Clock, Filter, Loader2 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import {
   fetchRequestsByStatus,
   approvePriceChange,
   rejectPriceChange,
   PriceHistoryEntry
 } from '@/lib/priceHistoryHelpers'
+import {
+  fetchStatusRequestsByStatus,
+  approveStatusChangeRequest,
+  rejectStatusChangeRequest,
+  VariantStatusChangeRequest
+} from '@/lib/variantStatusChangeHelpers'
 import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
-type RequestWithProduct = PriceHistoryEntry & {
+type PriceRequestWithProduct = PriceHistoryEntry & {
   product_title?: string
   size?: string
   color?: string
   company_sku?: string
+  sku?: string
+  option_values?: Record<string, string>
 }
+
+type StatusRequestWithProduct = VariantStatusChangeRequest & {
+  product_title?: string
+  size?: string
+  color?: string
+  company_sku?: string
+  sku?: string
+  option_values?: Record<string, string>
+  request_scope?: 'variant' | 'product'
+}
+
+type RequestWithProduct = (
+  | (PriceRequestWithProduct & { request_type: 'price' })
+  | (StatusRequestWithProduct & { request_type: 'status' })
+  | ({
+      id: string
+      product_id: number
+      variant_id: number
+      created_at: string
+      created_by_supplier_id: string | null
+      created_by_purchaser_id: number | null
+      status: 'pending' | 'approved' | 'rejected'
+      reviewed_at: string | null
+      reviewed_by: string | null
+      request_type: 'both'
+      product_title?: string
+      size?: string
+      color?: string
+      company_sku?: string
+      sku?: string
+      option_values?: Record<string, string>
+      previous_price: number
+      updated_price: number
+      previous_active: boolean
+      updated_active: boolean
+      price_request_id: string
+      status_request_id: string
+    })
+)
 
 export default function ApprovalsPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } = useAuth()
   const [requests, setRequests] = useState<RequestWithProduct[]>([])
   const [currencyBySupplierId, setCurrencyBySupplierId] = useState<Map<string, string>>(new Map())
+  const [requesterNameById, setRequesterNameById] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  const toMinuteBucket = (iso: string) => {
+    const d = new Date(iso)
+    d.setSeconds(0, 0)
+    return d.toISOString()
+  }
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -53,11 +108,135 @@ export default function ApprovalsPage() {
     setIsLoading(true)
     setError('')
     try {
-      const data = await fetchRequestsByStatus(filter)
-      setRequests(data)
-      const supplierIds = Array.from(new Set(data.map((r) => r.created_by_supplier_id).filter(Boolean))) as string[]
+      const [priceData, statusData] = await Promise.all([
+        fetchRequestsByStatus(filter),
+        fetchStatusRequestsByStatus(filter),
+      ])
+
+      // Enrich requests with variant details for proper label + SKU display.
+      const allVariantIds = Array.from(new Set([
+        ...priceData.map((r) => r.variant_id),
+        ...statusData.map((r) => r.variant_id),
+      ]))
+      let variantMetaMap = new Map<number, { sku?: string; option_values?: Record<string, string> }>()
+      if (allVariantIds.length > 0) {
+        const { data: variantMetaData } = await supabase
+          .from('product_variants')
+          .select('variant_id, sku, option_values')
+          .in('variant_id', allVariantIds)
+        variantMetaMap = new Map((variantMetaData || []).map((v: any) => [v.variant_id, v]))
+      }
+
+      // Enrich status requests with product details for display consistency.
+      const statusVariantIds = Array.from(new Set(statusData.map((r) => r.variant_id)))
+      let statusProductsMap = new Map<number, { product_title?: string; size?: string; color?: string; company_sku?: string }>()
+      if (statusVariantIds.length > 0) {
+        const productIds = Array.from(new Set(statusData.map((r) => r.product_id)))
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('product_id, product_title, size, color, company_sku')
+          .in('product_id', productIds)
+        statusProductsMap = new Map((productsData || []).map((p: any) => [p.product_id, p]))
+      }
+
+      // Combine price+status requests created in same minute for same product/variant/requester/status.
+      type CombinedGroup = {
+        price?: PriceRequestWithProduct
+        status?: StatusRequestWithProduct
+      }
+      const groups = new Map<string, CombinedGroup>()
+
+      priceData.forEach((r) => {
+        const key = `${r.status}|${r.product_id}|${r.variant_id}|${r.created_by_supplier_id ?? ''}|${toMinuteBucket(r.created_at)}`
+        const existing = groups.get(key) || {}
+        groups.set(key, { ...existing, price: r })
+      })
+      statusData.forEach((r) => {
+        const scope = r.request_scope || 'variant'
+        // Align variant-scope status requests with price_history keys so we can render "Price + Status".
+        const key = scope === 'product'
+          ? `${r.status}|product|${r.product_id}|${r.created_by_supplier_id ?? ''}|${toMinuteBucket(r.created_at)}`
+          : `${r.status}|${r.product_id}|${r.variant_id}|${r.created_by_supplier_id ?? ''}|${toMinuteBucket(r.created_at)}`
+        const existing = groups.get(key) || {}
+        groups.set(key, { ...existing, status: r })
+      })
+
+      const merged: RequestWithProduct[] = Array.from(groups.values()).map((g) => {
+        if (g.price && g.status) {
+          return {
+            id: `${g.price.id}|${g.status.id}`,
+            product_id: g.price.product_id,
+            variant_id: g.price.variant_id,
+            created_at: g.price.created_at > g.status.created_at ? g.price.created_at : g.status.created_at,
+            created_by_supplier_id: g.price.created_by_supplier_id ?? g.status.created_by_supplier_id,
+            created_by_purchaser_id: g.price.created_by_purchaser_id ?? g.status.created_by_purchaser_id,
+            status: g.price.status,
+            reviewed_at: g.price.reviewed_at ?? g.status.reviewed_at,
+            reviewed_by: g.price.reviewed_by ?? g.status.reviewed_by,
+            request_type: 'both' as const,
+            request_scope: g.status.request_scope,
+            product_title: statusProductsMap.get(g.price.product_id)?.product_title || g.price.product_title,
+            size: statusProductsMap.get(g.price.product_id)?.size || g.price.size,
+            color: statusProductsMap.get(g.price.product_id)?.color || g.price.color,
+            company_sku: statusProductsMap.get(g.price.product_id)?.company_sku || g.price.company_sku,
+            sku: variantMetaMap.get(g.price.variant_id)?.sku,
+            option_values: variantMetaMap.get(g.price.variant_id)?.option_values,
+            previous_price: g.price.previous_price,
+            updated_price: g.price.updated_price,
+            previous_active: g.status.previous_active,
+            updated_active: g.status.updated_active,
+            price_request_id: g.price.id,
+            status_request_id: g.status.id,
+          }
+        }
+        if (g.price) {
+          return {
+            ...g.price,
+            product_title: statusProductsMap.get(g.price.product_id)?.product_title || g.price.product_title,
+            size: statusProductsMap.get(g.price.product_id)?.size || g.price.size,
+            color: statusProductsMap.get(g.price.product_id)?.color || g.price.color,
+            company_sku: statusProductsMap.get(g.price.product_id)?.company_sku || g.price.company_sku,
+            sku: variantMetaMap.get(g.price.variant_id)?.sku,
+            option_values: variantMetaMap.get(g.price.variant_id)?.option_values,
+            request_type: 'price' as const,
+          }
+        }
+        const s = g.status!
+        return {
+          ...s,
+          ...statusProductsMap.get(s.product_id),
+          sku: variantMetaMap.get(s.variant_id)?.sku,
+          option_values: variantMetaMap.get(s.variant_id)?.option_values,
+          request_type: 'status' as const,
+        }
+      }).sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+
+      setRequests(merged)
+      const supplierIds = Array.from(new Set(merged.map((r) => r.created_by_supplier_id).filter(Boolean))) as string[]
       const map = await getCurrenciesForUserIds(supplierIds)
       setCurrencyBySupplierId(map)
+
+      // Resolve "Requested By" to shop name (fallback user ID).
+      let requesterMap = new Map<string, string>()
+      if (supplierIds.length > 0) {
+        const numericIds = supplierIds.filter((id) => /^\d+$/.test(id)).map((id) => Number(id))
+        const userIds = supplierIds.filter((id) => !/^\d+$/.test(id))
+        const [byUserId, byNumericId] = await Promise.all([
+          userIds.length > 0
+            ? supabase.from('users').select('id, user_id, shop_name_on_zambeel, email').in('user_id', userIds)
+            : Promise.resolve({ data: [], error: null as any }),
+          numericIds.length > 0
+            ? supabase.from('users').select('id, user_id, shop_name_on_zambeel, email').in('id', numericIds)
+            : Promise.resolve({ data: [], error: null as any }),
+        ])
+        const usersData = [...(byUserId.data || []), ...(byNumericId.data || [])]
+        usersData.forEach((u: any) => {
+          const label = u.shop_name_on_zambeel || u.email || String(u.user_id || u.id)
+          if (u.user_id) requesterMap.set(String(u.user_id), label)
+          if (u.id != null) requesterMap.set(String(u.id), label)
+        })
+      }
+      setRequesterNameById(requesterMap)
     } catch (err) {
       console.error('Error fetching requests:', err)
       setError('Failed to load approval requests')
@@ -77,10 +256,15 @@ export default function ApprovalsPage() {
     setSuccess('')
 
     try {
-      const result = await approvePriceChange(request.id, userFriendlyId)
+      const result = request.request_type === 'price'
+        ? await approvePriceChange(request.id, userFriendlyId)
+        : request.request_type === 'status'
+          ? await approveStatusChangeRequest(request.id, userFriendlyId)
+          : (await approvePriceChange(request.price_request_id, userFriendlyId)) &&
+            (await approveStatusChangeRequest(request.status_request_id, userFriendlyId))
       
       if (result) {
-        setSuccess(`Price change approved for ${request.product_title}`)
+        setSuccess(`${request.request_type === 'price' ? 'Price' : 'Status'} change approved for ${request.product_title}`)
         // Refresh the list
         await fetchRequests()
       } else {
@@ -105,10 +289,15 @@ export default function ApprovalsPage() {
     setSuccess('')
 
     try {
-      const result = await rejectPriceChange(request.id, userFriendlyId)
+      const result = request.request_type === 'price'
+        ? await rejectPriceChange(request.id, userFriendlyId)
+        : request.request_type === 'status'
+          ? await rejectStatusChangeRequest(request.id, userFriendlyId)
+          : (await rejectPriceChange(request.price_request_id, userFriendlyId)) &&
+            (await rejectStatusChangeRequest(request.status_request_id, userFriendlyId))
       
       if (result) {
-        setSuccess(`Price change rejected for ${request.product_title}`)
+        setSuccess(`${request.request_type === 'price' ? 'Price' : 'Status'} change rejected for ${request.product_title}`)
         // Refresh the list
         await fetchRequests()
       } else {
@@ -123,6 +312,13 @@ export default function ApprovalsPage() {
   }
 
   const formatVariant = (request: RequestWithProduct) => {
+    if ('request_scope' in request && request.request_scope === 'product') {
+      return 'All Variants'
+    }
+    if (request.option_values) {
+      const optionParts = Object.values(request.option_values).filter(Boolean)
+      if (optionParts.length > 0) return optionParts.join(' / ')
+    }
     const parts = []
     if (request.size) parts.push(`Size: ${request.size}`)
     if (request.color) parts.push(`Color: ${request.color}`)
@@ -202,10 +398,10 @@ export default function ApprovalsPage() {
             {/* Header */}
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                Price Change Approvals
+                Product Update Approvals
               </h1>
               <p className="text-gray-600">
-                Review and approve price change requests from suppliers
+                Review and approve pending price/status requests
               </p>
             </div>
 
@@ -283,26 +479,29 @@ export default function ApprovalsPage() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Product
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Variant
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Price Change
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Request Type
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Change
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Requested By
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Date
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
                         </th>
                         {filter === 'pending' && (
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
                           </th>
                         )}
@@ -311,57 +510,103 @@ export default function ApprovalsPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {requests.map((request) => (
                         <tr key={request.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="text-sm font-medium text-gray-900">
                               {request.product_title || 'Unknown Product'}
                             </div>
-                            {request.company_sku && (
+                            {(request.sku || request.company_sku) && (
                               <div className="text-xs text-gray-500">
-                                SKU: {request.company_sku}
+                                SKU: {request.sku || request.company_sku}
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="text-sm text-gray-700">
                               {formatVariant(request)}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm line-through text-gray-400">
-                                {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.previous_price.toFixed(2)}
-                              </span>
-                              <span className="text-gray-400">→</span>
-                              <span className="text-sm font-semibold text-gray-900">
-                                {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.updated_price.toFixed(2)}
-                              </span>
-                              {request.updated_price > request.previous_price ? (
-                                <span className="text-xs text-green-600">
-                                  (+{((request.updated_price - request.previous_price) / request.previous_price * 100).toFixed(1)}%)
-                                </span>
-                              ) : (
-                                <span className="text-xs text-red-600">
-                                  ({((request.updated_price - request.previous_price) / request.previous_price * 100).toFixed(1)}%)
-                                </span>
-                              )}
-                            </div>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                              request.request_type === 'price'
+                                ? 'bg-blue-100 text-blue-800'
+                                : request.request_type === 'status'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-indigo-100 text-indigo-800'
+                            }`}>
+                              {request.request_type === 'price' ? 'Price' : request.request_type === 'status' ? 'Status' : 'Price + Status'}
+                            </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            {request.request_type === 'price' ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <span className="text-sm line-through text-gray-400">
+                                  {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.previous_price.toFixed(2)}
+                                </span>
+                                <span className="text-gray-400">→</span>
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.updated_price.toFixed(2)}
+                                </span>
+                                {request.updated_price > request.previous_price ? (
+                                  <span className="text-xs text-green-600">
+                                    (+{((request.updated_price - request.previous_price) / request.previous_price * 100).toFixed(1)}%)
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-red-600">
+                                    ({((request.updated_price - request.previous_price) / request.previous_price * 100).toFixed(1)}%)
+                                  </span>
+                                )}
+                              </div>
+                            ) : request.request_type === 'both' ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="text-xs line-through text-gray-400">
+                                    {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.previous_price.toFixed(2)}
+                                  </span>
+                                  <span className="text-gray-400">→</span>
+                                  <span className="text-xs font-semibold text-gray-900">
+                                    {currencyBySupplierId.get(request.created_by_supplier_id ?? '') ?? 'USD'} {request.updated_price.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className={`text-xs font-medium ${request.previous_active ? 'text-green-700' : 'text-gray-500'}`}>
+                                    {request.previous_active ? 'Active' : 'Inactive'}
+                                  </span>
+                                  <span className="text-gray-400">→</span>
+                                  <span className={`text-xs font-semibold ${request.updated_active ? 'text-green-700' : 'text-gray-700'}`}>
+                                    {request.updated_active ? 'Active' : 'Inactive'}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-medium ${request.previous_active ? 'text-green-700' : 'text-gray-500'}`}>
+                                  {request.previous_active ? 'Active' : 'Inactive'}
+                                </span>
+                                <span className="text-gray-400">→</span>
+                                <span className={`text-sm font-semibold ${request.updated_active ? 'text-green-700' : 'text-gray-700'}`}>
+                                  {request.updated_active ? 'Active' : 'Inactive'}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="text-sm text-gray-700">
-                              {request.created_by_supplier_id || 'Unknown'}
+                              {requesterNameById.get(String(request.created_by_supplier_id ?? '')) || request.created_by_supplier_id || 'Unknown'}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="text-sm text-gray-700">
                               {formatDate(request.created_at)}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {getStatusBadge(request.status)}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="flex justify-center">
+                              {getStatusBadge(request.status)}
+                            </div>
                           </td>
                           {filter === 'pending' && (
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex items-center justify-end gap-2">
+                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                              <div className="flex items-center justify-center gap-2">
                                 <button
                                   onClick={() => handleApprove(request)}
                                   disabled={processingId === request.id}

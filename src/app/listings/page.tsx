@@ -7,31 +7,42 @@ import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import { groupProductsByProductId, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
+import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 // Use GroupedProduct as the Product interface
 type Product = GroupedProduct
 
+function getProductThumbnail(product: Product): string | undefined {
+  const mainImages = extractImages(product.image)
+  if (mainImages.length > 0) return mainImages[0]
+
+  for (const variant of product.variants || []) {
+    const variantImages = extractImages(variant.image ?? null)
+    if (variantImages.length > 0) return variantImages[0]
+  }
+
+  return undefined
+}
+
 export default function ListingsPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, userRole } = useAuth()
   const [activeTab, setActiveTab] = useState<'new' | 'approved' | 'inactive' | 'rejected'>('new')
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [expandedProductIds, setExpandedProductIds] = useState<Set<number>>(new Set())
   const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
   const products = useMemo(() => {
     const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive' | 'rejected'
-    const allSKU = (p: Product) =>
-      p.variants.length > 0 && p.variants.every((v: VariantInfo) => v.company_sku && String(v.company_sku).trim() !== '')
     if (activeTab === 'new') {
       return allProducts.filter((p) => st(p) === 'pending')
     }
     if (activeTab === 'approved') {
-      return allProducts.filter((p) => allSKU(p) && st(p) === 'active')
+      return allProducts.filter((p) => st(p) === 'active')
     }
     if (activeTab === 'inactive') {
       return allProducts.filter((p) => st(p) === 'inactive')
@@ -62,26 +73,39 @@ export default function ListingsPage() {
     setIsLoading(true)
     setError('')
     try {
-      // Fetch all product rows (each variant is a separate row now)
-      const { data: productsData, error: productsError } = await supabase
+      // Legacy products (multiple rows per product_id)
+      const { data: legacyData, error: legacyError } = await supabase
         .from('products')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (productsError) {
-        console.error('Error fetching products:', productsError)
+      if (legacyError) {
+        console.error('Error fetching products:', legacyError)
         setError('Failed to load products')
         setIsLoading(false)
         return
       }
 
-      if (productsData) {
-        const groupedProducts = groupProductsByProductId(productsData)
-        setAllProducts(groupedProducts)
-        const ownerIds = Array.from(new Set(groupedProducts.map((p) => p.fk_owned_by).filter(Boolean)))
-        const map = await getCurrenciesForUserIds(ownerIds)
-        setCurrencyByOwnerId(map)
-      }
+      const legacyGrouped = groupProductsByProductId(legacyData || [])
+
+      // New products with variants from product_variants table
+      const newGrouped = await fetchProductsWithVariants()
+
+      // Merge: prefer newGrouped entries when they have variants
+      const mergedMap = new Map<number, Product>()
+      legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
+      newGrouped.forEach(p => {
+        if (p.variants.length > 0) {
+          mergedMap.set(p.product_id, p)
+        }
+      })
+
+      const groupedProducts = Array.from(mergedMap.values())
+      setAllProducts(groupedProducts)
+
+      const ownerIds = Array.from(new Set(groupedProducts.map((p) => p.fk_owned_by).filter(Boolean)))
+      const map = await getCurrenciesForUserIds(ownerIds)
+      setCurrencyByOwnerId(map)
     } catch (err) {
       console.error('Unexpected error:', err)
       setError('An unexpected error occurred')
@@ -90,19 +114,131 @@ export default function ListingsPage() {
     }
   }
 
-  const handleSKUUpdate = async (variantId: number, companySKU: string) => {
+  const reconcileProductStatus = async (productId: number) => {
+    // Source of truth: products.status in backend.
+    //
+    // IMPORTANT BEHAVIOR:
+    // - Saving a SKU should NOT auto-approve a product.
+    // - SKU gating should only prevent approval, and can downgrade to 'pending' if SKUs are missing.
+    //
+    // So here we ONLY downgrade to 'pending' when required.
     try {
-      const { error } = await supabase
-        .from('products')
-        .update({ company_sku: companySKU.trim() || null })
-        .eq('variant_id', variantId)
+      const { data: pvData, error: pvErr } = await supabase
+        .from('product_variants')
+        .select('sku, active')
+        .eq('product_id', productId)
 
-      if (error) {
-        console.error('Error updating company SKU:', error)
-        alert('Failed to update company SKU. Please try again.')
+      if (!pvErr && pvData && pvData.length > 0) {
+        const activeVariants = pvData.filter((v: any) => v.active !== false)
+        const allHaveSku = activeVariants.length > 0 && activeVariants.every((v: any) => v.sku && String(v.sku).trim() !== '')
+        if (!allHaveSku) {
+          await supabase.from('products').update({ status: 'pending' }).eq('product_id', productId)
+        }
+        return
+      }
+
+      // Legacy fallback: check products rows
+      const { data: legacyRows, error: legacyErr } = await supabase
+        .from('products')
+        .select('company_sku, variant_id')
+        .eq('product_id', productId)
+
+      if (legacyErr || !legacyRows) return
+      const variantRows = legacyRows.filter((r: any) => r.variant_id != null)
+      const allHaveSku = variantRows.length > 0 && variantRows.every((r: any) => r.company_sku && String(r.company_sku).trim() !== '')
+      if (!allHaveSku) {
+        await supabase.from('products').update({ status: 'pending' }).eq('product_id', productId)
+      }
+    } catch (e) {
+      // non-fatal
+      console.error('Failed to reconcile product status:', e)
+    }
+  }
+
+  const isSkuUnique = async (sku: string, currentVariantId: number): Promise<boolean> => {
+    const skuNormalized = sku.trim()
+    if (!skuNormalized) return true
+    try {
+      // Check new system SKUs
+      const { data: pvMatches, error: pvErr } = await supabase
+        .from('product_variants')
+        .select('variant_id')
+        .ilike('sku', skuNormalized)
+        .limit(5)
+
+      if (!pvErr && pvMatches && pvMatches.some((r: any) => Number(r.variant_id) !== Number(currentVariantId))) {
         return false
       }
-      fetchProducts()
+
+      // Check legacy SKUs
+      const { data: legacyMatches, error: legacyErr } = await supabase
+        .from('products')
+        .select('variant_id')
+        .ilike('company_sku', skuNormalized)
+        .limit(5)
+
+      if (!legacyErr && legacyMatches && legacyMatches.some((r: any) => Number(r.variant_id) !== Number(currentVariantId))) {
+        return false
+      }
+
+      return true
+    } catch (e) {
+      // If check fails, do not block save (but we won't auto-approve anyway)
+      console.error('SKU uniqueness check failed:', e)
+      return true
+    }
+  }
+
+  const handleSKUUpdate = async (productId: number, variantId: number, zambeelSKU: string) => {
+    try {
+      const skuTrimmed = zambeelSKU.trim()
+
+      if (skuTrimmed) {
+        const ok = await isSkuUnique(skuTrimmed, variantId)
+        if (!ok) {
+          alert('This Zambeel SKU already exists. Please use a unique SKU.')
+          return false
+        }
+      }
+
+      // New variant system: update product_variants.sku (Zambeel SKU)
+      const { error: pvErr } = await supabase
+        .from('product_variants')
+        .update({ sku: skuTrimmed || null })
+        .eq('variant_id', variantId)
+
+      // Legacy fallback: update products.company_sku
+      const { error: legacyErr } = pvErr ? await supabase
+        .from('products')
+        .update({ company_sku: skuTrimmed || null })
+        .eq('variant_id', variantId) : { error: null as any }
+
+      const error = pvErr || legacyErr
+      if (error) {
+        console.error('Error updating Zambeel SKU:', error)
+        alert('Failed to update Zambeel SKU. Please try again.')
+        return false
+      }
+      // Never auto-approve on SKU save; only ensure pending when SKUs are missing.
+      await reconcileProductStatus(productId)
+      // Update UI locally to avoid collapsing the variants panel / jumping around.
+      setAllProducts((prev) =>
+        prev.map((p) => {
+          if (p.product_id !== productId) return p
+          return {
+            ...p,
+            variants: (p.variants || []).map((v) => {
+              if (v.variant_id !== variantId) return v
+              // New system uses v.sku; legacy uses v.company_sku
+              return {
+                ...v,
+                sku: skuTrimmed || null,
+                company_sku: pvErr ? (skuTrimmed || null) : v.company_sku,
+              }
+            }),
+          }
+        })
+      )
       return true
     } catch (err) {
       console.error('Unexpected error:', err)
@@ -113,6 +249,57 @@ export default function ListingsPage() {
 
   const handleStatusChange = async (productId: number, newStatus: 'active' | 'inactive' | 'rejected') => {
     try {
+      if (newStatus === 'active') {
+        // Enforce SKU gating before approving.
+        // If SKU missing, keep pending and do NOT approve.
+        try {
+          const { data: pvData, error: pvErr } = await supabase
+            .from('product_variants')
+            .select('sku, active')
+            .eq('product_id', productId)
+
+          if (!pvErr && pvData && pvData.length > 0) {
+            const activeVariants = pvData.filter((v: any) => v.active !== false)
+            const allHaveSku = activeVariants.length > 0 && activeVariants.every((v: any) => v.sku && String(v.sku).trim() !== '')
+            if (!allHaveSku) {
+              await supabase.from('products').update({ status: 'pending' }).eq('product_id', productId)
+              alert('Assign SKU to all variants before approving.')
+              fetchProducts()
+              return
+            }
+          } else {
+            // Legacy gating
+            const { data: legacyRows } = await supabase
+              .from('products')
+              .select('company_sku, variant_id')
+              .eq('product_id', productId)
+
+            const variantRows = (legacyRows || []).filter((r: any) => r.variant_id != null)
+            const allHaveSku = variantRows.length > 0 && variantRows.every((r: any) => r.company_sku && String(r.company_sku).trim() !== '')
+            if (!allHaveSku) {
+              await supabase.from('products').update({ status: 'pending' }).eq('product_id', productId)
+              alert('Assign SKU to all variants before approving.')
+              fetchProducts()
+              return
+            }
+          }
+        } catch (e) {
+          console.error('Failed SKU gating check:', e)
+        }
+
+        const { error } = await supabase
+          .from('products')
+          .update({ status: 'active' })
+          .eq('product_id', productId)
+
+        if (error) {
+          console.error('Error approving product:', error)
+          alert('Failed to approve. Please try again.')
+          return
+        }
+        fetchProducts()
+        return
+      }
       const { error } = await supabase
         .from('products')
         .update({ status: newStatus })
@@ -153,9 +340,8 @@ export default function ListingsPage() {
             {/* Tabs */}
             {(() => {
               const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive' | 'rejected'
-              const allSKU = (p: Product) => p.variants.length > 0 && p.variants.every(v => v.company_sku && String(v.company_sku).trim() !== '')
               const newCount = allProducts.filter(p => st(p) === 'pending').length
-              const approvedCount = allProducts.filter(p => allSKU(p) && st(p) === 'active').length
+              const approvedCount = allProducts.filter(p => st(p) === 'active').length
               const inactiveCount = allProducts.filter(p => st(p) === 'inactive').length
               const rejectedCount = allProducts.filter(p => st(p) === 'rejected').length
               return (
@@ -234,6 +420,15 @@ export default function ListingsPage() {
                     onSKUUpdate={handleSKUUpdate}
                     onStatusChange={handleStatusChange}
                     currencyByOwnerId={currencyByOwnerId}
+                    isExpanded={expandedProductIds.has(product.product_id)}
+                    onToggleExpanded={() => {
+                      setExpandedProductIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(product.product_id)) next.delete(product.product_id)
+                        else next.add(product.product_id)
+                        return next
+                      })
+                    }}
                   />
                 ))}
               </div>
@@ -251,15 +446,18 @@ function ProductListingCard({
   activeTab,
   onSKUUpdate,
   onStatusChange,
-  currencyByOwnerId
+  currencyByOwnerId,
+  isExpanded,
+  onToggleExpanded
 }: {
   product: Product
   activeTab: 'new' | 'approved' | 'inactive' | 'rejected'
-  onSKUUpdate: (variantId: number, companySKU: string) => Promise<boolean>
+  onSKUUpdate: (productId: number, variantId: number, zambeelSKU: string) => Promise<boolean>
   onStatusChange: (productId: number, newStatus: 'active' | 'inactive' | 'rejected') => Promise<void>
   currencyByOwnerId: Map<string, string>
+  isExpanded: boolean
+  onToggleExpanded: () => void
 }) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const [skuInputs, setSkuInputs] = useState<{ [key: number]: string }>({})
   const [isSaving, setIsSaving] = useState<{ [key: number]: boolean }>({})
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
@@ -276,7 +474,7 @@ function ProductListingCard({
     // Initialize SKU inputs with current company_sku values
     const initialSKUs: { [key: number]: string } = {}
     product.variants?.forEach(variant => {
-      initialSKUs[variant.variant_id] = variant.company_sku || ''
+      initialSKUs[variant.variant_id] = (variant.sku || variant.company_sku || '')
     })
     setSkuInputs(initialSKUs)
   }, [product.variants])
@@ -390,7 +588,7 @@ function ProductListingCard({
 
   const handleSaveSKU = async (variantId: number) => {
     setIsSaving(prev => ({ ...prev, [variantId]: true }))
-    const success = await onSKUUpdate(variantId, skuInputs[variantId] || '')
+    const success = await onSKUUpdate(product.product_id, variantId, skuInputs[variantId] || '')
     setIsSaving(prev => ({ ...prev, [variantId]: false }))
     
     if (success) {
@@ -402,21 +600,29 @@ function ProductListingCard({
     if (!product.variants) return
     
     for (const variant of product.variants) {
-      if (skuInputs[variant.variant_id] !== (variant.company_sku || '')) {
+      const currentSku = (variant.sku || variant.company_sku || '')
+      if (skuInputs[variant.variant_id] !== currentSku) {
         setIsSaving(prev => ({ ...prev, [variant.variant_id]: true }))
-        await onSKUUpdate(variant.variant_id, skuInputs[variant.variant_id] || '')
+        await onSKUUpdate(product.product_id, variant.variant_id, skuInputs[variant.variant_id] || '')
         setIsSaving(prev => ({ ...prev, [variant.variant_id]: false }))
       }
     }
   }
 
   const hasChanges = product.variants?.some(variant => 
-    skuInputs[variant.variant_id] !== (variant.company_sku || '')
+    skuInputs[variant.variant_id] !== (variant.sku || variant.company_sku || '')
   )
 
   const hasVariants = product.variants && product.variants.length > 0
   const totalVariants = product.variants?.length || 0
-  const variantsWithSKU = product.variants?.filter(v => v.company_sku && v.company_sku.trim() !== '').length || 0
+  const variantsWithSKU = product.variants?.filter(v => (v.sku || v.company_sku) && String(v.sku || v.company_sku).trim() !== '').length || 0
+  const assignmentLabel = !hasVariants
+    ? ''
+    : variantsWithSKU === 0
+      ? 'Not assigned'
+      : variantsWithSKU < totalVariants
+        ? 'Partially assigned'
+        : 'Assigned'
 
   return (
     <div className="theme-card rounded-xl shadow-sm overflow-hidden">
@@ -425,9 +631,7 @@ function ProductListingCard({
         <div className="flex items-center gap-4">
           {/* Product Image */}
           {(() => {
-            // Get first image from array
-            const images = extractImages(product.image)
-            const imageUrl = images.length > 0 ? images[0] : undefined
+            const imageUrl = getProductThumbnail(product)
             return imageUrl ? (
               <button
                 onClick={() => {
@@ -462,7 +666,7 @@ function ProductListingCard({
                       : `${currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} 0`
                   }</span>
                   {hasVariants && (
-                    <span><strong>Variants:</strong> {variantsWithSKU}/{totalVariants} assigned</span>
+                    <span><strong>Variants:</strong> {assignmentLabel} ({variantsWithSKU}/{totalVariants})</span>
                   )}
                   <span><strong>Status:</strong>
                     <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
@@ -525,7 +729,7 @@ function ProductListingCard({
               {/* View Variants Button */}
               {hasVariants && (
                 <button
-                  onClick={() => setIsExpanded(!isExpanded)}
+                  onClick={onToggleExpanded}
                   className="flex items-center gap-2 px-4 py-2 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-colors text-sm font-medium flex-shrink-0"
                 >
                   <Eye className="w-4 h-4" />
@@ -591,23 +795,23 @@ function ProductListingCard({
                     </div>
                   </div>
 
-                  {/* Company SKU Input */}
+                  {/* Zambeel SKU Input */}
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Company SKU
+                        Zambeel SKU
                       </label>
                       <input
                         type="text"
                         value={skuInputs[variant.variant_id] || ''}
                         onChange={(e) => handleSKUChange(variant.variant_id, e.target.value)}
                         className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-white text-gray-900 text-sm font-mono focus:border-primary-blue focus:outline-none"
-                        placeholder="Enter company SKU"
+                        placeholder="Enter Zambeel SKU"
                       />
                     </div>
                     <button
                       onClick={() => handleSaveSKU(variant.variant_id)}
-                      disabled={isSaving[variant.variant_id] || skuInputs[variant.variant_id] === (variant.company_sku || '')}
+                      disabled={isSaving[variant.variant_id] || skuInputs[variant.variant_id] === (variant.sku || variant.company_sku || '')}
                       className="px-4 py-2 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
                     >
                       {isSaving[variant.variant_id] ? (

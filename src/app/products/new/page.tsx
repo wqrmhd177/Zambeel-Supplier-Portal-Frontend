@@ -45,11 +45,63 @@ const isPredefinedSizeCategory = (sizeCategory: string): boolean => {
 }
 
 const COLOR_OPTIONS = [
-  'Red', 'Blue', 'Green', 'Black', 'White', 'Pink', 'Yellow', 'Orange', 
-  'Purple', 'Gray', 'Brown', 'Beige', 'Navy', 'Teal', 'Maroon', 'Gold', 'Silver'
+  'Red', 'Blue', 'Green', 'Black', 'White', 'Pink', 'Yellow', 'Orange',
+  'Purple', 'Gray', 'Brown', 'Beige', 'Navy', 'Teal', 'Maroon', 'Gold', 'Silver',
+  'Burgundy', 'Coral', 'Salmon', 'Rust', 'Brick Red', 'Crimson', 'Scarlet', 'Wine',
+  'Sky Blue', 'Royal Blue', 'Baby Blue', 'Turquoise', 'Aqua', 'Cobalt', 'Indigo',
+  'Olive', 'Forest Green', 'Mint', 'Sage', 'Lime', 'Army Green', 'Hunter Green',
+  'Lavender', 'Lilac', 'Plum', 'Violet', 'Magenta', 'Fuchsia', 'Mauve',
+  'Charcoal', 'Slate', 'Ash', 'Smoke', 'Stone', 'Taupe', 'Khaki',
+  'Cream', 'Ivory', 'Off-White', 'Eggshell', 'Tan', 'Camel', 'Caramel', 'Bronze',
+  'Mustard', 'Amber', 'Honey', 'Champagne', 'Blush', 'Dusty Rose', 'Rose', 'Peach',
+  'Denim', 'Cobalt Blue', 'Electric Blue', 'Midnight Blue', 'Steel Blue'
 ]
 
-interface Variant {
+const SIZE_VARIANT_OPTIONS = ['Small', 'Medium', 'Large', 'XL', 'XXL', 'XXXL']
+
+const VARIANT_NAME_SUGGESTIONS = [
+  'Color', 'Size', 'Weight', 'Volume', 'Length'
+]
+
+type VariantValueType = 'list' | 'colors' | 'number'
+const VARIANT_VALUE_CONFIG: Record<string, { type: VariantValueType; unit?: string; options?: string[] }> = {
+  Size: { type: 'list', options: SIZE_VARIANT_OPTIONS },
+  Color: { type: 'colors', options: COLOR_OPTIONS },
+  Weight: { type: 'number', unit: 'grams' },
+  Volume: { type: 'number', unit: 'ml' },
+  Length: { type: 'number', unit: 'inches' },
+}
+
+function getVariantValueConfig(variantName: string): { type: VariantValueType; unit?: string; options?: string[] } | null {
+  const key = variantName.trim() || ''
+  return VARIANT_VALUE_CONFIG[key] || null
+}
+
+function toTitleCase(text: string): string {
+  return text
+    .trim()
+    .split(/\s+/)
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : ''))
+    .join(' ')
+}
+
+interface ProductOption {
+  id: string
+  name: string
+  values: string[]
+}
+
+interface VariantRow {
+  id: string
+  optionValues: Record<string, string>
+  active: boolean
+  price: number
+  stock: number
+  sku: string
+  images: File[]
+}
+
+interface LegacyVariant {
   id: string
   sizeCategory: string
   sizeValue: string
@@ -71,7 +123,9 @@ interface ProductFormData {
   sizeValue: string
   color: string
   hasVariants: boolean
-  variants: Variant[]
+  options: ProductOption[]
+  variants: VariantRow[]
+  legacyVariants: LegacyVariant[]
 }
 
 export default function AddProductPage() {
@@ -97,13 +151,20 @@ export default function AddProductPage() {
     sizeCategory: '',
     sizeValue: '',
     color: '',
-    hasVariants: true,
+    hasVariants: false,
+    options: [],
     variants: [],
+    legacyVariants: [],
   })
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [packageIncludesOtherText, setPackageIncludesOtherText] = useState('')
   const [isVariantsSectionOpen, setIsVariantsSectionOpen] = useState(false)
+  const [sellingPriceInput, setSellingPriceInput] = useState('')
+  const [stockAmountInput, setStockAmountInput] = useState('')
+  const [newOptionName, setNewOptionName] = useState('')
+  const [newOptionValue, setNewOptionValue] = useState('')
+  const [numericValueByOptionId, setNumericValueByOptionId] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -120,6 +181,59 @@ export default function AddProductPage() {
     const t = setTimeout(() => router.push('/products'), 5000)
     return () => clearTimeout(t)
   }, [showSuccessScreen, router])
+
+  // Auto-generate variant combinations when options/values change (no button)
+  useEffect(() => {
+    if (!formData.hasVariants || formData.options.length === 0) return
+    const validOptions = formData.options.filter(o => o.name.trim() && o.values.length > 0)
+    if (validOptions.length === 0) {
+      setFormData(prev => ({ ...prev, variants: [] }))
+      return
+    }
+
+    const generateCombinations = (opts: ProductOption[]): Record<string, string>[] => {
+      if (opts.length === 0) return [{}]
+      const [first, ...rest] = opts
+      const restCombinations = generateCombinations(rest)
+      const result: Record<string, string>[] = []
+      for (const value of first.values) {
+        for (const combo of restCombinations) {
+          result.push({ [first.name]: value, ...combo })
+        }
+      }
+      return result
+    }
+
+    const combinations = generateCombinations(validOptions)
+    if (combinations.length > 50) {
+      setError(`Too many combinations (${combinations.length}). Maximum 50 variants. Reduce variant values.`)
+      return
+    }
+    setError('')
+
+    setFormData(prev => {
+      const existingMap = new Map(prev.variants.map(v => [JSON.stringify(v.optionValues), v]))
+      const newVariants = combinations.map(optionValues => {
+        const key = JSON.stringify(optionValues)
+        const existing = existingMap.get(key)
+        if (existing) return existing
+        return {
+          id: crypto.randomUUID(),
+          optionValues,
+          active: true,
+          price: prev.sellingPrice || 0,
+          stock: 0,
+          sku: '',
+          images: []
+        }
+      })
+      return { ...prev, variants: newVariants }
+    })
+  }, [
+    formData.hasVariants,
+    JSON.stringify(formData.options.map(o => ({ name: o.name, values: o.values }))),
+    formData.sellingPrice
+  ])
 
   // Currency from product owner's stock location (current user when supplier, selected supplier when purchaser/admin)
   useEffect(() => {
@@ -175,16 +289,22 @@ export default function AddProductPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'sellingPrice' || name === 'stockAmount' ? parseFloat(value) || 0 : value
-    }))
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
+    if (name === 'sellingPrice') {
+      setSellingPriceInput(value)
+      const num = value === '' ? 0 : parseFloat(value)
+      setFormData(prev => ({ ...prev, sellingPrice: Number.isNaN(num) ? 0 : num }))
+    } else if (name === 'stockAmount') {
+      setStockAmountInput(value)
+      const num = value === '' ? 0 : parseInt(value, 10)
+      setFormData(prev => ({ ...prev, stockAmount: Number.isNaN(num) ? 0 : num }))
+    } else {
+      setFormData(prev => ({
         ...prev,
-        [name]: ''
+        [name]: value
       }))
+    }
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }))
     }
   }
 
@@ -203,14 +323,14 @@ export default function AddProductPage() {
     const currentCount = formData.images.length
     const maxImages = 5
     
-    // Limit to maximum 5 images
+    // Limit to maximum 5 media files
     const remainingSlots = maxImages - currentCount
     const filesToAdd = files.slice(0, remainingSlots)
     
     if (files.length > remainingSlots) {
       setErrors(prev => ({
         ...prev,
-        images: `Maximum 5 images allowed. Only ${remainingSlots} more image(s) can be added.`
+        images: `Maximum 5 media files allowed. Only ${remainingSlots} more file(s) can be added.`
       }))
     } else {
       setErrors(prev => ({
@@ -242,18 +362,201 @@ export default function AddProductPage() {
   }
 
 
-  const addVariant = () => {
+  // New Shopify-style variant functions
+  const addOption = () => {
+    if (formData.options.length >= 3) {
+      setError('Maximum 3 options allowed per product')
+      return
+    }
+    setFormData(prev => ({
+      ...prev,
+      options: [
+        ...prev.options,
+        {
+          id: crypto.randomUUID(),
+          name: '',
+          values: []
+        }
+      ]
+    }))
+  }
+
+  const removeOption = (optionId: string) => {
+    setFormData(prev => {
+      const option = prev.options.find(o => o.id === optionId)
+      if (!option) return prev
+      
+      const newOptions = prev.options.filter(o => o.id !== optionId)
+      const newVariants = prev.variants.map(v => {
+        const newOptionValues = { ...v.optionValues }
+        delete newOptionValues[option.name]
+        return { ...v, optionValues: newOptionValues }
+      })
+      
+      return {
+        ...prev,
+        options: newOptions,
+        variants: newVariants
+      }
+    })
+  }
+
+  const updateOptionName = (optionId: string, newName: string) => {
+    const normalizedName = toTitleCase(newName)
+    setFormData(prev => {
+      const option = prev.options.find(o => o.id === optionId)
+      if (!option) return prev
+      
+      const oldName = option.name
+      const newOptions = prev.options.map(o =>
+        o.id === optionId ? { ...o, name: normalizedName } : o
+      )
+      
+      const newVariants = prev.variants.map(v => {
+        if (!oldName || !v.optionValues[oldName]) return v
+        const newOptionValues = { ...v.optionValues }
+        newOptionValues[normalizedName] = newOptionValues[oldName]
+        delete newOptionValues[oldName]
+        return { ...v, optionValues: newOptionValues }
+      })
+      
+      return {
+        ...prev,
+        options: newOptions,
+        variants: newVariants
+      }
+    })
+  }
+
+  const addOptionValue = (optionId: string, value: string) => {
+    if (!value.trim()) return
+    
+    setFormData(prev => ({
+      ...prev,
+      options: prev.options.map(o => {
+        if (o.id !== optionId) return o
+        if (o.values.includes(value.trim())) return o
+        return { ...o, values: [...o.values, value.trim()] }
+      })
+    }))
+  }
+
+  const removeOptionValue = (optionId: string, value: string) => {
+    setFormData(prev => {
+      const option = prev.options.find(o => o.id === optionId)
+      if (!option) return prev
+      
+      const newOptions = prev.options.map(o =>
+        o.id === optionId
+          ? { ...o, values: o.values.filter(v => v !== value) }
+          : o
+      )
+      
+      const newVariants = prev.variants.filter(v =>
+        v.optionValues[option.name] !== value
+      )
+      
+      return {
+        ...prev,
+        options: newOptions,
+        variants: newVariants
+      }
+    })
+  }
+
+  const generateVariantCombinations = () => {
+    const validOptions = formData.options.filter(o => o.name && o.values.length > 0)
+    
+    if (validOptions.length === 0) {
+      setError('Please define at least one option with values before generating variants')
+      return
+    }
+
+    const generateCombinations = (opts: ProductOption[]): Record<string, string>[] => {
+      if (opts.length === 0) return [{}]
+      
+      const [first, ...rest] = opts
+      const restCombinations = generateCombinations(rest)
+      const result: Record<string, string>[] = []
+      
+      for (const value of first.values) {
+        for (const combo of restCombinations) {
+          result.push({ [first.name]: value, ...combo })
+        }
+      }
+      
+      return result
+    }
+
+    const combinations = generateCombinations(validOptions)
+    
+    if (combinations.length > 50) {
+      setError(`This would generate ${combinations.length} variants. Maximum 50 allowed. Please reduce option values or use manual mode.`)
+      return
+    }
+
+    setFormData(prev => {
+      const existingMap = new Map(
+        prev.variants.map(v => [JSON.stringify(v.optionValues), v])
+      )
+      
+      const newVariants = combinations.map(optionValues => {
+        const key = JSON.stringify(optionValues)
+        const existing = existingMap.get(key)
+        
+        if (existing) {
+          return existing
+        }
+
+        return {
+          id: crypto.randomUUID(),
+          optionValues,
+          active: true,
+          price: prev.sellingPrice || 0,
+          stock: 0,
+          sku: '',
+          images: []
+        }
+      })
+      
+      return {
+        ...prev,
+        variants: newVariants
+      }
+    })
+    
+    setError('')
+  }
+
+  const addManualVariant = () => {
+    const validOptions = formData.options.filter(o => o.name && o.values.length > 0)
+    
+    if (validOptions.length === 0) {
+      setError('Please define at least one option with values before adding variants')
+      return
+    }
+
+    if (formData.variants.length >= 50) {
+      setError('Maximum 50 variants allowed per product')
+      return
+    }
+
+    const defaultOptionValues: Record<string, string> = {}
+    validOptions.forEach(opt => {
+      defaultOptionValues[opt.name] = opt.values[0] || ''
+    })
+
     setFormData(prev => ({
       ...prev,
       variants: [
         ...prev.variants,
         {
           id: crypto.randomUUID(),
-          sizeCategory: '',
-          sizeValue: '',
-          color: '',
+          optionValues: defaultOptionValues,
+          active: true,
           price: prev.sellingPrice || 0,
           stock: 0,
+          sku: '',
           images: []
         }
       ]
@@ -267,15 +570,23 @@ export default function AddProductPage() {
     }))
   }
 
-  const updateVariant = (id: string, field: keyof Variant, value: string | number | string[]) => {
+  const updateVariant = (id: string, field: keyof VariantRow, value: any) => {
     setFormData(prev => ({
       ...prev,
-      variants: prev.variants.map(v => {
-        if (v.id !== id) return v
-        const next = { ...v, [field]: value }
-        if (field === 'sizeCategory') next.sizeValue = ''
-        return next
-      })
+      variants: prev.variants.map(v =>
+        v.id === id ? { ...v, [field]: value } : v
+      )
+    }))
+  }
+
+  const updateVariantOptionValue = (variantId: string, optionName: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      variants: prev.variants.map(v =>
+        v.id === variantId
+          ? { ...v, optionValues: { ...v.optionValues, [optionName]: value } }
+          : v
+      )
     }))
   }
 
@@ -306,6 +617,23 @@ export default function AddProductPage() {
     }))
   }
 
+  const getVariantDisplayName = (variant: VariantRow): string => {
+    const parts = Object.entries(variant.optionValues)
+      .map(([optName, value]) => {
+        if (!value) return ''
+        const config = getVariantValueConfig(optName)
+        if (config?.type === 'number' && config.unit) return `${value} ${config.unit}`
+        // For custom "Other" option names (e.g., Pieces), include the option name
+        // so labels look like "50 Pieces / 50 Grams" instead of "50 / 50 Grams".
+        if (!config) return `${value} ${toTitleCase(optName)}`.trim()
+        return value
+      })
+      .filter(Boolean)
+    return parts.join(' / ') || 'Variant'
+  }
+
+  // (Option-level media removed; media is now required only at variant level.)
+
 
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {}
@@ -314,67 +642,57 @@ export default function AddProductPage() {
       newErrors.title = 'Product title is required'
     }
 
-    const hasVariants = formData.variants.length > 0
-    const allVariantsHaveImages = hasVariants && formData.variants.every(v => v.images?.length > 0)
-    if (!hasVariants) {
-      if (formData.images.length === 0) {
-        newErrors.images = 'Please upload at least 1 product image'
-      } else if (formData.images.length > 5) {
-        newErrors.images = 'Maximum 5 images allowed'
-      }
-    } else {
-      if (formData.images.length === 0 && !allVariantsHaveImages) {
-        newErrors.images = 'Please upload at least 1 product image or add at least 1 image per variant'
-      } else if (formData.images.length > 5) {
-        newErrors.images = 'Maximum 5 images allowed'
-      }
+    if ((userRole === 'purchaser' || userRole === 'admin') && !selectedSupplierId) {
+      newErrors.supplier = 'Please select a supplier'
     }
 
-    if (!hasVariants) {
+    if (!formData.hasVariants) {
+      if (formData.images.length === 0) {
+        newErrors.images = 'Please upload at least 1 product image or video'
+      } else if (formData.images.length > 5) {
+        newErrors.images = 'Maximum 5 media files allowed'
+      }
+      
       if (formData.sellingPrice <= 0) {
         newErrors.sellingPrice = 'Selling price must be greater than 0'
       }
       if (formData.stockAmount < 0) {
         newErrors.stockAmount = 'Stock amount cannot be negative'
       }
-    }
-
-    // Validate main size value if category requires it (only when no variants)
-    if (!hasVariants && shouldShowSizeValues(formData.sizeCategory)) {
-      if (isCustomInputCategory(formData.sizeCategory) || isPredefinedSizeCategory(formData.sizeCategory)) {
-        if (!formData.sizeValue || !formData.sizeValue.trim()) {
-          newErrors.sizeValue = 'Size value is required for this size category'
-        }
+    } else {
+      if (formData.options.length === 0) {
+        newErrors.options = 'Please define at least one option'
       }
-    }
 
-    // For purchasers and admin, supplier selection is required
-    if ((userRole === 'purchaser' || userRole === 'admin') && !selectedSupplierId) {
-      newErrors.supplier = 'Please select a supplier'
-    }
+      formData.options.forEach((option, optIndex) => {
+        if (!option.name.trim()) {
+          newErrors[`option_name_${optIndex}`] = 'Variant name is required'
+        }
+        if (option.values.length === 0) {
+          newErrors[`option_values_${optIndex}`] = 'At least one value is required'
+        }
+      })
 
-    // If no variants, product is saved as single row from main form (no variant validation)
-    if (formData.variants.length > 0) {
+      if (formData.variants.length === 0) {
+        newErrors.variants = 'Please generate or add at least one variant'
+      }
+
+      const activeVariants = formData.variants.filter(v => v.active)
+      if (activeVariants.length === 0) {
+        newErrors.variants = 'At least one variant must be active'
+      }
+
       formData.variants.forEach((variant, index) => {
-        // Validate size value if category requires it
-        if (shouldShowSizeValues(variant.sizeCategory)) {
-          if (isCustomInputCategory(variant.sizeCategory) || isPredefinedSizeCategory(variant.sizeCategory)) {
-            if (!variant.sizeValue || !variant.sizeValue.trim()) {
-              newErrors[`variant_sizeValue_${index}`] = 'Size value is required for this size category'
-            }
+        if (variant.active) {
+          if (!variant.price || variant.price <= 0) {
+            newErrors[`variant_price_${index}`] = 'Price must be greater than 0'
           }
-        }
-        
-        if (!variant.price || variant.price <= 0) {
-          newErrors[`variant_price_${index}`] = 'Variant price must be greater than 0'
-        }
-        if (variant.stock === undefined || variant.stock < 0) {
-          newErrors[`variant_stock_${index}`] = 'Stock cannot be negative'
-        }
-        if (!variant.images || variant.images.length === 0) {
-          newErrors[`variant_images_${index}`] = 'Please upload at least 1 image for this variant'
-        } else if (variant.images.length > 5) {
-          newErrors[`variant_images_${index}`] = 'Maximum 5 images per variant'
+          if (variant.stock === undefined || variant.stock < 0) {
+            newErrors[`variant_stock_${index}`] = 'Stock cannot be negative'
+          }
+          if (variant.images.length === 0 && formData.images.length === 0) {
+            newErrors[`variant_images_${index}`] = 'At least 1 media file (image or video) is required for this variant'
+          }
         }
       })
     }
@@ -397,7 +715,6 @@ export default function AddProductPage() {
       return
     }
 
-    // Determine supplier being used for the product
     const supplierOwnerId = (userRole === 'purchaser' || userRole === 'admin') && selectedSupplierId
       ? selectedSupplierId
       : userFriendlyId
@@ -407,7 +724,6 @@ export default function AddProductPage() {
     setShowSuccessScreen(false)
 
     try {
-      // Determine the owner ID based on user role (for image upload path)
       const ownerId = supplierOwnerId
 
       if (!ownerId) {
@@ -416,7 +732,6 @@ export default function AddProductPage() {
         return
       }
 
-      // Helper to upload files and return URLs
       const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
         const urls: string[] = []
         for (const imageFile of files) {
@@ -434,7 +749,6 @@ export default function AddProductPage() {
         return urls
       }
 
-      // Upload main product images to Supabase Storage (always when user added images)
       const imageUrls: string[] = []
       if (formData.images.length > 0) {
         try {
@@ -448,8 +762,7 @@ export default function AddProductPage() {
         }
       }
 
-      // Base product data (without product_id and variant_id - they're auto-generated)
-      const baseProductData = {
+      const productData = {
         product_title: formData.title,
         brand_name: formData.brandName || null,
         material: formData.material.trim() || null,
@@ -461,10 +774,38 @@ export default function AddProductPage() {
         fk_owned_by: ownerId,
         image: imageUrls.length > 0 ? imageUrls : null,
         status: 'pending',
+        has_variants: formData.hasVariants,
+        options: formData.hasVariants && formData.options.length > 0
+          ? formData.options.map(o => ({ name: o.name, values: o.values }))
+          : null,
       }
 
+      const { data: insertedProduct, error: productError } = await supabase
+        .from('products')
+        .insert([productData])
+        .select()
+        .single()
+
+      if (productError) {
+        console.error('Error creating product:', productError)
+        if (productError.code === '23503') {
+          setError('Invalid user ID. Please log out and log in again.')
+        } else {
+          setError(productError.message || 'Failed to create product. Please try again.')
+        }
+        setIsSaving(false)
+        return
+      }
+
+      if (!insertedProduct) {
+        setError('Failed to create product. Please try again.')
+        setIsSaving(false)
+        return
+      }
+
+      const productId = insertedProduct.product_id
+
       if (formData.hasVariants && formData.variants.length > 0) {
-        // Upload each variant's images and build variant image URL map
         const variantImageUrls: { [variantId: string]: string[] } = {}
         for (const variant of formData.variants) {
           if (variant.images.length > 0) {
@@ -481,105 +822,56 @@ export default function AddProductPage() {
           }
         }
 
-        // Build variant rows (one row per variant - no expansion)
-        const allVariantRows = formData.variants.map((variant, index) => {
-          const variantUrls = variantImageUrls[variant.id]?.length > 0 ? variantImageUrls[variant.id] : null
-          const imageForRow = variantUrls ?? (imageUrls.length > 0 ? imageUrls : null)
+        const variantRows = formData.variants.map(variant => {
+          let variantUrls = variantImageUrls[variant.id]?.length > 0 ? variantImageUrls[variant.id] : null
+          const imageForVariant = variantUrls ?? (imageUrls.length > 0 ? imageUrls : null)
+          
           return {
-            ...baseProductData,
-            image: imageForRow,
-            variant_id: index + 1, // 1, 2, 3... for each product
-            size_category: variant.sizeCategory || null,
-            size: variant.sizeValue || null,
-            color: variant.color || null,
-            variant_selling_price: variant.price,
-            variant_stock: variant.stock ?? 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            product_id: productId,
+            option_values: variant.optionValues,
+            sku: variant.sku || null,
+            price: variant.price,
+            stock: variant.stock,
+            image: imageForVariant,
+            active: variant.active,
           }
         })
 
-        if (allVariantRows.length === 0) {
-          setError('Please add at least one variant')
+        const { error: variantsError } = await supabase
+          .from('product_variants')
+          .insert(variantRows)
+
+        if (variantsError) {
+          console.error('Error creating variants:', variantsError)
+          setError('Product created but failed to save variants. Please try again.')
           setIsSaving(false)
           return
-        }
-
-        // Insert first row to get product_id
-        const { data: firstInsert, error: firstError } = await supabase
-          .from('products')
-          .insert([allVariantRows[0]])
-          .select()
-          .single()
-
-        if (firstError) {
-          console.error('Error creating product:', firstError)
-          if (firstError.code === '23503') {
-            setError('Invalid user ID. Please log out and log in again.')
-          } else {
-            setError(firstError.message || 'Failed to create product. Please try again.')
-          }
-          setIsSaving(false)
-          return
-        }
-
-        if (!firstInsert) {
-          setError('Failed to create product. Please try again.')
-          setIsSaving(false)
-          return
-        }
-
-        const productId = firstInsert.product_id
-
-        // Insert remaining rows with the same product_id
-        if (allVariantRows.length > 1) {
-          const rest = allVariantRows.slice(1).map(r => ({ ...r, product_id: productId }))
-          
-          const { error: variantsError } = await supabase
-            .from('products')
-            .insert(rest)
-
-          if (variantsError) {
-            console.error('Error creating additional variants:', variantsError)
-            setError('Product created but failed to save all variants. Please edit the product to add missing variants.')
-            setIsSaving(false)
-            return
-          }
         }
 
         setShowSuccessScreen(true)
       } else {
-        // Product without variants - insert one row using main form values
-        const { data: insertedData, error: productError } = await supabase
-          .from('products')
-          .insert([{
-            ...baseProductData,
-            variant_id: 1, // First (and only) variant for this product
-            size_category: formData.sizeCategory || null,
-            size: formData.sizeValue || null,
-            color: formData.color || null,
-            variant_selling_price: formData.sellingPrice,
-            variant_stock: formData.stockAmount,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }])
-          .select()
-          .single()
+        const singleVariant = {
+          product_id: productId,
+          option_values: {},
+          sku: null,
+          price: formData.sellingPrice,
+          stock: formData.stockAmount,
+          image: imageUrls.length > 0 ? imageUrls : null,
+          active: true,
+        }
 
-        if (productError) {
-          console.error('Error creating product:', productError)
-          if (productError.code === '23503') {
-            setError('Invalid user ID. Please log out and log in again.')
-          } else {
-            setError(productError.message || 'Failed to create product. Please try again.')
-          }
+        const { error: variantError } = await supabase
+          .from('product_variants')
+          .insert([singleVariant])
+
+        if (variantError) {
+          console.error('Error creating variant:', variantError)
+          setError('Product created but failed to save variant. Please try again.')
           setIsSaving(false)
           return
         }
 
-        if (insertedData) {
-          setShowSuccessScreen(true)
-        }
+        setShowSuccessScreen(true)
       }
     } catch (err) {
       console.error('Unexpected error:', err)
@@ -869,150 +1161,129 @@ export default function AddProductPage() {
                 )}
               </div>
 
-              {/* 5. Color */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Color <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+              {/* 5. Product Variants Toggle */}
+              <div className="mb-6 p-6 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
+                  Does this product have variants?
                 </label>
-                <select
-                  value={formData.color}
-                  onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
-                  className="w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all border-gray-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none"
-                >
-                  <option value="">Select a color</option>
-                  {COLOR_OPTIONS.map(color => (
-                    <option key={color} value={color}>{color}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 6. Size Category */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Size Category <span className="text-gray-500 text-xs font-normal">(Optional)</span>
-                </label>
-                <select
-                  value={formData.sizeCategory}
-                  onChange={(e) => setFormData(prev => ({ ...prev, sizeCategory: e.target.value, sizeValue: '' }))}
-                  className="w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all border-gray-200 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none"
-                >
-                  <option value="">Select size category</option>
-                  {SIZE_CATEGORY_OPTIONS.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 7. Size Value - Conditional based on Size Category */}
-              {shouldShowSizeValues(formData.sizeCategory) && (
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Size Value (Only one size value is allowed for each variant){(isCustomInputCategory(formData.sizeCategory) || isPredefinedSizeCategory(formData.sizeCategory)) && <span className="text-red-500">*</span>}
-                  </label>
-                  
-                  {isPredefinedSizeCategory(formData.sizeCategory) ? (
-                    // For "Size" category - single select from XS, S, M, L, XL, XXL
-                    <>
-                      <p className="text-sm text-gray-500 mb-3">Select one size</p>
-                      <select
-                        value={formData.sizeValue}
-                        onChange={(e) => setFormData(prev => ({ ...prev, sizeValue: e.target.value }))}
-                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                          errors.sizeValue ? 'border-red-500' : 'border-gray-200'
-                        } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
-                      >
-                        <option value="">Select a size</option>
-                        {SIZE_OPTIONS.map(size => (
-                          <option key={size} value={size}>{size}</option>
-                        ))}
-                      </select>
-                    </>
-                  ) : (
-                    // For numeric categories (ML, Inches, etc) - single text input
-                    <>
-                      <p className="text-sm text-gray-500 mb-3">Enter size value (e.g., 4 for {formData.sizeCategory})</p>
-                      <input
-                        type="text"
-                        value={formData.sizeValue}
-                        onChange={(e) => setFormData(prev => ({ ...prev, sizeValue: e.target.value }))}
-                        className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                          errors.sizeValue ? 'border-red-500' : 'border-gray-200'
-                        } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                        placeholder={`e.g., 500 for ${formData.sizeCategory}`}
-                      />
-                    </>
-                  )}
-                  {errors.sizeValue && (
-                    <span className="block text-xs text-red-500 mt-1.5">{errors.sizeValue}</span>
-                  )}
+                <p className="text-sm text-gray-600 mb-4">
+                  Variants are different versions of the same product (e.g., different colors, sizes, or weights)
+                </p>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, hasVariants: false, options: [], variants: [] }))}
+                    className={`flex-1 px-6 py-3 rounded-xl font-medium transition-all ${
+                      !formData.hasVariants
+                        ? 'bg-primary-blue text-white border-2 border-primary-blue'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    No
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, hasVariants: true }))
+                      setIsVariantsSectionOpen(true)
+                    }}
+                    className={`flex-1 px-6 py-3 rounded-xl font-medium transition-all ${
+                      formData.hasVariants
+                        ? 'bg-primary-blue text-white border-2 border-primary-blue'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    Yes, this product has variants
+                  </button>
                 </div>
+              </div>
+
+              {/* 6. Simple Product Fields (when no variants) */}
+              {!formData.hasVariants && (
+                <>
+                  {/* Product Selling Price */}
+                  <div className="mb-6">
+                    <label htmlFor="mainSellingPrice" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+                      Product Selling Price <span>(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
+                    </label>
+                    <div className={`flex items-stretch rounded-xl overflow-hidden border-2 focus-within:border-primary-blue focus-within:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] ${errors.sellingPrice ? 'border-red-500' : 'border-gray-200'}`}>
+                      <div className="flex items-center justify-center min-w-[56px] sm:min-w-[64px] px-2 sm:px-3 py-3 rounded-l-xl bg-gray-100 border-r border-gray-200 text-sm font-semibold text-gray-700">
+                        {priceCurrency}
+                      </div>
+                      <input
+                        id="mainSellingPrice"
+                        name="sellingPrice"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={sellingPriceInput}
+                        onChange={handleChange}
+                        className="flex-1 min-w-0 px-4 py-3 border-0 rounded-r-xl bg-white text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none focus:ring-0"
+                        placeholder="0"
+                        required
+                      />
+                    </div>
+                    {errors.sellingPrice && (
+                      <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.sellingPrice}</span>
+                    )}
+                  </div>
+
+                  {/* Stock Available in Your Shop */}
+                  <div className="mb-6">
+                    <label htmlFor="mainStockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
+                      Stock Available in Your Shop <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="mainStockAmount"
+                      name="stockAmount"
+                      type="number"
+                      min="0"
+                      value={stockAmountInput}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
+                        errors.stockAmount ? 'border-red-500' : 'border-gray-200'
+                      } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
+                      placeholder="0"
+                      required
+                    />
+                    {errors.stockAmount && (
+                      <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.stockAmount}</span>
+                    )}
+                  </div>
+                </>
               )}
 
-              {/* 8. Product Selling Price */}
-              <div className="mb-6">
-                <label htmlFor="mainSellingPrice" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                  Product Selling Price <span>(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
-                </label>
-                <div className={`flex items-stretch rounded-xl overflow-hidden border-2 focus-within:border-primary-blue focus-within:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] ${errors.sellingPrice ? 'border-red-500' : 'border-gray-200'}`}>
-                  <div className="flex items-center justify-center min-w-[56px] sm:min-w-[64px] px-2 sm:px-3 py-3 rounded-l-xl bg-gray-100 border-r border-gray-200 text-sm font-semibold text-gray-700">
-                    {priceCurrency}
-                  </div>
-                  <input
-                    id="mainSellingPrice"
-                    name="sellingPrice"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.sellingPrice || ''}
-                    onChange={handleChange}
-                    className="flex-1 min-w-0 px-4 py-3 border-0 rounded-r-xl bg-white text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none focus:ring-0"
-                    placeholder="0"
-                    required
-                  />
-                </div>
-                {errors.sellingPrice && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.sellingPrice}</span>
-                )}
-              </div>
-
-              {/* 9. Stock Available in Your Shop */}
-              <div className="mb-6">
-                <label htmlFor="mainStockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Stock Available in Your Shop <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="mainStockAmount"
-                  name="stockAmount"
-                  type="number"
-                  min="0"
-                  value={formData.stockAmount || ''}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                    errors.stockAmount ? 'border-red-500' : 'border-gray-200'
-                  } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                  placeholder="0"
-                  required
-                />
-                {errors.stockAmount && (
-                  <span className="block text-[13px] text-red-500 mt-1.5 font-medium">{errors.stockAmount}</span>
-                )}
-              </div>
-
-              {/* 10. Product Pictures */}
+              {/* 7. Product Media (images & videos) - only when product has NO variants */}
+              {!formData.hasVariants && (
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Product Pictures (Box Pictures and Original Product Pictures) <span className="text-red-500">*</span> (Max 5)
+                  Product Media (Images and Videos) <span className="text-red-500">*</span> (Max 5)
                 </label>
+                <p className="text-sm text-gray-500 mb-3">
+                  Upload product images and/or short videos (e.g. unboxing, product demo)
+                </p>
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-                    {formData.images.map((image, index) => (
+                    {formData.images.map((file, index) => {
+                      const isVideo = file.type.startsWith('video/')
+                      return (
                       <div key={index} className="relative group">
                         <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
-                          <img
-                            src={URL.createObjectURL(image)}
-                            alt={`Product ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
+                          {isVideo ? (
+                            <video
+                              src={URL.createObjectURL(file)}
+                              className="w-full h-full object-cover"
+                              muted
+                              loop
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt={`Product media ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
                         </div>
                         <button
                           type="button"
@@ -1022,14 +1293,15 @@ export default function AddProductPage() {
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                    ))}
+                      )
+                    })}
                     {formData.images.length < 5 && (
                       <label className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
                         <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" />
-                        <span className="text-xs text-gray-600">Add Image</span>
+                        <span className="text-xs text-gray-600">Add Media</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,video/*"
                           multiple
                           onChange={handleImageChange}
                           className="hidden"
@@ -1041,276 +1313,408 @@ export default function AddProductPage() {
                     <span className="block text-[13px] text-red-500 font-medium">{errors.images}</span>
                   )}
                   <p className="text-sm text-gray-500">
-                    {formData.images.length} / 5 images (maximum 5 images allowed)
+                    {formData.images.length} / 5 media files
                   </p>
                 </div>
               </div>
+              )}
+              {formData.hasVariants && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-sm text-gray-700">
+                    Add pictures for each variant in the variant details below. Main product images are not used when the product has variants.
+                  </p>
+                </div>
+              )}
 
-              {/* 11. Variants Section */}
-              {(
+              {/* 8. Create variants (when hasVariants = true) */}
+              {formData.hasVariants && (
                 <div className="mb-6 bg-gray-50 rounded-xl border-2 border-gray-200">
-                  {!isVariantsSectionOpen ? (
-                    <div className="p-4 sm:p-6">
-                      <div className="text-center">
-                        <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
-                          Click below to add product variants
+                  <div 
+                    className="flex items-center justify-between p-4 sm:p-6 cursor-pointer border-b border-gray-300"
+                    onClick={() => setIsVariantsSectionOpen(!isVariantsSectionOpen)}
+                  >
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Create variants</h3>
+                    <button
+                      type="button"
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-all"
+                    >
+                      {isVariantsSectionOpen ? (
+                        <ChevronUp className="w-5 h-5 text-gray-600" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-600" />
+                      )}
+                    </button>
+                  </div>
+
+                  {isVariantsSectionOpen && (
+                    <div className="p-4 sm:p-6 space-y-6">
+                      {/* Step 1: Define Options */}
+                      <div className="bg-white rounded-xl border-2 border-gray-200 p-4 sm:p-6">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Step 1: Define variant options (Max 3)</h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Define up to 3 variant dimensions like Color, Size, Weight, Volume, etc.
                         </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsVariantsSectionOpen(true)
-                            if (formData.variants.length === 0) {
-                              addVariant()
-                            }
-                          }}
-                          className="px-4 sm:px-6 py-2.5 sm:py-3 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-all flex items-center gap-2 text-xs sm:text-sm font-medium mx-auto"
-                        >
-                          <Plus className="w-4 h-4" />
-                          ADD VARIANT
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div 
-                        className="flex items-center justify-between p-4 sm:p-6 cursor-pointer border-b border-gray-300"
-                        onClick={() => setIsVariantsSectionOpen(false)}
-                      >
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Product Variants</h3>
-                        <button
-                          type="button"
-                          className="p-2 hover:bg-gray-200 rounded-lg transition-all"
-                        >
-                          <ChevronUp className="w-5 h-5 text-gray-600" />
-                        </button>
-                      </div>
 
-                      <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-4 sm:pt-6">
-                        {formData.variants.length === 0 ? (
-                          <div className="text-center py-6 sm:py-8">
-                            <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
-                              No variants added yet. Click &quot;Add Another Variant&quot; to get started.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={addVariant}
-                              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-all flex items-center gap-2 text-xs sm:text-sm font-medium mx-auto"
-                            >
-                              <Plus className="w-4 h-4" />
-                              ADD ANOTHER VARIANT
-                            </button>
-                          </div>
-                  ) : (
-                    <div className="space-y-4 sm:space-y-6">
-                      {formData.variants.map((variant, index) => (
-                        <div key={variant.id} className="p-4 sm:p-6 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
-                          <div className="flex items-center justify-between mb-4 sm:mb-6">
-                            <h4 className="text-sm sm:text-base font-semibold text-gray-900">Variant {index + 1}</h4>
-                            <button
-                              type="button"
-                              onClick={() => removeVariant(variant.id)}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            >
-                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </button>
-                          </div>
-
-                          {/* Color */}
-                          <div className="mb-4 sm:mb-5">
-                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                              Color <span className="text-gray-500 text-xs font-normal">(Optional)</span>
-                            </label>
-                            <select
-                              value={variant.color}
-                              onChange={(e) => updateVariant(variant.id, 'color', e.target.value)}
-                              className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                                errors[`variant_color_${index}`] ? 'border-red-500' : 'border-gray-200'
-                              } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
-                            >
-                              <option value="">Select a color</option>
-                              {COLOR_OPTIONS.map(color => (
-                                <option key={color} value={color}>{color}</option>
-                              ))}
-                            </select>
-                            {errors[`variant_color_${index}`] && (
-                              <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_color_${index}`]}</span>
-                            )}
-                          </div>
-
-                          {/* Size Category */}
-                          <div className="mb-4 sm:mb-5">
-                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                              Size Category <span className="text-gray-500 text-xs font-normal">(Optional)</span>
-                            </label>
-                            <select
-                              value={variant.sizeCategory}
-                              onChange={(e) => updateVariant(variant.id, 'sizeCategory', e.target.value)}
-                              className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                                errors[`variant_sizeCategory_${index}`] ? 'border-red-500' : 'border-gray-200'
-                              } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
-                            >
-                              <option value="">Select size category</option>
-                              {SIZE_CATEGORY_OPTIONS.map(option => (
-                                <option key={option} value={option}>{option}</option>
-                              ))}
-                            </select>
-                            {errors[`variant_sizeCategory_${index}`] && (
-                              <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_sizeCategory_${index}`]}</span>
-                            )}
-                          </div>
-
-                          {/* Size Value - Conditional based on Size Category */}
-                          {shouldShowSizeValues(variant.sizeCategory) && (
-                            <div className="mb-4 sm:mb-5">
-                              <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                                Size Value (Only one size value is allowed for each variant){(isCustomInputCategory(variant.sizeCategory) || isPredefinedSizeCategory(variant.sizeCategory)) && <span className="text-red-500">*</span>}
+                        {formData.options.map((option, optIndex) => (
+                          <div key={option.id} className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-3">
+                              <label className="text-sm font-semibold text-gray-900">
+                                Variant option {optIndex + 1}
                               </label>
-                              
-                              {isPredefinedSizeCategory(variant.sizeCategory) ? (
-                                // For "Size" category - single select from XS, S, M, L, XL, XXL
-                                <>
-                                  <p className="text-xs sm:text-sm text-gray-500 mb-3">Select one size</p>
-                                  <select
-                                    value={variant.sizeValue}
-                                    onChange={(e) => updateVariant(variant.id, 'sizeValue', e.target.value)}
-                                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                                      errors[`variant_sizeValue_${index}`] ? 'border-red-500' : 'border-gray-200'
-                                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none`}
-                                  >
-                                    <option value="">Select a size</option>
-                                    {SIZE_OPTIONS.map(size => (
-                                      <option key={size} value={size}>{size}</option>
-                                    ))}
-                                  </select>
-                                </>
-                              ) : (
-                                // For numeric categories (ML, Inches, etc) - single text input
-                                <>
-                                  <p className="text-sm text-gray-500 mb-3">Enter size value (e.g., 500 for {variant.sizeCategory})</p>
-                                  <input
-                                    type="text"
-                                    value={variant.sizeValue}
-                                    onChange={(e) => updateVariant(variant.id, 'sizeValue', e.target.value)}
-                                    className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                                      errors[`variant_sizeValue_${index}`] ? 'border-red-500' : 'border-gray-200'
-                                    } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                                    placeholder={`e.g., 500 for ${variant.sizeCategory}`}
-                                  />
-                                </>
+                              <button
+                                type="button"
+                                onClick={() => removeOption(option.id)}
+                                className="p-1 text-red-500 hover:bg-red-50 rounded transition-all"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <div className="mb-3">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">Variant name</label>
+                              <select
+                                value={VARIANT_NAME_SUGGESTIONS.includes(option.name) ? option.name : (option.name ? 'Other' : '')}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  if (v === 'Other') updateOptionName(option.id, '')
+                                  else updateOptionName(option.id, v)
+                                }}
+                                className={`w-full px-3 py-2 border-2 rounded-lg bg-white text-gray-900 ${
+                                  errors[`option_name_${optIndex}`] ? 'border-red-500' : 'border-gray-200'
+                                } focus:border-primary-blue focus:outline-none`}
+                              >
+                                <option value="">Select variant name</option>
+                                {VARIANT_NAME_SUGGESTIONS.map(name => (
+                                  <option key={name} value={name}>{name}</option>
+                                ))}
+                                <option value="Other">Other</option>
+                              </select>
+                              {!VARIANT_NAME_SUGGESTIONS.includes(option.name) && (
+                                <input
+                                  type="text"
+                                  value={option.name}
+                                  onChange={(e) => updateOptionName(option.id, e.target.value)}
+                                  placeholder="Custom variant name"
+                                  className="mt-2 w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
+                                />
                               )}
-                              {errors[`variant_sizeValue_${index}`] && (
-                                <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_sizeValue_${index}`]}</span>
+                              {errors[`option_name_${optIndex}`] && (
+                                <span className="block text-xs text-red-500 mt-1">{errors[`option_name_${optIndex}`]}</span>
                               )}
                             </div>
-                          )}
 
-                          {/* Variant Selling Price */}
-                          <div className="mb-4 sm:mb-5">
-                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                              Product Selling Price <span>(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
-                            </label>
-                            <div className={`flex items-stretch rounded-xl overflow-hidden border-2 focus-within:border-primary-blue focus-within:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] ${errors[`variant_price_${index}`] ? 'border-red-500' : 'border-gray-200'}`}>
-                              <div className="flex items-center justify-center min-w-[56px] sm:min-w-[64px] px-2 sm:px-3 py-3 rounded-l-xl bg-gray-100 border-r border-gray-200 text-sm font-semibold text-gray-700">
-                                {priceCurrency}
-                              </div>
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={variant.price || ''}
-                                onChange={(e) => updateVariant(variant.id, 'price', Number(e.target.value) || 0)}
-                                className="flex-1 min-w-0 px-4 py-3 border-0 rounded-r-xl bg-white text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none focus:ring-0"
-                                placeholder="0"
-                                required
-                              />
-                            </div>
-                            {errors[`variant_price_${index}`] && (
-                              <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_price_${index}`]}</span>
-                            )}
-                          </div>
-
-                          {/* Stock Available in Your Shop (per variant) */}
-                          <div className="mb-4 sm:mb-5">
-                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                              Stock Available in Your Shop <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={variant.stock ?? ''}
-                              onChange={(e) => updateVariant(variant.id, 'stock', parseInt(e.target.value, 10) || 0)}
-                              className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
-                                errors[`variant_stock_${index}`] ? 'border-red-500' : 'border-gray-200'
-                              } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
-                              placeholder="0"
-                              required
-                            />
-                            {errors[`variant_stock_${index}`] && (
-                              <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_stock_${index}`]}</span>
-                            )}
-                          </div>
-
-                          {/* Product Pictures (per variant) */}
-                          <div className="mb-0">
-                            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                              Product Pictures <span className="hidden sm:inline">(Box Pictures and Original Product Pictures)</span> <span className="text-red-500">*</span> <span className="text-gray-500 text-xs">(Max 5)</span>
-                            </label>
-                            <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-                              {variant.images.map((image, imgIndex) => (
-                                <div key={imgIndex} className="relative group">
-                                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-gray-200 overflow-hidden bg-gray-50">
-                                    <img
-                                      src={URL.createObjectURL(image)}
-                                      alt={`Variant ${index + 1} image ${imgIndex + 1}`}
-                                      className="w-full h-full object-cover"
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-2">Values</label>
+                              {(() => {
+                                const config = getVariantValueConfig(option.name)
+                                if (config?.type === 'list' && config.options) {
+                                  return (
+                                    <div className="flex flex-wrap gap-2">
+                                      {config.options.map(val => {
+                                        const selected = option.values.includes(val)
+                                        return (
+                                          <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => {
+                                              if (selected) removeOptionValue(option.id, val)
+                                              else addOptionValue(option.id, val)
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                              selected ? 'bg-primary-blue text-white border-2 border-primary-blue' : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-primary-blue'
+                                            }`}
+                                          >
+                                            {val}
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  )
+                                }
+                                if (config?.type === 'colors' && config.options) {
+                                  return (
+                                    <div className="flex flex-wrap gap-2">
+                                      {config.options.map(val => {
+                                        const selected = option.values.includes(val)
+                                        return (
+                                          <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => {
+                                              if (selected) removeOptionValue(option.id, val)
+                                              else addOptionValue(option.id, val)
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                              selected ? 'bg-primary-blue text-white border-2 border-primary-blue' : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-primary-blue'
+                                            }`}
+                                          >
+                                            {val}
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  )
+                                }
+                                if (config?.type === 'number' && config.unit) {
+                                  return (
+                                    <div className="flex gap-2 flex-wrap items-center">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1"
+                                          placeholder={`Number (${config.unit})`}
+                                          value={numericValueByOptionId[option.id] ?? ''}
+                                          onChange={(e) => setNumericValueByOptionId(prev => ({ ...prev, [option.id]: e.target.value }))}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault()
+                                              const v = (e.target as HTMLInputElement).value.trim()
+                                              if (v !== '') {
+                                                addOptionValue(option.id, v)
+                                                setNumericValueByOptionId(prev => ({ ...prev, [option.id]: '' }))
+                                              }
+                                            }
+                                          }}
+                                          className="w-32 px-3 py-2 border-2 border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
+                                        />
+                                        <span className="text-sm text-gray-500">{config.unit}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const v = (numericValueByOptionId[option.id] ?? '').trim()
+                                            if (v !== '') {
+                                              addOptionValue(option.id, v)
+                                              setNumericValueByOptionId(prev => ({ ...prev, [option.id]: '' }))
+                                            }
+                                          }}
+                                          className="px-4 py-2 bg-primary-blue text-white rounded-lg hover:opacity-90 transition-all"
+                                        >
+                                          Add
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )
+                                }
+                                return (
+                                  <div className="flex gap-2 mb-2">
+                                    <input
+                                      type="text"
+                                      placeholder="e.g., Custom value"
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault()
+                                          const input = e.currentTarget
+                                          if (input.value.trim()) { addOptionValue(option.id, input.value.trim()); input.value = '' }
+                                        }
+                                      }}
+                                      className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement)
+                                        if (input?.value.trim()) { addOptionValue(option.id, input.value.trim()); input.value = '' }
+                                      }}
+                                      className="px-4 py-2 bg-primary-blue text-white rounded-lg hover:opacity-90 transition-all"
+                                    >
+                                      Add
+                                    </button>
+                                  </div>
+                                )
+                              })()}
+                              <div className="space-y-2 mt-3">
+                                {option.values.map(value => {
+                                  const numConfig = getVariantValueConfig(option.name)
+                                  const displayValue = numConfig?.type === 'number' && numConfig.unit
+                                    ? `${value} ${numConfig.unit}`
+                                    : value
+                                  
+                                  return (
+                                    <div key={value} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200">
+                                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
+                                        {displayValue}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeOptionValue(option.id, value)}
+                                        className="ml-auto p-1 hover:bg-red-50 text-red-500 rounded-full transition-all"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                              {errors[`option_values_${optIndex}`] && (
+                                <span className="block text-xs text-red-500 mt-1">{errors[`option_values_${optIndex}`]}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        {formData.options.length < 3 && (
+                          <button
+                            type="button"
+                            onClick={addOption}
+                            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-primary-blue font-medium hover:border-primary-blue hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Another Option
+                          </button>
+                        )}
+
+                        {errors.options && (
+                          <span className="block text-sm text-red-500 mt-2">{errors.options}</span>
+                        )}
+                      </div>
+
+                      {/* Step 2: Variant details */}
+                      {formData.variants.length > 0 && (
+                        <div className="bg-white rounded-xl border-2 border-gray-200 p-4 sm:p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-semibold text-gray-900">
+                              Step 2: Variant details ({formData.variants.length} / 50)
+                            </h4>
+                            {errors.variants && (
+                              <span className="text-sm text-red-500">{errors.variants}</span>
+                            )}
+                          </div>
+
+                          <div className="space-y-4">
+                            {formData.variants.map((variant, index) => (
+                              <div key={variant.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <div className="flex items-start justify-between mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={variant.active}
+                                      onChange={(e) => updateVariant(variant.id, 'active', e.target.checked)}
+                                      className="w-5 h-5 rounded border-gray-300 text-primary-blue focus:ring-primary-blue"
+                                    />
+                                    <div>
+                                      <div className="font-medium text-gray-900">
+                                        {getVariantDisplayName(variant)}
+                                      </div>
+                                      {!variant.active && (
+                                        <span className="text-xs text-gray-500">Inactive - will not be sold</span>
+                                      )}
+                                    </div>
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => removeVariantImage(variant.id, imgIndex)}
-                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                    onClick={() => removeVariant(variant.id)}
+                                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-all"
                                   >
-                                    <X className="w-3 h-3" />
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
-                              ))}
-                              {variant.images.length < 5 && (
-                                <label className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
-                                  <Upload className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 mb-0.5 sm:mb-1" />
-                                  <span className="text-xs text-gray-600">Add</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={(e) => handleVariantImageChange(variant.id, e)}
-                                    className="hidden"
-                                  />
-                                </label>
-                              )}
-                            </div>
-                            {errors[`variant_images_${index}`] && (
-                              <span className="block text-xs text-red-500 mt-1.5">{errors[`variant_images_${index}`]}</span>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              {variant.images.length} / 5 images
-                            </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Price <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className={`flex items-stretch rounded-lg overflow-hidden border-2 ${errors[`variant_price_${index}`] ? 'border-red-500' : 'border-gray-200'}`}>
+                                      <div className="flex items-center justify-center px-2 py-2 bg-gray-100 border-r border-gray-200 text-xs font-semibold text-gray-700">
+                                        {priceCurrency}
+                                      </div>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={variant.price === 0 ? '' : variant.price}
+                                        onChange={(e) => updateVariant(variant.id, 'price', e.target.value === '' ? 0 : Number(e.target.value) || 0)}
+                                        className="flex-1 min-w-0 px-3 py-2 border-0 bg-white text-gray-900 focus:outline-none"
+                                        placeholder="0"
+                                      />
+                                    </div>
+                                    {errors[`variant_price_${index}`] && (
+                                      <span className="block text-xs text-red-500 mt-1">{errors[`variant_price_${index}`]}</span>
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Stock <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={variant.stock === 0 ? '' : variant.stock}
+                                      onChange={(e) => updateVariant(variant.id, 'stock', e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0)}
+                                      className={`w-full px-3 py-2 border-2 rounded-lg bg-white text-gray-900 ${
+                                        errors[`variant_stock_${index}`] ? 'border-red-500' : 'border-gray-200'
+                                      } focus:border-primary-blue focus:outline-none`}
+                                      placeholder="0"
+                                    />
+                                    {errors[`variant_stock_${index}`] && (
+                                      <span className="block text-xs text-red-500 mt-1">{errors[`variant_stock_${index}`]}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                                    Media (Images & Videos) <span className="text-red-500">*</span> <span className="text-gray-500">(Max 5)</span>
+                                  </label>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {variant.images.map((file, imgIndex) => {
+                                      const isVideo = file.type.startsWith('video/')
+                                      return (
+                                      <div key={imgIndex} className="relative group">
+                                        <div className="w-16 h-16 rounded-lg border-2 border-gray-200 overflow-hidden bg-gray-50">
+                                          {isVideo ? (
+                                            <video
+                                              src={URL.createObjectURL(file)}
+                                              className="w-full h-full object-cover"
+                                              muted
+                                              loop
+                                              playsInline
+                                            />
+                                          ) : (
+                                            <img
+                                              src={URL.createObjectURL(file)}
+                                              alt={`Variant media ${imgIndex + 1}`}
+                                              className="w-full h-full object-cover"
+                                            />
+                                          )}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeVariantImage(variant.id, imgIndex)}
+                                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )})}
+                                    {variant.images.length < 5 && (
+                                      <label className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-blue hover:bg-blue-50 transition-all">
+                                        <Upload className="w-4 h-4 text-gray-400" />
+                                        <input
+                                          type="file"
+                                          accept="image/*,video/*"
+                                          multiple
+                                          onChange={(e) => handleVariantImageChange(variant.id, e)}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
+                                  {errors[`variant_images_${index}`] && (
+                                    <span className="block text-xs text-red-500 mt-1">{errors[`variant_images_${index}`]}</span>
+                                  )}
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {variant.images.length} / 5 media files
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-
-                      {/* Add Another Variant Button */}
-                      <button
-                        type="button"
-                        onClick={addVariant}
-                        className="w-full py-3 sm:py-4 border-2 border-dashed border-gray-300 rounded-xl text-primary-blue font-semibold hover:border-primary-blue hover:bg-blue-50 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
-                      >
-                        <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-                        ADD ANOTHER VARIANT
-                      </button>
+                      )}
                     </div>
-                  )}
-                      </div>
-                    </>
                   )}
                 </div>
               )}

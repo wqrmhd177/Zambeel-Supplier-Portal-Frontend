@@ -6,6 +6,7 @@
  */
 
 import { supabase } from './supabase'
+import { getPendingStatusChangeCount } from './variantStatusChangeHelpers'
 
 export interface PriceHistoryEntry {
   id: string
@@ -36,36 +37,79 @@ export async function createPriceHistoryEntry(
   status: 'pending' | 'approved' = 'pending'
 ): Promise<PriceHistoryEntry | null> {
   try {
-    // Validate that prices are different
-    if (previousPrice === updatedPrice) {
+    // Prices can come from inputs as strings at runtime, even if TS says number.
+    // Normalize to numbers so equality/constraints behave correctly.
+    const prev = Number(previousPrice)
+    const upd = Number(updatedPrice)
+
+    if (Number.isNaN(prev) || Number.isNaN(upd)) {
+      console.error('Invalid price values for price_history insert', { previousPrice, updatedPrice })
+      return null
+    }
+
+    // Validate that prices are different (numeric equality)
+    if (prev === upd) {
       console.warn('Price did not change, skipping history entry')
       return null
     }
 
-    const { data, error } = await supabase
-      .from('price_history')
-      .insert([{
-        product_id: productId,
-        variant_id: variantId,
-        previous_price: previousPrice,
-        updated_price: updatedPrice,
-        created_by_supplier_id: createdBySupplierId,
-        created_by_purchaser_id: createdByPurchaserId || null,
-        status: status,
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single()
-    
-    if (error) {
-      console.error('Error creating price history entry:', error)
-      return null
+    const doInsert = async (payload: any) => {
+      const { data, error } = await supabase
+        .from('price_history')
+        .insert([payload])
+        .select()
+        .single()
+      return { data, error }
     }
-    
-    return data
+
+    const withStatusPayload = {
+      product_id: productId,
+      variant_id: variantId,
+      previous_price: prev,
+      updated_price: upd,
+      created_by_supplier_id: createdBySupplierId,
+      created_by_purchaser_id: createdByPurchaserId || null,
+      status,
+      created_at: new Date().toISOString()
+    }
+
+    const withoutStatusPayload = {
+      product_id: productId,
+      variant_id: variantId,
+      previous_price: prev,
+      updated_price: upd,
+      created_by_supplier_id: createdBySupplierId,
+      created_by_purchaser_id: createdByPurchaserId || null,
+      created_at: new Date().toISOString()
+    }
+
+    const { data, error } = await doInsert(withStatusPayload)
+    if (error) {
+      const msg = error?.message?.toLowerCase?.() || ''
+      // If the DB schema hasn't been migrated yet, retry without `status`.
+      if (msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
+        const { data: data2, error: error2 } = await doInsert(withoutStatusPayload)
+        if (error2) {
+          console.error('Error creating price history entry (fallback):', error2)
+          throw new Error(error2.message || 'Failed to create price history entry')
+        }
+        return {
+          ...(data2 as any),
+          status,
+          reviewed_at: null,
+          reviewed_by: null
+        } as PriceHistoryEntry
+      }
+
+      console.error('Error creating price history entry:', error)
+      throw new Error(error.message || 'Failed to create price history entry')
+    }
+
+    return data as PriceHistoryEntry
   } catch (err) {
     console.error('Unexpected error creating price history entry:', err)
-    return null
+    if (err instanceof Error) throw err
+    throw new Error('Failed to create price history entry')
   }
 }
 
@@ -524,18 +568,62 @@ export async function getPendingRequestCount(): Promise<number> {
  */
 export async function getPendingApprovalsCount(): Promise<number> {
   try {
-    const { count, error } = await supabase
+    let priceRows: any[] = []
+    let priceQueryOk = true
+    const { data: priceRowsMaybe, error: priceError } = await supabase
       .from('price_history')
-      .select('*', { count: 'exact', head: true })
+      .select('product_id, variant_id, created_by_supplier_id, created_at, status')
       .eq('status', 'pending')
-    if (error) {
-      console.error('Error fetching pending approvals count:', error)
-      return 0
+
+    if (priceError) {
+      const msg = priceError?.message?.toLowerCase?.() || ''
+      // If the DB doesn't yet have `status`, treat all price_history rows as pending for badge purposes.
+      if (msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
+        priceQueryOk = false
+        const { data: priceRowsNoStatus, error: priceError2 } = await supabase
+          .from('price_history')
+          .select('product_id, variant_id, created_by_supplier_id, created_at')
+
+        if (priceError2) {
+          console.error('Error fetching pending approvals count (fallback):', priceError2)
+          return await getPendingStatusChangeCount()
+        }
+
+        priceRows = (priceRowsNoStatus || []).map((r: any) => ({ ...r, status: 'pending' }))
+      } else {
+        priceQueryOk = false
+        console.error('Error fetching pending approvals count:', priceError)
+        return await getPendingStatusChangeCount()
+      }
+    } else {
+      priceRows = priceRowsMaybe || []
     }
-    return count ?? 0
+
+    const { data: statusRows } = await supabase
+      .from('variant_status_change_requests')
+      .select('product_id, variant_id, request_scope, created_by_supplier_id, created_at, status')
+      .eq('status', 'pending')
+
+    const toMinuteBucket = (iso: string) => {
+      const d = new Date(iso)
+      d.setSeconds(0, 0)
+      return d.toISOString()
+    }
+    const keys = new Set<string>()
+    ;(priceRows || []).forEach((r: any) => {
+      keys.add(`pending|variant|${r.product_id}|${r.variant_id}|${r.created_by_supplier_id ?? ''}|${toMinuteBucket(r.created_at)}`)
+    })
+    ;(statusRows || []).forEach((r: any) => {
+      const scope = r.request_scope || 'variant'
+      const scopeKey = scope === 'product'
+        ? `${r.product_id}`
+        : `${r.product_id}|${r.variant_id}`
+      keys.add(`pending|${scope}|${scopeKey}|${r.created_by_supplier_id ?? ''}|${toMinuteBucket(r.created_at)}`)
+    })
+    return keys.size
   } catch (err) {
     console.error('Unexpected error fetching pending approvals count:', err)
-    return 0
+    return await getPendingStatusChangeCount()
   }
 }
 
@@ -553,18 +641,36 @@ export async function fetchRequestsByStatus(
 }>> {
   try {
     // First, get price history entries
-    let query = supabase
-      .from('price_history')
-      .select('*')
-    
+    let query = supabase.from('price_history').select('*')
+
     // Only filter by status if not 'all'
-    if (status !== 'all') {
-      query = query.eq('status', status)
-    }
-    
+    if (status !== 'all') query = query.eq('status', status)
+
     const { data: priceHistoryData, error: priceHistoryError } = await query.order('created_at', { ascending: false })
-    
+
     if (priceHistoryError) {
+      const msg = priceHistoryError?.message?.toLowerCase?.() || ''
+      // If the DB hasn't been migrated yet and `status` column is missing,
+      // fetch everything and assume it matches the requested status.
+      if (status !== 'all' && msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
+        const { data: priceHistoryData2, error: priceHistoryError2 } = await supabase
+          .from('price_history')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        if (priceHistoryError2) {
+          console.error('Error fetching requests by status (fallback):', priceHistoryError2)
+          return []
+        }
+
+        return (priceHistoryData2 || []).map((entry: any) => ({
+          ...entry,
+          status,
+          reviewed_at: entry.reviewed_at ?? null,
+          reviewed_by: entry.reviewed_by ?? null
+        }))
+      }
+
       console.error('Error fetching requests by status:', priceHistoryError)
       return []
     }

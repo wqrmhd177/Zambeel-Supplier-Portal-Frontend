@@ -12,6 +12,7 @@ import {
   CheckCircle,
   Clock,
   X,
+  XCircle,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -26,25 +27,59 @@ import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import { groupProductsByProductId, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
+import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import { fetchPendingPriceRequests, PriceHistoryEntry, createPriceHistoryEntry } from '@/lib/priceHistoryHelpers'
+import { createVariantStatusChangeRequest } from '@/lib/variantStatusChangeHelpers'
 import { getCurrencyForUserId, getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 // Use GroupedProduct as the Product interface
 type Product = GroupedProduct
 
-/** Display status from status + company_sku: Pending Approval, Active, or Inactive */
-function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'Inactive' {
+function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'Inactive' | 'Rejected' {
   const status = product.status || 'active'
-  const hasCompanySku = product.variants?.some(v => v.company_sku != null && String(v.company_sku).trim() !== '') ?? false
+  // Backend is source of truth for status. If SKU gating is required,
+  // we update products.status in the backend when SKUs change.
   if (status === 'pending') return 'Pending Approval'
-  if (status === 'active' && !hasCompanySku) return 'Pending Approval'
-  if (status === 'active' && hasCompanySku) return 'Active'
-  if ((status === 'inactive' || status === 'rejected') && hasCompanySku) return 'Pending Approval'
-  if (status === 'inactive' || status === 'rejected') return 'Inactive'
+  if (status === 'active') return 'Active'
+  if (status === 'rejected') return 'Rejected'
+  if (status === 'inactive') return 'Inactive'
   return 'Inactive'
+}
+
+function getVariantDisplayName(variant: VariantInfo): string {
+  if (variant.option_values && Object.keys(variant.option_values).length > 0) {
+    return Object.values(variant.option_values).filter(Boolean).join(' / ')
+  }
+  
+  const parts: string[] = []
+  if (variant.color) parts.push(variant.color)
+  if (variant.size) {
+    parts.push(variant.size_category ? `${variant.size} ${variant.size_category}` : variant.size)
+  }
+  return parts.length > 0 ? parts.join(' / ') : 'Default'
+}
+
+function getVariantDisplayStatus(product: Product, variant: VariantInfo): 'Pending Approval' | 'Active' | 'Inactive' | 'Rejected' {
+  const productStatus = product.status || 'active'
+  if (productStatus === 'pending') return 'Pending Approval'
+  if (productStatus === 'rejected') return 'Rejected'
+  if (productStatus === 'inactive') return 'Inactive'
+  // productStatus === 'active'
+  return variant.active !== false ? 'Active' : 'Inactive'
+}
+
+function getProductThumbnail(product: Product): string | undefined {
+  const mainImages = extractImages(product.image)
+  if (mainImages.length > 0) return mainImages[0]
+
+  // Fallback for multi-variant products where product-level image is empty.
+  for (const variant of product.variants || []) {
+    const variantImages = extractImages(variant.image ?? null)
+    if (variantImages.length > 0) return variantImages[0]
+  }
+  return undefined
 }
 
 export default function ProductsPage() {
@@ -70,6 +105,9 @@ export default function ProductsPage() {
   // View Variants modal: edit prices only
   const [isEditingPrices, setIsEditingPrices] = useState(false)
   const [editedVariantPrices, setEditedVariantPrices] = useState<Map<number, number>>(new Map())
+  const [editedVariantActive, setEditedVariantActive] = useState<Map<number, boolean>>(new Map())
+  const [editedProductActiveStatus, setEditedProductActiveStatus] = useState<'active' | 'inactive'>('active')
+  const [isProductStatusEdited, setIsProductStatusEdited] = useState(false)
   const [isSavingPrices, setIsSavingPrices] = useState(false)
   const [priceSaveError, setPriceSaveError] = useState('')
   const [priceSaveSuccess, setPriceSaveSuccess] = useState('')
@@ -87,6 +125,7 @@ export default function ProductsPage() {
     pendingApproval: 0,
     active: 0,
     inactive: 0,
+    rejected: 0,
   })
 
   useEffect(() => {
@@ -235,15 +274,12 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     setIsLoading(true)
     try {
-      let productsData: any[] = []
+      let groupedProducts: GroupedProduct[] = []
 
       if (userRole === 'purchaser' && userId) {
-        // For purchasers: fetch products from suppliers in the same country only
-        productsData = await fetchProductsForPurchaser(userId)
         const supplierList = await fetchSuppliersForPurchaser(userId)
         setSuppliers(supplierList)
         
-        // Create map for quick lookup
         const map = new Map<string, SupplierInfo>()
         supplierList.forEach(s => {
           if (s.user_id) {
@@ -251,24 +287,29 @@ export default function ProductsPage() {
           }
         })
         setSupplierMap(map)
+
+        const legacyProductsData = await fetchProductsForPurchaser(userId)
+        const legacyGrouped = groupProductsByProductId(legacyProductsData)
+
+        const supplierIds = supplierList.map(s => s.user_id).filter(Boolean)
+        const newProducts = await fetchProductsWithVariants()
+        const newGrouped = newProducts.filter(p => supplierIds.includes(p.fk_owned_by))
+
+        const allProductIds = new Set([
+          ...legacyGrouped.map(p => p.product_id),
+          ...newGrouped.map(p => p.product_id)
+        ])
+
+        const mergedMap = new Map<number, GroupedProduct>()
+        legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
+        newGrouped.forEach(p => {
+          if (p.variants.length > 0) {
+            mergedMap.set(p.product_id, p)
+          }
+        })
+
+        groupedProducts = Array.from(mergedMap.values())
       } else if (userRole === 'admin') {
-        // For admin: fetch all products from all suppliers
-        const { data, error: productsError } = await supabase
-          .from('products')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (productsError) {
-          console.error('Error fetching products:', productsError)
-          setProducts([])
-          setAllProducts([])
-          setIsLoading(false)
-          return
-        }
-
-        productsData = data || []
-
-        // Fetch all suppliers for filter dropdown
         const { data: supplierData, error: supplierError } = await supabase
           .from('users')
           .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
@@ -285,44 +326,71 @@ export default function ProductsPage() {
           })
           setSupplierMap(map)
         }
-      } else {
-        // For suppliers: fetch their own products
-        const userFriendlyId = localStorage.getItem('userFriendlyId')
-        if (!userFriendlyId) {
-          setIsLoading(false)
-          return
-        }
 
-        const { data, error: productsError } = await supabase
+        const { data: legacyData, error: legacyError } = await supabase
           .from('products')
           .select('*')
-          .eq('fk_owned_by', userFriendlyId)
           .order('created_at', { ascending: false })
 
-        if (productsError) {
-          console.error('Error fetching products:', productsError)
+        if (legacyError) {
+          console.error('Error fetching products:', legacyError)
           setProducts([])
           setAllProducts([])
           setIsLoading(false)
           return
         }
 
-        productsData = data || []
+        const legacyGrouped = groupProductsByProductId(legacyData || [])
+        const newGrouped = await fetchProductsWithVariants()
+
+        const mergedMap = new Map<number, GroupedProduct>()
+        legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
+        newGrouped.forEach(p => {
+          if (p.variants.length > 0) {
+            mergedMap.set(p.product_id, p)
+          }
+        })
+
+        groupedProducts = Array.from(mergedMap.values())
+      } else {
+        const userFriendlyId = localStorage.getItem('userFriendlyId')
+        if (!userFriendlyId) {
+          setIsLoading(false)
+          return
+        }
+
+        const { data: legacyData, error: legacyError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('fk_owned_by', userFriendlyId)
+          .order('created_at', { ascending: false })
+
+        if (legacyError) {
+          console.error('Error fetching products:', legacyError)
+          setProducts([])
+          setAllProducts([])
+          setIsLoading(false)
+          return
+        }
+
+        const legacyGrouped = groupProductsByProductId(legacyData || [])
+        const newGrouped = await fetchProductsWithVariants({ ownerId: userFriendlyId })
+
+        const mergedMap = new Map<number, GroupedProduct>()
+        legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
+        newGrouped.forEach(p => {
+          if (p.variants.length > 0) {
+            mergedMap.set(p.product_id, p)
+          }
+        })
+
+        groupedProducts = Array.from(mergedMap.values())
       }
 
-      if (productsData.length > 0) {
-        // Group rows by product_id
-        const groupedProducts = groupProductsByProductId(productsData)
-        setAllProducts(groupedProducts)
-        applyFilters(groupedProducts)
-        calculateStats(groupedProducts)
-      } else {
-        setAllProducts([])
-        setProducts([])
-        calculateStats([])
-      }
+      setAllProducts(groupedProducts)
+      applyFilters(groupedProducts)
+      calculateStats(groupedProducts)
       
-      // Fetch pending price changes
       await fetchPendingChanges()
     } catch (err) {
       console.error('Unexpected error:', err)
@@ -341,7 +409,7 @@ export default function ProductsPage() {
       filtered = filtered.filter(p => p.fk_owned_by === filterSupplier)
     }
 
-    // Apply status filter (Pending Approval = pending, Active = active, Inactive = inactive)
+    // Apply status filter: Inactive and Rejected are separate (exact match only)
     if (filterStatus !== 'all') {
       filtered = filtered.filter(p => (p.status || 'active') === filterStatus)
     }
@@ -357,25 +425,27 @@ export default function ProductsPage() {
     setProducts(filtered)
   }
 
-  // Update filters when they change
+  // Update filters when they or allProducts change
   useEffect(() => {
-    if (allProducts.length > 0 || products.length > 0) {
+    if (allProducts.length > 0) {
       applyFilters()
     }
-  }, [filterStatus, filterSupplier, searchQuery])
+  }, [filterStatus, filterSupplier, searchQuery, allProducts])
 
   const calculateStats = (productsData: Product[]) => {
-    // For purchaser: productsData is already from same-country suppliers only. All four stats use this same set.
+    // Stats should match what the UI shows in the Status column.
     const total = productsData.length
     let pendingApproval = 0
     let active = 0
     let inactive = 0
+    let rejected = 0
 
     productsData.forEach(product => {
-      const status = (product.status || 'active') as string
-      if (status === 'pending') pendingApproval++
-      else if (status === 'active') active++
-      else inactive++ // inactive, rejected, or any other
+      const display = getDisplayStatus(product)
+      if (display === 'Pending Approval') pendingApproval++
+      else if (display === 'Active') active++
+      else if (display === 'Inactive') inactive++
+      else if (display === 'Rejected') rejected++
     })
 
     setStats({
@@ -383,6 +453,7 @@ export default function ProductsPage() {
       pendingApproval,
       active,
       inactive,
+      rejected,
     })
   }
 
@@ -427,18 +498,18 @@ export default function ProductsPage() {
         return
       }
 
-      // Update local state
-      setProducts(prevProducts =>
-        prevProducts.map(p =>
-          p.product_id === productId ? { ...p, status: newStatus as 'active' | 'inactive' } : p
+      // Update local state (both allProducts and filtered products)
+      setAllProducts(prev =>
+        prev.map(p =>
+          p.product_id === productId ? { ...p, status: newStatus as 'pending' | 'active' | 'inactive' | 'rejected' } : p
         )
       )
-
-      // Recalculate stats
-      const updatedProducts = products.map(p =>
-        p.product_id === productId ? { ...p, status: newStatus as 'active' | 'inactive' } : p
+      setProducts(prev =>
+        prev.map(p =>
+          p.product_id === productId ? { ...p, status: newStatus as 'pending' | 'active' | 'inactive' | 'rejected' } : p
+        )
       )
-      calculateStats(updatedProducts)
+      // Recalculate stats from updated allProducts (will be done by useEffect when allProducts updates)
     } catch (err) {
       console.error('Unexpected error updating status:', err)
       alert('An unexpected error occurred. Please try again.')
@@ -452,9 +523,12 @@ export default function ProductsPage() {
     setIsViewModalOpen(true)
     if (product.variants && product.variants.length > 0) {
       setEditedVariantPrices(new Map(product.variants.map(v => [v.variant_id, v.variant_selling_price])))
+      setEditedVariantActive(new Map(product.variants.map(v => [v.variant_id, v.active !== false])))
+      setEditedProductActiveStatus((product.status === 'inactive' ? 'inactive' : 'active'))
       setIsEditingPrices(true)
     } else {
       setEditedVariantPrices(new Map())
+      setEditedVariantActive(new Map())
       setIsEditingPrices(false)
     }
   }
@@ -462,6 +536,9 @@ export default function ProductsPage() {
   const handleStartEditPrices = () => {
     if (!selectedProduct) return
     setEditedVariantPrices(new Map(selectedProduct.variants.map(v => [v.variant_id, v.variant_selling_price])))
+    setEditedVariantActive(new Map(selectedProduct.variants.map(v => [v.variant_id, v.active !== false])))
+    setEditedProductActiveStatus((selectedProduct.status === 'inactive' ? 'inactive' : 'active'))
+    setIsProductStatusEdited(false)
     setIsEditingPrices(true)
     setPriceSaveError('')
     setPriceSaveSuccess('')
@@ -470,15 +547,26 @@ export default function ProductsPage() {
   const handleCancelEditPrices = () => {
     setIsEditingPrices(false)
     setEditedVariantPrices(new Map())
+    setEditedVariantActive(new Map())
+    setIsProductStatusEdited(false)
     setPriceSaveError('')
     setPriceSaveSuccess('')
   }
 
   const handleSavePrices = async () => {
     if (!selectedProduct || selectedProduct.variants.length === 0) return
+    if (selectedProduct.status !== 'active') {
+      setPriceSaveError('Only active products can submit price/status update requests.')
+      return
+    }
+    const currentProductStatusForEdit: 'active' = 'active'
+    const hasProductLevelStatusChange =
+      isProductStatusEdited && editedProductActiveStatus !== currentProductStatusForEdit
     const hasAnyChange = selectedProduct.variants.some(
       v => (editedVariantPrices.get(v.variant_id) ?? v.variant_selling_price) !== v.variant_selling_price
-    )
+    ) || selectedProduct.variants.some(
+      v => (editedVariantActive.get(v.variant_id) ?? (v.active !== false)) !== (v.active !== false)
+    ) || hasProductLevelStatusChange
     if (!hasAnyChange) {
       handleCancelEditPrices()
       return
@@ -491,30 +579,39 @@ export default function ProductsPage() {
       let hasPendingChanges = false
       const purchaserIntId = (userRole === 'purchaser' && userId) ? await getPurchaserIntegerId(userId) : null
 
+      if (hasProductLevelStatusChange && userFriendlyId) {
+        await createVariantStatusChangeRequest(
+          productIdNum,
+          selectedProduct.variants[0].variant_id,
+          true,
+          false,
+          userFriendlyId,
+          purchaserIntId ?? null,
+          'product'
+        )
+        hasPendingChanges = true
+      }
+
       for (const variant of selectedProduct.variants) {
-        const newPrice = editedVariantPrices.get(variant.variant_id) ?? variant.variant_selling_price
-        const oldPrice = variant.variant_selling_price
-        const priceChanged = oldPrice !== newPrice
+        const newPriceRaw = editedVariantPrices.get(variant.variant_id) ?? variant.variant_selling_price
+        const oldPriceRaw = variant.variant_selling_price
+        const newPrice = Number(newPriceRaw)
+        const oldPrice = Number(oldPriceRaw)
 
-        if (!priceChanged) continue
+        // Normalize numeric comparisons; inputs might be strings at runtime.
+        const priceChanged = !Number.isNaN(oldPrice) && !Number.isNaN(newPrice) && oldPrice !== newPrice
+        const oldActive = variant.active !== false
+        const productLevelTarget = editedProductActiveStatus === 'active'
+        const variantLevelEdited = editedVariantActive.has(variant.variant_id)
+        const newActive = variantLevelEdited
+          ? (editedVariantActive.get(variant.variant_id) ?? oldActive)
+          : oldActive
+        const statusChanged = oldActive !== newActive
 
-        const { error: updateError } = await supabase
-          .from('products')
-          .update({
-            variant_selling_price: oldPrice,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('variant_id', variant.variant_id)
-          .eq('product_id', productIdNum)
+        if (!priceChanged && (!statusChanged || hasProductLevelStatusChange)) continue
 
-        if (updateError) {
-          setPriceSaveError(updateError.message || 'Failed to save price. Please try again.')
-          setIsSavingPrices(false)
-          return
-        }
-
-        if (userFriendlyId) {
-          await createPriceHistoryEntry(
+        if (priceChanged && userFriendlyId) {
+          const created = await createPriceHistoryEntry(
             productIdNum,
             variant.variant_id,
             oldPrice,
@@ -523,17 +620,35 @@ export default function ProductsPage() {
             purchaserIntId ?? null,
             'pending'
           )
+          if (!created) {
+            throw new Error('Failed to submit price update request for agent approval.')
+          }
+          hasPendingChanges = true
+        }
+
+        if (statusChanged && userFriendlyId) {
+          const created = await createVariantStatusChangeRequest(
+            productIdNum,
+            variant.variant_id,
+            oldActive,
+            newActive,
+            userFriendlyId,
+            purchaserIntId ?? null,
+            'variant'
+          )
           hasPendingChanges = true
         }
       }
 
-      setPriceSaveSuccess(hasPendingChanges ? 'Price changes submitted for approval.' : 'Prices saved.')
+      setPriceSaveSuccess(hasPendingChanges ? 'Update requests submitted for agent approval.' : 'No changes submitted.')
       await fetchProducts()
       setIsEditingPrices(false)
       setEditedVariantPrices(new Map())
+      setEditedVariantActive(new Map())
+      setIsProductStatusEdited(false)
     } catch (err) {
       console.error('Error saving prices:', err)
-      setPriceSaveError('An unexpected error occurred. Please try again.')
+      setPriceSaveError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.')
     } finally {
       setIsSavingPrices(false)
     }
@@ -545,12 +660,9 @@ export default function ProductsPage() {
   }
 
   const filteredProducts = products.filter(product => {
-    const status = product.status || 'active'
-
+    const status = (product.status || 'active') as string
     const matchesSearch = product.product_title.toLowerCase().includes(searchQuery.toLowerCase())
-    
     const matchesFilter = filterStatus === 'all' || status === filterStatus
-
     return matchesSearch && matchesFilter
   })
 
@@ -595,8 +707,8 @@ export default function ProductsPage() {
             </button>
           </div>
 
-          {/* Stats Cards: Total Products, Pending Approval, Active, Inactive */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+          {/* Stats Cards: Total, Pending Approval, Active, Inactive, Rejected */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
             <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
               <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div>
@@ -644,6 +756,18 @@ export default function ProductsPage() {
                 </div>
               </div>
             </div>
+
+            <div className="theme-card rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:shadow-lg">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
+                <div>
+                  <p className="theme-label text-xs sm:text-sm mb-1">Rejected</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold theme-heading">{stats.rejected}</h3>
+                </div>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-md">
+                  <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Search and Filter Bar */}
@@ -687,6 +811,7 @@ export default function ProductsPage() {
                   <option value="pending">Pending Approval</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
+                  <option value="rejected">Rejected</option>
                 </select>
               </div>
             </div>
@@ -728,10 +853,10 @@ export default function ProductsPage() {
                       {(userRole === 'purchaser' || userRole === 'admin') && (
                         <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Supplier</th>
                       )}
-                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Price</th>
-                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Stock</th>
-                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold theme-label uppercase tracking-wider">Status</th>
-                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-right text-xs font-semibold theme-label uppercase tracking-wider">Actions</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center text-xs font-semibold theme-label uppercase tracking-wider">Price</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center text-xs font-semibold theme-label uppercase tracking-wider">Stock</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center text-xs font-semibold theme-label uppercase tracking-wider">Status</th>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center text-xs font-semibold theme-label uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
@@ -773,9 +898,7 @@ export default function ProductsPage() {
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                             <div className="flex items-center gap-2 sm:gap-3">
                               {(() => {
-                                // Use extractImages helper to handle all image formats
-                                const images = extractImages(product.image)
-                                const imageUrl = images.length > 0 ? images[0] : undefined
+                                const imageUrl = getProductThumbnail(product)
                                 return imageUrl ? (
                                   <button
                                     onClick={() => {
@@ -820,7 +943,7 @@ export default function ProductsPage() {
                             </td>
                           )}
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center gap-2">
                               <span className="text-xs sm:text-sm font-medium theme-heading whitespace-nowrap">{displayPrice}</span>
                               {hasPendingChanges && (
                                 <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -829,36 +952,53 @@ export default function ProductsPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm theme-heading">
-                            {totalStock}
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+                            <div className="text-xs sm:text-sm theme-heading text-center">
+                              {totalStock}
+                            </div>
                           </td>
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-                            {getDisplayStatus(product) === 'Pending Approval' ? (
-                              <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                                Pending Approval
-                              </span>
-                            ) : (
-                              <select
-                                value={status}
-                                onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
-                                className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-full border-2 transition-all cursor-pointer appearance-none bg-no-repeat bg-right pr-8 ${
+                            <div className="flex items-center justify-center">
+                              {getDisplayStatus(product) === 'Pending Approval' ? (
+                                <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                  Pending Approval
+                                </span>
+                              ) : (userRole === 'admin' || userRole === 'agent') ? (
+                                <select
+                                  value={status}
+                                  onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
+                                  className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-full border-2 transition-all cursor-pointer appearance-none bg-no-repeat bg-right pr-8 ${
+                                    status === 'active'
+                                      ? 'bg-green-100 text-green-800 border-green-200'
+                                      : status === 'rejected'
+                                        ? 'bg-red-100 text-red-800 border-red-200'
+                                        : 'bg-gray-100 text-gray-800 border-gray-200'
+                                  } hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary-blue`}
+                                  style={{
+                                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                                    backgroundPosition: 'right 0.5rem center',
+                                    paddingRight: '2rem'
+                                  }}
+                                >
+                                  <option value="active">Active</option>
+                                  <option value="inactive">Inactive</option>
+                                  <option value="rejected">Rejected</option>
+                                </select>
+                              ) : (
+                                <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full border ${
                                   status === 'active'
                                     ? 'bg-green-100 text-green-800 border-green-200'
-                                    : 'bg-gray-100 text-gray-800 border-gray-200'
-                                } hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary-blue`}
-                                style={{
-                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
-                                  backgroundPosition: 'right 0.5rem center',
-                                  paddingRight: '2rem'
-                                }}
-                              >
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                              </select>
-                            )}
+                                    : status === 'rejected'
+                                      ? 'bg-red-100 text-red-800 border-red-200'
+                                      : 'bg-gray-100 text-gray-800 border-gray-200'
+                                }`}>
+                                  {status === 'active' ? 'Active' : status === 'rejected' ? 'Rejected' : 'Inactive'}
+                                </span>
+                              )}
+                            </div>
                           </td>
-                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-right">
-                            <div className="flex items-center justify-end gap-1 sm:gap-2">
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+                            <div className="flex items-center justify-center gap-1 sm:gap-2">
                               <button
                                 onClick={() => {
                                   setSelectedProduct(product)
@@ -869,19 +1009,23 @@ export default function ProductsPage() {
                                 <span className="hidden sm:inline">View Variants</span>
                                 <span className="sm:hidden">View</span>
                               </button>
-                              <button
-                                onClick={() => handleOpenModalForEditPrices(product)}
-                                className="p-1.5 sm:p-2 theme-muted hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all"
-                                title="Edit prices"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                className="p-1.5 sm:p-2 theme-muted hover:text-red-300 hover:bg-white/10 rounded-lg transition-all"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {(userRole === 'admin' || userRole === 'agent') && (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenModalForEditPrices(product)}
+                                    className="p-1.5 sm:p-2 theme-muted hover:text-violet-300 hover:bg-white/10 rounded-lg transition-all"
+                                    title="Edit prices"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    className="p-1.5 sm:p-2 theme-muted hover:text-red-300 hover:bg-white/10 rounded-lg transition-all"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -897,8 +1041,7 @@ export default function ProductsPage() {
                   const hasVariants = product.variants && product.variants.length > 0
                   const status = product.status || 'active'
                   const displayStatus = getDisplayStatus(product)
-                  const images = extractImages(product.image)
-                  const imageUrl = images.length > 0 ? images[0] : undefined
+                  const imageUrl = getProductThumbnail(product)
 
                   return (
                     <div key={product.product_id} className="theme-card rounded-xl p-4 flex items-center gap-3">
@@ -930,20 +1073,22 @@ export default function ProductsPage() {
                               {product.variants!.length} variant{product.variants!.length > 1 ? 's' : ''}
                             </div>
                           )}
-                          {/* Status: Pending Approval = badge only; Active/Inactive = dropdown */}
+                          {/* Status: Pending Approval = badge; Purchaser = read-only badge; Admin/Supplier = dropdown */}
                           <div className="mt-2">
                             {displayStatus === 'Pending Approval' ? (
                               <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                 Pending Approval
                               </span>
-                            ) : (
+                            ) : (userRole === 'admin' || userRole === 'agent') ? (
                               <select
                                 value={status}
                                 onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
                                 className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border-2 transition-all cursor-pointer appearance-none bg-no-repeat bg-right pr-6 ${
                                   status === 'active'
                                     ? 'bg-green-100 text-green-800 border-green-200'
-                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                    : status === 'rejected'
+                                      ? 'bg-red-100 text-red-800 border-red-200'
+                                      : 'bg-gray-100 text-gray-800 border-gray-200'
                                 } hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary-blue`}
                                 style={{
                                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
@@ -953,7 +1098,18 @@ export default function ProductsPage() {
                               >
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
+                                <option value="rejected">Rejected</option>
                               </select>
+                            ) : (
+                              <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${
+                                status === 'active'
+                                  ? 'bg-green-100 text-green-800 border-green-200'
+                                  : status === 'rejected'
+                                    ? 'bg-red-100 text-red-800 border-red-200'
+                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                              }`}>
+                                {status === 'active' ? 'Active' : status === 'rejected' ? 'Rejected' : 'Inactive'}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1059,55 +1215,74 @@ export default function ProductsPage() {
               {/* Product Basic Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div 
-                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105"
+                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105 flex flex-col items-center text-center"
                   style={{
                     background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
                     border: '1px solid rgba(255,255,255,0.08)',
                   }}
                 >
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center justify-center gap-2 mb-2">
                     <Package className="w-4 h-4 text-violet-400" />
                     <label className="text-xs sm:text-sm font-semibold text-white/70">Product Title</label>
                   </div>
                   <p className="text-sm sm:text-base md:text-lg font-medium text-white">{selectedProduct.product_title}</p>
                 </div>
+                {selectedProduct.variants.length === 0 && (
+                  <div 
+                    className="p-4 rounded-xl transition-all duration-300 hover:scale-105 flex flex-col items-center text-center"
+                    style={{
+                      background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <label className="text-xs sm:text-sm font-semibold text-white/70 block mb-2">Price</label>
+                    <p className="text-sm sm:text-base md:text-lg font-medium text-white">
+                      {selectedProduct.variants.length > 0 && selectedProduct.variants[0].variant_selling_price
+                        ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} ${selectedProduct.variants[0].variant_selling_price.toLocaleString()}`
+                        : `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} 0`}
+                    </p>
+                  </div>
+                )}
                 <div 
-                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105"
+                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105 flex flex-col items-center text-center"
                   style={{
                     background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
                     border: '1px solid rgba(255,255,255,0.08)',
                   }}
                 >
-                  <label className="text-xs sm:text-sm font-semibold text-white/70 block mb-2">Price</label>
-                  <p className="text-sm sm:text-base md:text-lg font-medium text-white">
-                    {selectedProduct.variants.length > 0 && selectedProduct.variants[0].variant_selling_price
-                      ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} ${selectedProduct.variants[0].variant_selling_price.toLocaleString()}`
-                      : `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} 0`}
-                  </p>
-                </div>
-                <div 
-                  className="p-4 rounded-xl transition-all duration-300 hover:scale-105"
-                  style={{
-                    background: 'linear-gradient(145deg, rgba(30,27,75,0.6) 0%, rgba(45,27,105,0.4) 100%)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center justify-center gap-2 mb-2">
                     <Activity className="w-4 h-4 text-violet-400" />
                     <label className="text-xs sm:text-sm font-semibold text-white/70">Status</label>
                   </div>
-                  <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${
-                    getDisplayStatus(selectedProduct) === 'Active'
-                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                      : getDisplayStatus(selectedProduct) === 'Pending Approval'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
-                  }`}>
-                    {getDisplayStatus(selectedProduct)}
-                  </span>
+                  {(userRole === 'supplier' || userRole === 'admin' || userRole === 'purchaser') && isEditingPrices ? (
+                    <select
+                      value={editedProductActiveStatus}
+                      onChange={(e) => {
+                        const next = e.target.value === 'inactive' ? 'inactive' : 'active'
+                        setIsProductStatusEdited(true)
+                        setEditedProductActiveStatus(next)
+                        // Product-level toggle applies across all variants by default.
+                        setEditedVariantActive(new Map(selectedProduct.variants.map(v => [v.variant_id, next === 'active'])))
+                      }}
+                      className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:border-violet-400 focus:outline-none [&>option]:bg-[#1e1b4b] [&>option]:text-white"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  ) : (
+                    <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${
+                      getDisplayStatus(selectedProduct) === 'Active'
+                        ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                        : getDisplayStatus(selectedProduct) === 'Pending Approval'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
+                    }`}>
+                      {getDisplayStatus(selectedProduct)}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1123,93 +1298,155 @@ export default function ProductsPage() {
                     Variants Summary ({selectedProduct.variants.length})
                   </h3>
                   <div className="space-y-2 sm:space-y-3">
-                    {selectedProduct.variants.map((variant, index) => (
-                      <div
-                        key={variant.variant_id || index}
-                        className="rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all duration-300 hover:scale-[1.02] group"
-                        style={{
-                          background: variant.variant_stock === 0 
-                            ? 'linear-gradient(145deg, rgba(127,29,29,0.3) 0%, rgba(153,27,27,0.2) 100%)'
-                            : 'linear-gradient(145deg, rgba(30,27,75,0.5) 0%, rgba(45,27,105,0.3) 100%)',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
-                          border: variant.variant_stock === 0 
-                            ? '1px solid rgba(239,68,68,0.3)'
-                            : '1px solid rgba(255,255,255,0.08)',
-                        }}
-                      >
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                          {variant.size && (
-                            <div>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Ruler className="w-3 h-3 text-violet-400" />
-                                <label className="text-xs font-semibold text-white/70">Size</label>
-                              </div>
-                              <p className="text-sm text-white">
-                                {variant.size}{variant.size_category ? ` ${variant.size_category}` : ''}
-                              </p>
-                            </div>
-                          )}
-                          {variant.color && (
-                            <div>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Palette className="w-3 h-3 text-violet-400" />
-                                <label className="text-xs font-semibold text-white/70">Color</label>
-                              </div>
-                              <p className="text-sm text-white">{variant.color}</p>
-                            </div>
-                          )}
-                          {variant.company_sku && (
-                            <div>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Tag className="w-3 h-3 text-violet-400" />
-                                <label className="text-xs font-semibold text-white/70">Zambeel SKU</label>
-                              </div>
-                              <p className="text-sm font-mono text-white">{variant.company_sku}</p>
-                            </div>
-                          )}
-                          <div>
-                            <label className="text-xs font-semibold text-white/70 block mb-1">Price</label>
-                            {isEditingPrices ? (
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={editedVariantPrices.get(variant.variant_id) ?? variant.variant_selling_price}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value)
-                                  if (!Number.isNaN(val) && val >= 0) {
-                                    setEditedVariantPrices(prev => {
-                                      const next = new Map(prev)
-                                      next.set(variant.variant_id, val)
-                                      return next
+                    {selectedProduct.variants.map((variant, index) => {
+                      const images = extractImages(variant.image ?? null)
+                      const imageUrl = images.length > 0 ? images[0] : undefined
+                      return (
+                        <div
+                          key={variant.variant_id || index}
+                          className="rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all duration-300 hover:scale-[1.02] group"
+                          style={{
+                            background: variant.variant_stock === 0 
+                              ? 'linear-gradient(145deg, rgba(127,29,29,0.3) 0%, rgba(153,27,27,0.2) 100%)'
+                              : 'linear-gradient(145deg, rgba(30,27,75,0.5) 0%, rgba(45,27,105,0.3) 100%)',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
+                            border: variant.variant_stock === 0 
+                              ? '1px solid rgba(239,68,68,0.3)'
+                              : '1px solid rgba(255,255,255,0.08)',
+                          }}
+                        >
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 items-center">
+                            <div className="flex flex-col items-center text-center">
+                              {imageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    // Open viewer focusing on this variant's images.
+                                    // We reuse the existing viewer by setting a viewerProduct
+                                    // whose image is the variant image array (fallback to product image).
+                                    const variantImageSource = variant.image ?? selectedProduct.image
+                                    setViewerProduct({
+                                      ...selectedProduct,
+                                      image: variantImageSource,
                                     })
-                                  }
-                                }}
-                                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                              />
-                            ) : (
-                              <p className="text-sm font-medium text-white">
-                                {userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} {variant.variant_selling_price.toLocaleString()}
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Box className="w-3 h-3 text-violet-400" />
-                              <label className="text-xs font-semibold text-white/70">Stock</label>
+                                    setIsImageViewerOpen(true)
+                                    setCurrentImageIndex(0)
+                                  }}
+                                  className="hover:opacity-80 transition-opacity"
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={getVariantDisplayName(variant)}
+                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-md object-cover border border-white/20"
+                                  />
+                                </button>
+                              )}
+                              <div className="mt-2">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                  <Tag className="w-3 h-3 text-violet-400" />
+                                  <label className="text-xs font-semibold text-white/70">Variant</label>
+                                </div>
+                                <p className="text-sm text-white font-medium">
+                                  {getVariantDisplayName(variant)}
+                                </p>
+                              </div>
                             </div>
-                            <p className={`text-sm font-medium ${
-                              variant.variant_stock === 0 
-                                ? 'text-red-400' 
-                                : 'text-white'
-                            }`}>
-                              {variant.variant_stock}
-                              {variant.variant_stock === 0 && <span className="ml-1 text-xs">(Out of Stock)</span>}
-                            </p>
+                            <div className="flex flex-col items-center text-center">
+                              <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <Tag className="w-3 h-3 text-violet-400" />
+                                <label className="text-xs font-semibold text-white/70">SKU</label>
+                              </div>
+                              <p className="text-sm font-mono text-white">
+                                {variant.sku || '-'}
+                              </p>
+                            </div>
+                            {variant.company_sku && (
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <Tag className="w-3 h-3 text-violet-400" />
+                                  <label className="text-xs font-semibold text-white/70">Zambeel SKU</label>
+                                </div>
+                                <p className="text-sm font-mono text-white">{variant.company_sku}</p>
+                              </div>
+                            )}
+                            <div className="flex flex-col items-center text-center">
+                              <label className="text-xs font-semibold text-white/70 block mb-1">Price</label>
+                              {(userRole === 'admin' || userRole === 'supplier' || userRole === 'purchaser') && isEditingPrices ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={editedVariantPrices.get(variant.variant_id) ?? variant.variant_selling_price}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value)
+                                    if (!Number.isNaN(val) && val >= 0) {
+                                      setEditedVariantPrices(prev => {
+                                        const next = new Map(prev)
+                                        next.set(variant.variant_id, val)
+                                        return next
+                                      })
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                                />
+                              ) : (
+                                <p className="text-sm font-medium text-white">
+                                  {userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} {variant.variant_selling_price.toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-center text-center">
+                              <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <Box className="w-3 h-3 text-violet-400" />
+                                <label className="text-xs font-semibold text-white/70">Stock</label>
+                              </div>
+                              <p className={`text-sm font-medium ${
+                                variant.variant_stock === 0 
+                                  ? 'text-red-400' 
+                                  : 'text-white'
+                              }`}>
+                                {variant.variant_stock}
+                                {variant.variant_stock === 0 && <span className="ml-1 text-xs">(Out of Stock)</span>}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-center text-center">
+                              <label className="text-xs font-semibold text-white/70 block mb-1">Status</label>
+                              {(userRole === 'admin' || userRole === 'supplier' || userRole === 'purchaser') && isEditingPrices ? (
+                                <select
+                                  value={(editedVariantActive.get(variant.variant_id) ?? (variant.active !== false)) ? 'active' : 'inactive'}
+                                  onChange={(e) => {
+                                    const next = e.target.value === 'active'
+                                    setEditedVariantActive(prev => {
+                                      const map = new Map(prev)
+                                      map.set(variant.variant_id, next)
+                                      return map
+                                    })
+                                  }}
+                                  className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:border-violet-400 focus:outline-none [&>option]:bg-[#1e1b4b] [&>option]:text-white"
+                                >
+                                  <option value="active">Active</option>
+                                  <option value="inactive">Inactive</option>
+                                </select>
+                              ) : (
+                                <span
+                                  className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                                    getVariantDisplayStatus(selectedProduct!, variant) === 'Active'
+                                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                                      : getVariantDisplayStatus(selectedProduct!, variant) === 'Pending Approval'
+                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                        : getVariantDisplayStatus(selectedProduct!, variant) === 'Rejected'
+                                          ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                          : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
+                                  }`}
+                                >
+                                  {getVariantDisplayStatus(selectedProduct!, variant)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               ) : (
@@ -1283,7 +1520,7 @@ export default function ProductsPage() {
                       ) : (
                         <>
                           <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
-                          Save prices
+                          Submit requests
                         </>
                       )}
                     </button>
@@ -1302,7 +1539,7 @@ export default function ProductsPage() {
                     >
                       Close
                     </button>
-                    {selectedProduct.variants && selectedProduct.variants.length > 0 && (
+                    {selectedProduct.status === 'active' && selectedProduct.variants && selectedProduct.variants.length > 0 && (
                       <button
                         onClick={handleStartEditPrices}
                         className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base text-white font-semibold transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
@@ -1313,7 +1550,7 @@ export default function ProductsPage() {
                         }}
                       >
                         <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
-                        Edit prices
+                        Request updates
                       </button>
                     )}
                   </>

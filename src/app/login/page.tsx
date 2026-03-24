@@ -9,7 +9,7 @@ import { setSessionCookie, updateLastActivity } from '@/lib/authCookie'
 function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isSignUp, setIsSignUp] = useState(true)
+  const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -40,6 +40,7 @@ function LoginPageContent() {
     setIsLoading(true)
     
     try {
+      const emailNormalized = email.trim().toLowerCase()
       if (isSignUp) {
         // Sign up flow
         // Validate passwords match
@@ -59,8 +60,8 @@ function LoginPageContent() {
         const { data: existingUser, error: checkError } = await supabase
           .from('users')
           .select('id, email, archived, user_id')
-          .eq('email', email)
-          .single()
+          .ilike('email', emailNormalized)
+          .maybeSingle()
 
         if (existingUser) {
           // If account exists and is archived, restore it
@@ -88,7 +89,7 @@ function LoginPageContent() {
               // Store user ID in localStorage
               localStorage.setItem('userId', restoredUser.id)
               localStorage.setItem('userFriendlyId', restoredUser.user_id || '')
-              localStorage.setItem('userEmail', email)
+              localStorage.setItem('userEmail', emailNormalized)
               localStorage.setItem('isLoggedIn', 'true')
               localStorage.setItem('userRole', restoredUser.role || 'supplier')
               setSessionCookie()
@@ -111,7 +112,7 @@ function LoginPageContent() {
         }
 
         // If email doesn't exist or check returned error (user not found), create new account
-        if (checkError && checkError.code !== 'PGRST116') {
+        if (checkError) {
           // Some other error occurred
           setError(checkError.message || 'An error occurred. Please try again.')
           setIsLoading(false)
@@ -123,7 +124,7 @@ function LoginPageContent() {
           .from('users')
           .insert([
             {
-              email: email,
+              email: emailNormalized,
               password: password, // Note: In production, hash passwords before storing
               created_at: new Date().toISOString(),
               account_approval: 'Wait',
@@ -142,7 +143,7 @@ function LoginPageContent() {
           // Store user ID in localStorage
           localStorage.setItem('userId', data.id)
           localStorage.setItem('userFriendlyId', data.user_id || '')
-          localStorage.setItem('userEmail', email)
+          localStorage.setItem('userEmail', emailNormalized)
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', data.role || 'supplier')
           setSessionCookie()
@@ -164,24 +165,49 @@ function LoginPageContent() {
       } else {
         // Login flow
         // First, check if user exists in Supabase
-        const { data: existingUser, error: fetchError } = await supabase
+        const { data: matchingUsers, error: fetchError } = await supabase
           .from('users')
           .select('*')
-          .eq('email', email)
-          .single()
+          .ilike('email', emailNormalized)
+          .limit(50)
 
         if (fetchError) {
-          // User doesn't exist
-          if (fetchError.code === 'PGRST116') {
-            setError('Account not found. Please sign up first to create an account.')
-            setIsLoading(false)
-            return
-          } else {
-            setError(fetchError.message || 'An error occurred. Please try again.')
-            setIsLoading(false)
-            return
-          }
+          setError(fetchError.message || 'An error occurred. Please try again.')
+          setIsLoading(false)
+          return
         }
+
+        const users = (matchingUsers as any[] | null)?.filter(Boolean) || []
+        if (users.length === 0) {
+          setError('Account not found. Please sign up first to create an account.')
+          setIsLoading(false)
+          return
+        }
+
+        // If there are duplicates with same email, prefer the best candidate:
+        // - not archived
+        // - supplier/admin/agent (any role), but for suppliers prefer onboarded + approved
+        // - newest updated/created as last tie-breaker
+        const candidates = users.filter(u => u.archived !== true)
+        const pickBest = (arr: any[]) => {
+          const score = (u: any) => {
+            const role = u.role || 'supplier'
+            const onboarded = u.onboarded === true || u.onboarded === 'true'
+            const approvalNormalized = String(u.account_approval || '').trim().toLowerCase()
+            const approved = approvalNormalized === 'approved'
+            const supplierPreferred = role === 'supplier'
+            const updated = Date.parse(u.updated_at || '') || 0
+            const created = Date.parse(u.created_at || '') || 0
+            return (
+              (supplierPreferred ? 1000000 : 0) +
+              (onboarded ? 200000 : 0) +
+              (approved ? 100000 : 0) +
+              Math.max(updated, created)
+            )
+          }
+          return arr.slice().sort((a, b) => score(b) - score(a))[0]
+        }
+        const existingUser = pickBest(candidates.length ? candidates : users)
 
         if (existingUser) {
           // Check if account is deleted
@@ -200,19 +226,24 @@ function LoginPageContent() {
 
           // Check user role and approval status BEFORE setting session
           const userRole = existingUser.role || 'supplier'
+
+          const onboarded = existingUser.onboarded === true || existingUser.onboarded === 'true'
+          const approvalNormalized = String(existingUser.account_approval || '').trim().toLowerCase()
+          const isApproved = approvalNormalized === 'approved'
+          const isRefused = approvalNormalized === 'refused'
           
           // For suppliers who have completed onboarding, check account approval status
-          if (userRole === 'supplier' && existingUser.onboarded) {
-            const accountApproval = existingUser.account_approval
+          if (userRole === 'supplier' && onboarded) {
+            const accountApproval = String(existingUser.account_approval || '').trim()
             
-            if (accountApproval === 'Refused') {
+            if (isRefused) {
               setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
               setError('')
               setIsLoading(false)
               return
             }
             
-            if (accountApproval !== 'Approved') {
+            if (!isApproved) {
               // Status is 'Wait' or null - pending approval
               setPopupMessage('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
               setError('')
@@ -224,24 +255,27 @@ function LoginPageContent() {
           // Password matches and approval check passed - set session and login
           localStorage.setItem('userId', existingUser.id)
           localStorage.setItem('userFriendlyId', existingUser.user_id || '')
-          localStorage.setItem('userEmail', email)
+          localStorage.setItem('userEmail', emailNormalized)
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', userRole)
           setSessionCookie()
           updateLastActivity() // Initialize activity tracking
           
           // Redirect based on role
-          if (userRole === 'admin') {
-            router.push('/dashboard')
-          } else if (userRole === 'agent') {
-            router.push('/listings')
-          } else if (existingUser.onboarded) {
-            // Supplier with approved account (already checked above)
-            router.push('/dashboard')
-          } else {
-            // Supplier who hasn't completed onboarding yet
-            router.push('/onboarding')
-          }
+        if (userRole === 'admin') {
+          router.push('/dashboard')
+        } else if (userRole === 'agent') {
+          router.push('/listings')
+        } else if (
+          userRole === 'supplier' &&
+          (onboarded || isApproved)
+        ) {
+          // Supplier with approved account (treat as fully onboarded even if onboarded flag is false)
+          router.push('/dashboard')
+        } else {
+          // Supplier who hasn't completed onboarding and is not approved yet
+          router.push('/onboarding')
+        }
           setIsLoading(false)
         }
       }

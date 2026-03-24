@@ -3,56 +3,59 @@
 import { supabase } from './supabase'
 
 /**
+ * Get purchaser's country (and optional stock_location_country) for pre-filling new supplier form.
+ * Returns null for admin or if not found.
+ */
+export async function getPurchaserCountry(purchaserUuid: string): Promise<{ country: string; stockLocationCountry: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('country, stock_location_country')
+      .eq('id', purchaserUuid)
+      .eq('role', 'purchaser')
+      .single<{ country: string | null; stock_location_country: string | null }>()
+
+    if (error || !data) return null
+    const country = data.country || data.stock_location_country
+    const stockLocationCountry = data.stock_location_country || data.country
+    if (!country) return null
+    return { country, stockLocationCountry: stockLocationCountry || country }
+  } catch (err) {
+    console.error('Error fetching purchaser country:', err)
+    return null
+  }
+}
+
+/**
  * Get purchaser's integer ID from their UUID
- * This assumes purchasers have an integer ID field (like purchaser_id or a sequential ID)
- * If your users table has a different integer ID field, update this function
+ * Used to link a new supplier to the purchaser who created them.
+ * First tries to get a stable index from the purchasers list; if that fails (e.g. RLS),
+ * returns a deterministic integer derived from the UUID so creation still succeeds.
  */
 export async function getPurchaserIntegerId(purchaserUuid: string): Promise<number | null> {
   try {
-    // First, try to get purchaser_id if it exists as an integer field on the purchaser's own record
-    // Or we can use a sequence/row number approach
-    // For now, we'll query the user and use their purchaser_id if they are a purchaser
-    // But actually, purchasers don't have purchaser_id set (only suppliers do)
-    
-    // Alternative: If you have an integer ID field in users table, use that
-    // For now, let's assume we need to get it from a separate field or calculate it
-    
-    // Check if user is a purchaser and get their integer ID
-    // This might need to be adjusted based on your actual schema
-    const { data, error } = await supabase
-      .from('users')
-      .select('purchaser_id') // This won't work for purchasers themselves
-      .eq('id', purchaserUuid)
-      .eq('role', 'purchaser')
-      .single()
-    
-    // Actually, purchasers don't have purchaser_id. We need a different approach.
-    // Let's query for an integer ID field. If your users table has an auto-increment integer ID,
-    // we can use that. Otherwise, we might need to add one.
-    
-    // For now, let's use a workaround: get the row number or use a sequence
-    // But the best solution is to have an integer ID field in users table
-    
-    // Temporary solution: Query all purchasers and find the index
-    // This is not ideal but works if we don't have an integer ID field
+    // Try: get all purchasers and use 1-based index (works when RLS allows reading purchasers)
     const { data: allPurchasers, error: purchasersError } = await supabase
       .from('users')
       .select('id')
       .eq('role', 'purchaser')
       .order('created_at', { ascending: true })
-    
-    if (purchasersError || !allPurchasers) {
-      console.error('Error fetching purchasers:', purchasersError)
-      return null
+
+    if (!purchasersError && allPurchasers && allPurchasers.length > 0) {
+      const index = allPurchasers.findIndex((p: { id: string }) => p.id === purchaserUuid)
+      if (index !== -1) {
+        return index + 1
+      }
     }
-    
-    // Find the index of this purchaser (1-based)
-    const index = allPurchasers.findIndex(p => p.id === purchaserUuid)
-    if (index === -1) {
-      return null
+
+    // Fallback: current user might not be in the list (e.g. RLS only returns own row or blocks).
+    // Return a deterministic integer from the UUID so the same purchaser always gets the same ID.
+    const hex = purchaserUuid.replace(/-/g, '').slice(0, 8)
+    const num = parseInt(hex, 16)
+    if (!Number.isNaN(num)) {
+      return (num % 2147483647) + 1
     }
-    
-    return index + 1 // Return 1-based integer ID
+    return null
   } catch (err) {
     console.error('Error getting purchaser integer ID:', err)
     return null
@@ -209,13 +212,14 @@ export async function getSupplierByUserId(userId: string): Promise<SupplierInfo 
 }
 
 /**
- * Get product count for a supplier
+ * Get product count for a supplier (distinct products, not variant rows).
+ * Matches the Products tab definition so supplier card totals align with Products page stats.
  */
 export async function getProductCountForSupplier(supplierUserId: string): Promise<number> {
   try {
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .from('products')
-      .select('product_id', { count: 'exact', head: true })
+      .select('product_id')
       .eq('fk_owned_by', supplierUserId)
 
     if (error) {
@@ -223,7 +227,8 @@ export async function getProductCountForSupplier(supplierUserId: string): Promis
       return 0
     }
 
-    return count || 0
+    const distinctProductIds = new Set((data || []).map((r) => r.product_id))
+    return distinctProductIds.size
   } catch (err) {
     console.error('Unexpected error counting products:', err)
     return 0

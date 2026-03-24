@@ -46,14 +46,29 @@ export default function Sidebar() {
 
   // Fetch pending counts for Listings and Approvals when user is agent or admin
   useEffect(() => {
-    if (!userRole) return
-    if (userRole === 'agent' || userRole === 'admin') {
-      getPendingListingsCount().then(setListingPendingCount)
+    let isMounted = true
+    const loadCounts = async () => {
+      if (!userRole) return
+      if (userRole === 'agent' || userRole === 'admin') {
+        // For the Agent screen, show only "New Products" count in the left panel.
+        // (Matches Listings > New Products tab)
+        const listings = await getPendingListingsCount()
+        if (isMounted) setListingPendingCount(listings)
+      }
+      if (userRole === 'agent') {
+        const approvals = await getPendingApprovalsCount()
+        if (isMounted) setApprovalsPendingCount(approvals)
+      }
     }
-    if (userRole === 'agent') {
-      getPendingApprovalsCount().then(setApprovalsPendingCount)
+
+    loadCounts()
+    const interval = setInterval(loadCounts, 15000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
     }
-  }, [userRole])
+  }, [userRole, pathname])
 
   // Get menu items based on user role
   const getMenuItems = () => {
