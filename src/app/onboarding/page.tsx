@@ -160,7 +160,7 @@ export default function SupplierOnboarding() {
 
       const { data, error } = await supabase
         .from('users')
-        .select('role, onboarded, account_approval')
+        .select('role, onboarded, account_approval, full_name, shop_name_on_zambeel, shop_name, phone_number, country')
         .eq('id', currentUserId)
         .maybeSingle()
 
@@ -170,8 +170,13 @@ export default function SupplierOnboarding() {
       const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
       const approvalNormalized = String(data.account_approval || '').trim().toLowerCase()
       const isApproved = approvalNormalized === 'approved' || approvalNormalized.includes('approved')
+      const profileSubmitted =
+        String(data.full_name || '').trim().length > 0 ||
+        String(data.shop_name_on_zambeel || data.shop_name || '').trim().length > 0 ||
+        String(data.phone_number || '').trim().length > 0 ||
+        String(data.country || '').trim().length > 0
 
-      if (role === 'supplier' && (onboarded || isApproved)) {
+      if (role === 'supplier' && (onboarded || isApproved || profileSubmitted)) {
         router.push('/dashboard')
       }
     }

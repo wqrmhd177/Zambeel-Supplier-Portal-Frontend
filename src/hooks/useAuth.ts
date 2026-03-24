@@ -34,6 +34,14 @@ export function useAuth() {
     }
 
     const checkAuth = async () => {
+      const hasSubmittedOnboarding = (u: any) => {
+        const hasFullName = String(u?.full_name || '').trim().length > 0
+        const hasShopName = String(u?.shop_name_on_zambeel || u?.shop_name || '').trim().length > 0
+        const hasPhone = String(u?.phone_number || '').trim().length > 0
+        const hasCountry = String(u?.country || '').trim().length > 0
+        return hasFullName || hasShopName || hasPhone || hasCountry
+      }
+
       // Read all localStorage values in one batch
       const authData = {
         userId: localStorage.getItem('userId'),
@@ -107,11 +115,12 @@ export function useAuth() {
 
         // Security check: normalize flags for robust handling across DB value formats.
         const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
+        const profileSubmitted = hasSubmittedOnboarding(data)
         const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
 
         // For suppliers who have completed onboarding, enforce account approval status.
         const userRole = String(data.role || 'supplier').trim().toLowerCase()
-        if (userRole === 'supplier' && onboarded) {
+        if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
           if (isRefused) {
             console.log('Account has been refused, logging out...')
             clearAuth()

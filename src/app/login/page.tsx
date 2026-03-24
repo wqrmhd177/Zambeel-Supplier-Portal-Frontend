@@ -32,6 +32,14 @@ function LoginPageContent() {
     return { normalized, isApproved, isRefused }
   }
 
+  const hasSubmittedOnboarding = (u: any) => {
+    const hasFullName = String(u?.full_name || '').trim().length > 0
+    const hasShopName = String(u?.shop_name_on_zambeel || u?.shop_name || '').trim().length > 0
+    const hasPhone = String(u?.phone_number || '').trim().length > 0
+    const hasCountry = String(u?.country || '').trim().length > 0
+    return hasFullName || hasShopName || hasPhone || hasCountry
+  }
+
   // Handle redirect messages from security checks
   useEffect(() => {
     const reason = searchParams.get('reason')
@@ -206,6 +214,7 @@ function LoginPageContent() {
           const getPriority = (u: any) => {
             const role = String(u.role || 'supplier').trim().toLowerCase()
             const onboarded = u.onboarded === true || String(u.onboarded || '').trim().toLowerCase() === 'true'
+            const profileSubmitted = hasSubmittedOnboarding(u)
             const { isApproved } = getApprovalFlags(u.account_approval)
             const updatedOrCreated = Math.max(Date.parse(u.updated_at || '') || 0, Date.parse(u.created_at || '') || 0)
 
@@ -216,6 +225,7 @@ function LoginPageContent() {
               isSupplier: role === 'supplier' ? 1 : 0,
               isApproved: isApproved ? 1 : 0,
               isOnboarded: onboarded ? 1 : 0,
+              isProfileSubmitted: profileSubmitted ? 1 : 0,
               updatedOrCreated,
             }
           }
@@ -226,6 +236,7 @@ function LoginPageContent() {
             if (pb.isSupplier !== pa.isSupplier) return pb.isSupplier - pa.isSupplier
             if (pb.isApproved !== pa.isApproved) return pb.isApproved - pa.isApproved
             if (pb.isOnboarded !== pa.isOnboarded) return pb.isOnboarded - pa.isOnboarded
+            if (pb.isProfileSubmitted !== pa.isProfileSubmitted) return pb.isProfileSubmitted - pa.isProfileSubmitted
             return pb.updatedOrCreated - pa.updatedOrCreated
           })[0]
         }
@@ -256,10 +267,11 @@ function LoginPageContent() {
           const userRole = String(existingUser.role || 'supplier').trim().toLowerCase()
 
           const onboarded = existingUser.onboarded === true || String(existingUser.onboarded || '').trim().toLowerCase() === 'true'
+          const profileSubmitted = hasSubmittedOnboarding(existingUser)
           const { isApproved, isRefused } = getApprovalFlags(existingUser.account_approval)
           
           // For suppliers who have completed onboarding, check account approval status
-          if (userRole === 'supplier' && onboarded) {
+          if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
             if (isRefused) {
               setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
               setError('')
@@ -292,7 +304,7 @@ function LoginPageContent() {
           router.push('/listings')
         } else if (
           userRole === 'supplier' &&
-          (onboarded || isApproved)
+          (onboarded || isApproved || profileSubmitted)
         ) {
           // Supplier with approved account (treat as fully onboarded even if onboarded flag is false)
           router.push('/dashboard')
