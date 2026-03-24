@@ -172,7 +172,7 @@ function LoginPageContent() {
           
           // Check user role and redirect accordingly
           const userRole = String(data.role || 'supplier').trim().toLowerCase()
-          if (userRole === 'admin') {
+          if (userRole === 'admin' || userRole === 'purchaser') {
             router.push('/dashboard')
           } else if (userRole === 'agent') {
             router.push('/listings')
@@ -307,9 +307,9 @@ function LoginPageContent() {
           updateLastActivity() // Initialize activity tracking
           
           // Redirect based on role
-        if (userRole === 'admin') {
+          if (userRole === 'admin' || userRole === 'purchaser' || userRole === 'supplier') {
             // #region agent log
-            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-admin',message:'Redirecting after login',data:{target:'/dashboard'},timestamp:Date.now()})}).catch(()=>{});
+            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-existing-user-dashboard',message:'Redirecting existing user after login',data:{target:'/dashboard',role:userRole},timestamp:Date.now()})}).catch(()=>{});
             // #endregion
           router.push('/dashboard')
         } else if (userRole === 'agent') {
@@ -317,21 +317,12 @@ function LoginPageContent() {
             fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-agent',message:'Redirecting after login',data:{target:'/listings'},timestamp:Date.now()})}).catch(()=>{});
             // #endregion
           router.push('/listings')
-        } else if (
-          userRole === 'supplier' &&
-          (onboarded || isApproved || profileSubmitted)
-        ) {
-          // Supplier with approved account (treat as fully onboarded even if onboarded flag is false)
-            // #region agent log
-            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-supplier-dashboard',message:'Redirecting supplier to dashboard',data:{target:'/dashboard',onboarded,isApproved,profileSubmitted},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-          router.push('/dashboard')
         } else {
-          // Supplier who hasn't completed onboarding and is not approved yet
+            // Unknown role fallback for existing users
             // #region agent log
-            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-onboarding',message:'Redirecting supplier to onboarding',data:{target:'/onboarding',onboarded,isApproved,profileSubmitted,role:userRole},timestamp:Date.now()})}).catch(()=>{});
+            fetch('/api/debug-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'b6669e',runId:'login-flow',hypothesisId:'H3',location:'login/page.tsx:redirect-unknown-role-dashboard',message:'Redirecting unknown role to dashboard fallback',data:{target:'/dashboard',role:userRole},timestamp:Date.now()})}).catch(()=>{});
             // #endregion
-          router.push('/onboarding')
+            router.push('/dashboard')
         }
           setIsLoading(false)
         }
