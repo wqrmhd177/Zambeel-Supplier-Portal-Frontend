@@ -60,16 +60,277 @@ const COLOR_OPTIONS = [
 const SIZE_VARIANT_OPTIONS = ['Small', 'Medium', 'Large', 'XL', 'XXL', 'XXXL']
 
 const VARIANT_NAME_SUGGESTIONS = [
-  'Color', 'Size', 'Weight', 'Volume', 'Length'
+  'Battery Capacity',
+  'Color',
+  'Charger Type',
+  'Flavours',
+  'Material',
+  'Sizes',
+  'Bundle',
+  'Weight',
+  'Power Output',
+  'Pack SIZE',
 ]
 
 type VariantValueType = 'list' | 'colors' | 'number'
 const VARIANT_VALUE_CONFIG: Record<string, { type: VariantValueType; unit?: string; options?: string[] }> = {
-  Size: { type: 'list', options: SIZE_VARIANT_OPTIONS },
-  Color: { type: 'colors', options: COLOR_OPTIONS },
-  Weight: { type: 'number', unit: 'grams' },
-  Volume: { type: 'number', unit: 'ml' },
-  Length: { type: 'number', unit: 'inches' },
+  'Battery Capacity': {
+    type: 'list',
+    options: [
+      '500 mAh',
+      '1000 mAh',
+      '2000 mAh',
+      '5000 mAh',
+      '10000 mAh',
+      '20000 mAh',
+      '3000 mAh',
+    ],
+  },
+  Color: {
+    type: 'list',
+    options: [
+      'Black',
+      'White',
+      'Red',
+      'Blue',
+      'Navy',
+      'Green',
+      'Grey',
+      'Brown',
+      'Beige',
+      'Pink',
+      'Purple',
+      'Yellow',
+      'Orange',
+      'Gold',
+      'Silver',
+    ],
+  },
+  'Charger Type': {
+    type: 'list',
+    options: ['Lightening', 'Micro-Usb', 'Type-C'],
+  },
+  Flavours: {
+    type: 'list',
+    options: [
+      'Almond',
+      'Aloe Vera',
+      'Amour',
+      'Banana',
+      'Banana Extract',
+      'Beige',
+      'Beyond Teracotta',
+      'Beyond Ultraviolet',
+      'Black Currant',
+      'Black Opium',
+      'Blood Orange',
+      'Blossoms Cherry',
+      'Blue Sky',
+      'Blueberry',
+      'Blueberry Mint',
+      'Bronze Vision',
+      'Brown',
+      'Butter Creamy Peanut',
+      'Caramel',
+      'Cadenza',
+      'Chai',
+      'Check Tone',
+      'Cherry',
+      'Cherry Extract',
+      'Chocolate Skin',
+      'Cinnamon',
+      'Clove Oil',
+      'Cocoa',
+      'Cola Sour',
+      'Cookie Dough',
+      'Cool Water',
+      'Cream',
+      'Dimension Pink',
+      'Extra Mint',
+      'Extract Honey',
+      'Extract Strawberry',
+      'Fair',
+      'Fluer',
+      'Force',
+      'Fresh Mint',
+      'Fresh Pure',
+      'Ginger Oil',
+      'Golden',
+      'Grapes',
+      'Honey',
+      'Illusion Khaki',
+      'Infinite Nude',
+      'Juicy',
+      'Lavender',
+      'Lemon',
+      'Lemon Sicilian',
+      'Lily',
+      'Lime',
+      'Mint',
+      'Moisturizing Panthenol',
+      'Natural Skin',
+      'Oil Turmeric',
+      'Orange',
+      'Oud',
+      'Papaya',
+      'Passion',
+      'Peach',
+      'Peppermint',
+      'Pink',
+      'Pistachio',
+      'Porcelain',
+      'Purity',
+      'Purple',
+      'Raspberry Vanilla',
+      'Royale',
+      'Ruby',
+      'Spearmint',
+      'Spearmint Strong',
+      'Strawberry',
+      'Strong',
+      'Tan',
+      'Vanilla',
+      'Vervelle',
+      'Warm',
+      'Watermelon',
+      'White',
+    ],
+  },
+  Material: {
+    type: 'list',
+    options: [
+      'Silver',
+      'Alloy',
+      'Aqua',
+      'Gold',
+      'Iron',
+      'Oil',
+      'Powder',
+      'Stainless Steel',
+      'Wooden',
+      'Acrylic',
+      'Glass',
+      'Cream',
+      'Lotion',
+      'Serum',
+    ],
+  },
+  Sizes: {
+    type: 'list',
+    options: ['Extra Small', 'Large', 'Medium', 'Small', 'XL', 'XXL', 'XXXL'],
+  },
+  Bundle: {
+    type: 'list',
+    options: ['2-In-1', '3-In-1', '4-In-1', '5-In-1', '6-In-1', '7-In-1'],
+  },
+  Weight: {
+    type: 'list',
+    options: [
+      '1000 ml',
+      '1400 ml',
+      '1500 ml',
+      '3000 ml',
+      '4000 ml',
+      '6 ml',
+      '8 ml',
+      '10 ml',
+      '15 ml',
+      '18 ml',
+      '25 ml',
+      '30 ml',
+      '120 ml',
+      '130 ml',
+      '150 ml',
+      '160 ml',
+      '180 ml',
+      '190 ml',
+      '200 ml',
+      '210 ml',
+      '240 ml',
+      '250 ml',
+      '260 ml',
+      '275 ml',
+      '280 ml',
+      '300 ml',
+      '320 ml',
+      '330 ml',
+      '340 ml',
+      '350 ml',
+      '360 ml',
+      '380 ml',
+      '400 ml',
+      '450 ml',
+      '500 ml',
+      '8 g',
+      '15 g',
+      '20 g',
+      '25 g',
+      '30 g',
+      '40 g',
+      '55 g',
+      '80 g',
+      '150 g',
+      '300 g',
+      '400 g',
+      '900 g',
+      '1800 g',
+      '2000 g',
+      '2500 g',
+    ],
+  },
+  'Power Output': {
+    type: 'list',
+    options: [
+      '0.5 W',
+      '1 W',
+      '1.3 W',
+      '1.5 W',
+      '2.4 W',
+      '3 W',
+      '5 W',
+      '7 W',
+      '10 W',
+      '11 W',
+      '20 W',
+      '24 W',
+      '30 W',
+      '35 W',
+      '38 W',
+      '45 W',
+      '1500 W',
+      '1.5V',
+      '3.7V',
+      '25V',
+      '48V',
+    ],
+  },
+  'Pack SIZE': {
+    type: 'list',
+    options: [
+      '2 Pcs',
+      '3 Pcs',
+      '4 Pcs',
+      '5 Pcs',
+      '6 Pcs',
+      '8 Pcs',
+      '10 Pcs',
+      '12 Pcs',
+      '15 Pcs',
+      '16 Pcs',
+      '20 Pcs',
+      '24 Pcs',
+      '25 Pcs',
+      '30 Pcs',
+      '35 Pcs',
+      '36 Pcs',
+      '50 Pcs',
+      '60 Pcs',
+      '80 Pcs',
+      '86 Pcs',
+      '100 Pcs',
+      '128 Pcs',
+    ],
+  },
 }
 
 function getVariantValueConfig(variantName: string): { type: VariantValueType; unit?: string; options?: string[] } | null {
@@ -364,8 +625,8 @@ export default function AddProductPage() {
 
   // New Shopify-style variant functions
   const addOption = () => {
-    if (formData.options.length >= 3) {
-      setError('Maximum 3 options allowed per product')
+    if (formData.options.length >= 2) {
+      setError('Maximum 2 options allowed per product')
       return
     }
     setFormData(prev => ({
@@ -402,7 +663,8 @@ export default function AddProductPage() {
   }
 
   const updateOptionName = (optionId: string, newName: string) => {
-    const normalizedName = toTitleCase(newName)
+    const trimmed = newName.trim()
+    const normalizedName = VARIANT_NAME_SUGGESTIONS.includes(trimmed) ? trimmed : toTitleCase(newName)
     setFormData(prev => {
       const option = prev.options.find(o => o.id === optionId)
       if (!option) return prev
@@ -1350,9 +1612,9 @@ export default function AddProductPage() {
                     <div className="p-4 sm:p-6 space-y-6">
                       {/* Step 1: Define Options */}
                       <div className="bg-white rounded-xl border-2 border-gray-200 p-4 sm:p-6">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Step 1: Define variant options (Max 3)</h4>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Step 1: Define variant options (Max 2)</h4>
                         <p className="text-sm text-gray-600 mb-4">
-                          Define up to 3 variant dimensions like Color, Size, Weight, Volume, etc.
+                          Define up to 2 variant dimensions like Color, Size, Weight, Volume, etc.
                         </p>
 
                         {formData.options.map((option, optIndex) => (
@@ -1373,11 +1635,10 @@ export default function AddProductPage() {
                             <div className="mb-3">
                               <label className="block text-xs font-medium text-gray-700 mb-2">Variant name</label>
                               <select
-                                value={VARIANT_NAME_SUGGESTIONS.includes(option.name) ? option.name : (option.name ? 'Other' : '')}
+                                value={VARIANT_NAME_SUGGESTIONS.includes(option.name) ? option.name : ''}
                                 onChange={(e) => {
                                   const v = e.target.value
-                                  if (v === 'Other') updateOptionName(option.id, '')
-                                  else updateOptionName(option.id, v)
+                                  updateOptionName(option.id, v)
                                 }}
                                 className={`w-full px-3 py-2 border-2 rounded-lg bg-white text-gray-900 ${
                                   errors[`option_name_${optIndex}`] ? 'border-red-500' : 'border-gray-200'
@@ -1387,17 +1648,7 @@ export default function AddProductPage() {
                                 {VARIANT_NAME_SUGGESTIONS.map(name => (
                                   <option key={name} value={name}>{name}</option>
                                 ))}
-                                <option value="Other">Other</option>
                               </select>
-                              {!VARIANT_NAME_SUGGESTIONS.includes(option.name) && (
-                                <input
-                                  type="text"
-                                  value={option.name}
-                                  onChange={(e) => updateOptionName(option.id, e.target.value)}
-                                  placeholder="Custom variant name"
-                                  className="mt-2 w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-white text-gray-900 focus:border-primary-blue focus:outline-none"
-                                />
-                              )}
                               {errors[`option_name_${optIndex}`] && (
                                 <span className="block text-xs text-red-500 mt-1">{errors[`option_name_${optIndex}`]}</span>
                               )}
@@ -1553,7 +1804,7 @@ export default function AddProductPage() {
                           </div>
                         ))}
 
-                        {formData.options.length < 3 && (
+                        {formData.options.length < 2 && (
                           <button
                             type="button"
                             onClick={addOption}
