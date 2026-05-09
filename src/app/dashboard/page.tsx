@@ -29,9 +29,9 @@ export default function Dashboard() {
       return
     }
     
-    // Redirect agents to listings page (admin can access everything)
+    // Agents use Product Availability as their home (not Listings)
     if (!isLoading && isAuthenticated && userRole === 'agent') {
-      router.push('/listings')
+      router.push('/product-availability')
       return
     }
   }, [isAuthenticated, isLoading, userRole, router])

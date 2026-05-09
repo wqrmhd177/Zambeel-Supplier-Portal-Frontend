@@ -175,7 +175,7 @@ function LoginPageContent() {
           if (userRole === 'admin' || userRole === 'purchaser') {
             router.push('/dashboard')
           } else if (userRole === 'agent') {
-            router.push('/listings')
+            router.push('/product-availability')
           } else {
             router.push('/onboarding')
           }
@@ -301,7 +301,7 @@ function LoginPageContent() {
           if (userRole === 'admin' || userRole === 'purchaser' || userRole === 'supplier') {
             router.push('/dashboard')
           } else if (userRole === 'agent') {
-            router.push('/listings')
+            router.push('/product-availability')
           } else {
             // Unknown role fallback for existing users
             router.push('/dashboard')
