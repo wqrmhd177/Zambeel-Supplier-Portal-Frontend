@@ -423,25 +423,25 @@ export default function OrdersPage() {
       <div className="flex-1 overflow-auto">
         <Header />
         
-        <main className="p-8">
+        <main className="p-4 sm:p-6 lg:p-8">
           {/* Header Section */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Orders</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Orders</h2>
               <p className="text-gray-600">View and manage your orders</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2 sm:gap-3">
               <button
                 onClick={exportToCSV}
                 disabled={orders.length === 0}
-                className="px-6 py-3 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto justify-center px-4 sm:px-6 py-3 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="w-5 h-5" />
                 Export CSV
               </button>
               <button
                 onClick={fetchOrders}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
+                className="w-full sm:w-auto justify-center px-4 sm:px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
               >
                 <RefreshCw className="w-5 h-5" />
                 Refresh
@@ -591,7 +591,52 @@ export default function OrdersPage() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="md:hidden divide-y divide-gray-200">
+                {orders.map((order) => {
+                  const statusBadge = getStatusBadge(order.status)
+                  const StatusIcon = statusBadge.icon
+                  const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') ? supplierMap.get(order.vendor_id) : null
+
+                  return (
+                    <div key={`${order.order_id}-${order.sku}`} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">#{order.order_id}</p>
+                          <p className="text-xs text-gray-500">{formatDate(order.order_date)}</p>
+                        </div>
+                        <div className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${statusBadge.className}`}>
+                          <StatusIcon className="w-3.5 h-3.5" />
+                          {statusBadge.label}
+                        </div>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">{order.title || 'N/A'}</p>
+                      <p className="text-xs font-mono text-gray-600 break-all">{order.sku}</p>
+                      {(userRole === 'purchaser' || userRole === 'admin') && (
+                        <p className="text-xs text-gray-600">
+                          Supplier: {supplierInfo?.shop_name_on_zambeel || 'Unknown'}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-900">
+                        {order.supplier_price !== undefined && order.supplier_price !== null
+                          ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByVendorId.get(order.vendor_id) ?? 'USD')} ${Number(order.supplier_price).toLocaleString()}`
+                          : 'N/A'}
+                      </p>
+                      <div className="text-xs text-gray-600">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <Phone className="w-3.5 h-3.5 text-gray-400" />
+                          {order.phone}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                          {order.country}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
@@ -680,6 +725,7 @@ export default function OrdersPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </main>

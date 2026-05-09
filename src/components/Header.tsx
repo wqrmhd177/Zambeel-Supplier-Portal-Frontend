@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Menu } from 'lucide-react'
 
 export default function Header() {
   const router = useRouter()
@@ -57,6 +58,10 @@ export default function Header() {
     router.push('/profile')
   }
 
+  const handleOpenMobileMenu = () => {
+    window.dispatchEvent(new Event('open-mobile-sidebar'))
+  }
+
   const displayName = ownerName || 'there'
 
   return (
@@ -69,16 +74,26 @@ export default function Header() {
       }}
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white drop-shadow-sm truncate">
-            Welcome back, <span className="text-white/95">{displayName}!</span> 👋
-          </h1>
-          <p className="text-white/75 mt-1 text-xs sm:text-sm hidden sm:block">Here&apos;s what&apos;s happening with your store today</p>
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={handleOpenMobileMenu}
+            className="lg:hidden p-2 rounded-lg text-white/90 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white drop-shadow-sm truncate">
+              Welcome back, <span className="text-white/95">{displayName}!</span> 👋
+            </h1>
+            <p className="text-white/75 mt-1 text-xs sm:text-sm hidden sm:block">Here&apos;s what&apos;s happening with your store today</p>
+          </div>
         </div>
 
         <button
           onClick={handleViewProfile}
-          className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm md:text-base font-medium transition-all text-white relative overflow-hidden flex-shrink-0 flex flex-col items-center justify-center gap-0.5"
+          className="px-2.5 sm:px-4 md:px-6 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm md:text-base font-medium transition-all text-white relative overflow-hidden flex-shrink-0 flex flex-col items-center justify-center gap-0.5 max-w-[42vw] sm:max-w-none"
           style={{
             background: 'linear-gradient(90deg, #7c3aed 0%, #5b21b6 50%, #4f46e5 100%)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 3px 10px rgba(0,0,0,0.3)',
@@ -86,7 +101,7 @@ export default function Header() {
           }}
         >
           {shopName && (
-            <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">{shopName}</span>
+            <span className="text-xs sm:text-sm font-semibold truncate max-w-full">{shopName}</span>
           )}
           <span className="text-xs whitespace-nowrap">View Profile</span>
         </button>

@@ -135,7 +135,7 @@ export default function ProfilePage() {
       <div className="flex-1 overflow-auto">
         {/* Header - no Edit Bank Details button */}
         <header
-          className="px-8 py-6 border-b border-white/10"
+          className="px-4 sm:px-6 md:px-8 py-4 sm:py-5 md:py-6 border-b border-white/10"
           style={{
             background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.15)',
@@ -155,7 +155,7 @@ export default function ProfilePage() {
           </div>
         </header>
 
-        <main className="p-8 bg-[#f5f3ff]">
+        <main className="p-4 sm:p-6 lg:p-8 bg-[#f5f3ff]">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
               <p className="text-sm text-red-600 font-medium">{error}</p>
@@ -170,7 +170,7 @@ export default function ProfilePage() {
                 Basic Information
               </h3>
             </div>
-            <div className="p-8 bg-white">
+            <div className="p-4 sm:p-6 md:p-8 bg-white">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">User ID</label>
@@ -241,7 +241,7 @@ export default function ProfilePage() {
                 Business Information
               </h3>
             </div>
-            <div className="p-8 bg-white">
+            <div className="p-4 sm:p-6 md:p-8 bg-white">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Shop Name on Zambeel</label>
@@ -297,7 +297,7 @@ export default function ProfilePage() {
                 Banking Information
               </h3>
             </div>
-            <div className="p-8 bg-white">
+            <div className="p-4 sm:p-6 md:p-8 bg-white">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Bank Account Title</label>
@@ -353,7 +353,7 @@ export default function ProfilePage() {
                 Attachments
               </h3>
             </div>
-            <div className="p-8 bg-white">
+            <div className="p-4 sm:p-6 md:p-8 bg-white">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">NIC Picture</label>
               {profileData.nicPictureUrl ? (

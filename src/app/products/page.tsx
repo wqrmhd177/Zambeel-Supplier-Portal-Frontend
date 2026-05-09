@@ -37,6 +37,30 @@ import { getCurrencyForUserId, getCurrenciesForUserIds } from '@/lib/currencyHel
 // Use GroupedProduct as the Product interface
 type Product = GroupedProduct
 
+const VARIANT_DIMENSION_ORDER = [
+  'Battery Capacity',
+  'Charger Type',
+  'Material',
+  'Sizes',
+  'Bundle',
+  'Weight',
+  'Power Output',
+  'Pack SIZE',
+  'Color',
+  'Flavours',
+]
+
+function sortVariantOptionNames(optionNames: string[]): string[] {
+  return [...optionNames].sort((a, b) => {
+    const aIdx = VARIANT_DIMENSION_ORDER.indexOf(a)
+    const bIdx = VARIANT_DIMENSION_ORDER.indexOf(b)
+    const aOrder = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx
+    const bOrder = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return a.localeCompare(b)
+  })
+}
+
 function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'Inactive' | 'Rejected' {
   const status = product.status || 'active'
   // Backend is source of truth for status. If SKU gating is required,
@@ -50,7 +74,10 @@ function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'In
 
 function getVariantDisplayName(variant: VariantInfo): string {
   if (variant.option_values && Object.keys(variant.option_values).length > 0) {
-    return Object.values(variant.option_values).filter(Boolean).join(' / ')
+    const orderedValues = sortVariantOptionNames(Object.keys(variant.option_values))
+      .map((key) => variant.option_values?.[key])
+      .filter(Boolean)
+    return orderedValues.join(' / ')
   }
   
   const parts: string[] = []
@@ -1315,7 +1342,7 @@ export default function ProductsPage() {
                               : '1px solid rgba(255,255,255,0.08)',
                           }}
                         >
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 items-center">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 items-center">
                             <div className="flex flex-col items-center text-center">
                               {imageUrl && (
                                 <button
@@ -1356,7 +1383,7 @@ export default function ProductsPage() {
                                 <Tag className="w-3 h-3 text-violet-400" />
                                 <label className="text-xs font-semibold text-white/70">SKU</label>
                               </div>
-                              <p className="text-sm font-mono text-white">
+                              <p className="text-sm font-mono text-white break-all">
                                 {variant.sku || '-'}
                               </p>
                             </div>
@@ -1366,7 +1393,7 @@ export default function ProductsPage() {
                                   <Tag className="w-3 h-3 text-violet-400" />
                                   <label className="text-xs font-semibold text-white/70">Zambeel SKU</label>
                                 </div>
-                                <p className="text-sm font-mono text-white">{variant.company_sku}</p>
+                                <p className="text-sm font-mono text-white break-all">{variant.company_sku}</p>
                               </div>
                             )}
                             <div className="flex flex-col items-center text-center">

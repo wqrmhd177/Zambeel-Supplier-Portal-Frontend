@@ -435,7 +435,7 @@ function LoginPageContent() {
 
       {/* Right Panel - Login Form */}
       <div className="flex-1 bg-gray-50 flex items-center justify-center p-6 sm:p-8 md:p-10 lg:p-16">
-        <div className="w-full max-w-[480px] mr-8 lg:mr-16 animate-slide-in-right">
+        <div className="w-full max-w-[480px] mr-0 md:mr-8 lg:mr-16 animate-slide-in-right">
           {/* Form card with indigo border on all sides */}
           <div className="relative flex flex-col bg-white rounded-2xl shadow-xl border-4 border-indigo-500 p-6 sm:p-8 md:p-10">
           <div className="text-center mb-8 md:mb-10">

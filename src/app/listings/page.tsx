@@ -333,9 +333,9 @@ export default function ListingsPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-8 overflow-y-auto bg-[#f5f3ff]">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-[#f5f3ff]">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold mb-8 theme-heading-gradient">Product Listings</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 theme-heading-gradient">Product Listings</h1>
 
             {/* Tabs */}
             {(() => {
@@ -345,10 +345,10 @@ export default function ListingsPage() {
               const inactiveCount = allProducts.filter(p => st(p) === 'inactive').length
               const rejectedCount = allProducts.filter(p => st(p) === 'rejected').length
               return (
-                <div className="mb-6 flex gap-4 border-b border-gray-200 flex-wrap">
+                <div className="mb-6 flex gap-2 sm:gap-4 border-b border-gray-200 flex-wrap">
                   <button
                     onClick={() => setActiveTab('new')}
-                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                    className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-colors border-b-2 ${
                       activeTab === 'new'
                         ? 'text-primary-blue border-primary-blue'
                         : 'text-gray-500 border-transparent hover:text-gray-700'
@@ -358,7 +358,7 @@ export default function ListingsPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab('approved')}
-                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                    className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-colors border-b-2 ${
                       activeTab === 'approved'
                         ? 'text-primary-blue border-primary-blue'
                         : 'text-gray-500 border-transparent hover:text-gray-700'
@@ -368,7 +368,7 @@ export default function ListingsPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab('inactive')}
-                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                    className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-colors border-b-2 ${
                       activeTab === 'inactive'
                         ? 'text-primary-blue border-primary-blue'
                         : 'text-gray-500 border-transparent hover:text-gray-700'
@@ -378,7 +378,7 @@ export default function ListingsPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab('rejected')}
-                    className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+                    className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-colors border-b-2 ${
                       activeTab === 'rejected'
                         ? 'text-primary-blue border-primary-blue'
                         : 'text-gray-500 border-transparent hover:text-gray-700'
@@ -628,7 +628,7 @@ function ProductListingCard({
     <div className="theme-card rounded-xl shadow-sm overflow-hidden">
       {/* Main Product Row */}
       <div className="p-4 hover:bg-white/5 transition-colors">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* Product Image */}
           {(() => {
             const imageUrl = getProductThumbnail(product)
@@ -654,12 +654,12 @@ function ProductListingCard({
 
           {/* Product Details */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 md:gap-4">
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-semibold theme-heading truncate">
                   {product.product_title}
                 </h3>
-                <div className="flex items-center gap-4 mt-2 text-sm theme-muted">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-4 mt-2 text-sm theme-muted">
                   <span><strong>Price:</strong> {
                     product.variants.length > 0 && product.variants[0].variant_selling_price
                       ? `${currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} ${product.variants[0].variant_selling_price.toLocaleString()}`
@@ -685,21 +685,21 @@ function ProductListingCard({
               </div>
 
               {/* New: Approve + Reject | Approved: Inactive only | Inactive: Active only */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                 {activeTab === 'new' && (
                   <>
                     <button
                       onClick={() => onStatusChange(product.product_id, 'active')}
                       disabled={hasVariants && variantsWithSKU < totalVariants}
                       title={hasVariants && variantsWithSKU < totalVariants ? 'Assign SKU to all variants first' : 'Approve product'}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs sm:text-sm font-medium"
                     >
                       <Check className="w-4 h-4" />
                       Approve
                     </button>
                     <button
                       onClick={() => onStatusChange(product.product_id, 'rejected')}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs sm:text-sm font-medium"
                     >
                       <XCircle className="w-4 h-4" />
                       Reject
@@ -710,7 +710,7 @@ function ProductListingCard({
                   <button
                     onClick={() => onStatusChange(product.product_id, 'inactive')}
                     title="Move to Inactive products"
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm font-medium"
                   >
                     <PauseCircle className="w-4 h-4" />
                     Inactive
@@ -720,7 +720,7 @@ function ProductListingCard({
                   <button
                     onClick={() => onStatusChange(product.product_id, 'active')}
                     title="Activate product"
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs sm:text-sm font-medium"
                   >
                     Active
                   </button>
@@ -730,7 +730,7 @@ function ProductListingCard({
               {hasVariants && (
                 <button
                   onClick={onToggleExpanded}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-colors text-sm font-medium flex-shrink-0"
+                  className="w-full sm:w-auto justify-center flex items-center gap-2 px-4 py-2 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-colors text-xs sm:text-sm font-medium flex-shrink-0"
                 >
                   <Eye className="w-4 h-4" />
                   View Variants
@@ -796,7 +796,7 @@ function ProductListingCard({
                   </div>
 
                   {/* Zambeel SKU Input */}
-                  <div className="flex items-end gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                     <div className="flex-1">
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Zambeel SKU

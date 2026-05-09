@@ -58,7 +58,7 @@ export default function Dashboard() {
       <div className="flex-1 overflow-auto">
         <Header />
         
-        <main className="p-8 bg-[#f5f3ff]">
+        <main className="p-4 sm:p-6 lg:p-8 bg-[#f5f3ff]">
           <StatsCards currency={currency} />
           <RevenueChart currency={currency} />
           <SupplierProfile />

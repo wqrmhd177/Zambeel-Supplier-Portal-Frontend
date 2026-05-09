@@ -72,6 +72,48 @@ const VARIANT_NAME_SUGGESTIONS = [
   'Pack SIZE',
 ]
 
+const VARIANT_PRIMARY_ORDER = [
+  'Battery Capacity',
+  'Charger Type',
+  'Material',
+  'Sizes',
+  'Bundle',
+  'Weight',
+  'Power Output',
+  'Pack SIZE',
+]
+
+const VARIANT_SECONDARY_ORDER = ['Color', 'Flavours']
+const VARIANT_DIMENSION_ORDER = [...VARIANT_PRIMARY_ORDER, ...VARIANT_SECONDARY_ORDER]
+
+const COLOR_ABBREVIATIONS: Record<string, string> = {
+  Black: 'BLK',
+  White: 'WHT',
+  Red: 'RED',
+  Blue: 'BLU',
+  Navy: 'NAVY',
+  Green: 'GRN',
+  Grey: 'GRY',
+  Brown: 'BWN',
+  Beige: 'BGE',
+  Pink: 'PNK',
+  Purple: 'PPL',
+  Yellow: 'YLW',
+  Orange: 'ORG',
+  Gold: 'GLD',
+  Silver: 'SLV',
+}
+
+const SIZES_ABBREVIATIONS: Record<string, string> = {
+  'Extra Small': 'XS',
+  Small: 'S',
+  Medium: 'M',
+  Large: 'L',
+  XL: 'XL',
+  XXL: 'XXL',
+  XXXL: 'XXXL',
+}
+
 type VariantValueType = 'list' | 'colors' | 'number'
 const VARIANT_VALUE_CONFIG: Record<string, { type: VariantValueType; unit?: string; options?: string[] }> = {
   'Battery Capacity': {
@@ -338,6 +380,93 @@ function getVariantValueConfig(variantName: string): { type: VariantValueType; u
   return VARIANT_VALUE_CONFIG[key] || null
 }
 
+function getVariantOrderIndex(optionName: string): number {
+  const canonical = canonicalizeVariantOptionName(optionName)
+  const idx = VARIANT_DIMENSION_ORDER.indexOf(canonical)
+  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+}
+
+function sortVariantOptionNames(optionNames: string[]): string[] {
+  const canonicalNames = optionNames
+    .map(canonicalizeVariantOptionName)
+  const uniqueCanonicalNames = Array.from(new Set(canonicalNames))
+
+  return uniqueCanonicalNames.sort((a, b) => {
+    const aIdx = getVariantOrderIndex(a)
+    const bIdx = getVariantOrderIndex(b)
+    if (aIdx !== bIdx) return aIdx - bIdx
+    return a.localeCompare(b)
+  })
+}
+
+function sortVariantOptions(options: ProductOption[]): ProductOption[] {
+  return [...options].sort((a, b) => {
+    const aIdx = getVariantOrderIndex(a.name)
+    const bIdx = getVariantOrderIndex(b.name)
+    if (aIdx !== bIdx) return aIdx - bIdx
+    return a.name.localeCompare(b.name)
+  })
+}
+
+function normalizeOptionValues(optionValues: Record<string, string>): Record<string, string> {
+  const valuesByCanonicalKey: Record<string, string> = {}
+  for (const [k, v] of Object.entries(optionValues)) {
+    valuesByCanonicalKey[canonicalizeVariantOptionName(k)] = v
+  }
+
+  const orderedKeys = sortVariantOptionNames(Object.keys(valuesByCanonicalKey))
+  return orderedKeys.reduce<Record<string, string>>((acc, key) => {
+    acc[key] = valuesByCanonicalKey[key]
+    return acc
+  }, {})
+}
+
+function getAbbrev(optionName: string, displayValue: string): string {
+  const value = displayValue.trim()
+  if (!value) return value
+
+  if (optionName === 'Color') {
+    return COLOR_ABBREVIATIONS[value] || value
+  }
+  if (optionName === 'Sizes') {
+    return SIZES_ABBREVIATIONS[value] || value
+  }
+  if (optionName === 'Battery Capacity' || optionName === 'Weight' || optionName === 'Power Output' || optionName === 'Pack SIZE') {
+    return value.replace(/\s+/g, '')
+  }
+  if (optionName === 'Charger Type' || optionName === 'Flavours' || optionName === 'Material') {
+    return value.replace(/\s+/g, '-')
+  }
+
+  return value
+}
+
+function buildOptionValuesAbbrev(optionValues: Record<string, string>): Record<string, string> {
+  const normalized = normalizeOptionValues(optionValues)
+  return Object.entries(normalized).reduce<Record<string, string>>((acc, [optionName, value]) => {
+    acc[optionName] = getAbbrev(optionName, value)
+    return acc
+  }, {})
+}
+
+function getNormalizedVariantKey(optionValues: Record<string, string>): string {
+  return JSON.stringify(normalizeOptionValues(optionValues))
+}
+
+function canonicalizeVariantOptionName(optionName: string): string {
+  const trimmed = (optionName ?? '').trim()
+  if (!trimmed) return trimmed
+
+  // Exact match first (keeps correct casing)
+  const exact = VARIANT_NAME_SUGGESTIONS.find((n) => n === trimmed)
+  if (exact) return exact
+
+  // Case-insensitive match (defensive)
+  const lower = trimmed.toLowerCase()
+  const ci = VARIANT_NAME_SUGGESTIONS.find((n) => n.toLowerCase() === lower)
+  return ci || trimmed
+}
+
 function toTitleCase(text: string): string {
   return text
     .trim()
@@ -446,7 +575,7 @@ export default function AddProductPage() {
   // Auto-generate variant combinations when options/values change (no button)
   useEffect(() => {
     if (!formData.hasVariants || formData.options.length === 0) return
-    const validOptions = formData.options.filter(o => o.name.trim() && o.values.length > 0)
+    const validOptions = sortVariantOptions(formData.options.filter(o => o.name.trim() && o.values.length > 0))
     if (validOptions.length === 0) {
       setFormData(prev => ({ ...prev, variants: [] }))
       return
@@ -473,14 +602,15 @@ export default function AddProductPage() {
     setError('')
 
     setFormData(prev => {
-      const existingMap = new Map(prev.variants.map(v => [JSON.stringify(v.optionValues), v]))
+      const existingMap = new Map(prev.variants.map(v => [getNormalizedVariantKey(v.optionValues), v]))
       const newVariants = combinations.map(optionValues => {
-        const key = JSON.stringify(optionValues)
+        const normalizedOptionValues = normalizeOptionValues(optionValues)
+        const key = getNormalizedVariantKey(normalizedOptionValues)
         const existing = existingMap.get(key)
         if (existing) return existing
         return {
           id: crypto.randomUUID(),
-          optionValues,
+          optionValues: normalizedOptionValues,
           active: true,
           price: prev.sellingPrice || 0,
           stock: 0,
@@ -670,16 +800,19 @@ export default function AddProductPage() {
       if (!option) return prev
       
       const oldName = option.name
+      if (oldName === normalizedName) return prev
+      
+      // Switching the variant dimension should clear previously selected values,
+      // otherwise old values stay under the new dimension name.
       const newOptions = prev.options.map(o =>
-        o.id === optionId ? { ...o, name: normalizedName } : o
+        o.id === optionId ? { ...o, name: normalizedName, values: [] } : o
       )
       
       const newVariants = prev.variants.map(v => {
         if (!oldName || !v.optionValues[oldName]) return v
         const newOptionValues = { ...v.optionValues }
-        newOptionValues[normalizedName] = newOptionValues[oldName]
         delete newOptionValues[oldName]
-        return { ...v, optionValues: newOptionValues }
+        return { ...v, optionValues: normalizeOptionValues(newOptionValues) }
       })
       
       return {
@@ -727,7 +860,7 @@ export default function AddProductPage() {
   }
 
   const generateVariantCombinations = () => {
-    const validOptions = formData.options.filter(o => o.name && o.values.length > 0)
+    const validOptions = sortVariantOptions(formData.options.filter(o => o.name && o.values.length > 0))
     
     if (validOptions.length === 0) {
       setError('Please define at least one option with values before generating variants')
@@ -759,11 +892,12 @@ export default function AddProductPage() {
 
     setFormData(prev => {
       const existingMap = new Map(
-        prev.variants.map(v => [JSON.stringify(v.optionValues), v])
+        prev.variants.map(v => [getNormalizedVariantKey(v.optionValues), v])
       )
       
       const newVariants = combinations.map(optionValues => {
-        const key = JSON.stringify(optionValues)
+        const normalizedOptionValues = normalizeOptionValues(optionValues)
+        const key = getNormalizedVariantKey(normalizedOptionValues)
         const existing = existingMap.get(key)
         
         if (existing) {
@@ -772,7 +906,7 @@ export default function AddProductPage() {
 
         return {
           id: crypto.randomUUID(),
-          optionValues,
+          optionValues: normalizedOptionValues,
           active: true,
           price: prev.sellingPrice || 0,
           stock: 0,
@@ -791,7 +925,7 @@ export default function AddProductPage() {
   }
 
   const addManualVariant = () => {
-    const validOptions = formData.options.filter(o => o.name && o.values.length > 0)
+    const validOptions = sortVariantOptions(formData.options.filter(o => o.name && o.values.length > 0))
     
     if (validOptions.length === 0) {
       setError('Please define at least one option with values before adding variants')
@@ -807,6 +941,7 @@ export default function AddProductPage() {
     validOptions.forEach(opt => {
       defaultOptionValues[opt.name] = opt.values[0] || ''
     })
+    const normalizedDefaultOptionValues = normalizeOptionValues(defaultOptionValues)
 
     setFormData(prev => ({
       ...prev,
@@ -814,7 +949,7 @@ export default function AddProductPage() {
         ...prev.variants,
         {
           id: crypto.randomUUID(),
-          optionValues: defaultOptionValues,
+          optionValues: normalizedDefaultOptionValues,
           active: true,
           price: prev.sellingPrice || 0,
           stock: 0,
@@ -846,7 +981,7 @@ export default function AddProductPage() {
       ...prev,
       variants: prev.variants.map(v =>
         v.id === variantId
-          ? { ...v, optionValues: { ...v.optionValues, [optionName]: value } }
+          ? { ...v, optionValues: normalizeOptionValues({ ...v.optionValues, [optionName]: value }) }
           : v
       )
     }))
@@ -880,8 +1015,15 @@ export default function AddProductPage() {
   }
 
   const getVariantDisplayName = (variant: VariantRow): string => {
-    const parts = Object.entries(variant.optionValues)
-      .map(([optName, value]) => {
+    const valueByCanonicalKey: Record<string, string> = {}
+    for (const [k, v] of Object.entries(variant.optionValues)) {
+      valueByCanonicalKey[canonicalizeVariantOptionName(k)] = v
+    }
+
+    const orderedOptionNames = sortVariantOptionNames(Object.keys(valueByCanonicalKey))
+    const parts = orderedOptionNames
+      .map((optName) => {
+        const value = valueByCanonicalKey[optName]
         if (!value) return ''
         const config = getVariantValueConfig(optName)
         if (config?.type === 'number' && config.unit) return `${value} ${config.unit}`
@@ -1087,10 +1229,12 @@ export default function AddProductPage() {
         const variantRows = formData.variants.map(variant => {
           let variantUrls = variantImageUrls[variant.id]?.length > 0 ? variantImageUrls[variant.id] : null
           const imageForVariant = variantUrls ?? (imageUrls.length > 0 ? imageUrls : null)
+          const normalizedOptionValues = normalizeOptionValues(variant.optionValues)
           
           return {
             product_id: productId,
-            option_values: variant.optionValues,
+            option_values: normalizedOptionValues,
+            option_values_abbrev: buildOptionValuesAbbrev(normalizedOptionValues),
             sku: variant.sku || null,
             price: variant.price,
             stock: variant.stock,
@@ -1105,7 +1249,15 @@ export default function AddProductPage() {
 
         if (variantsError) {
           console.error('Error creating variants:', variantsError)
-          setError('Product created but failed to save variants. Please try again.')
+          // Keep data consistent: rollback the product row if variants fail.
+          const { error: rollbackError } = await supabase
+            .from('products')
+            .delete()
+            .eq('product_id', productId)
+          if (rollbackError) {
+            console.error('Rollback failed after variants insert error:', rollbackError)
+          }
+          setError('Product submission failed while saving variants. No product was saved. Please try again.')
           setIsSaving(false)
           return
         }
@@ -1115,6 +1267,7 @@ export default function AddProductPage() {
         const singleVariant = {
           product_id: productId,
           option_values: {},
+          option_values_abbrev: {},
           sku: null,
           price: formData.sellingPrice,
           stock: formData.stockAmount,
@@ -1128,7 +1281,15 @@ export default function AddProductPage() {
 
         if (variantError) {
           console.error('Error creating variant:', variantError)
-          setError('Product created but failed to save variant. Please try again.')
+          // Keep data consistent: rollback the product row if variant save fails.
+          const { error: rollbackError } = await supabase
+            .from('products')
+            .delete()
+            .eq('product_id', productId)
+          if (rollbackError) {
+            console.error('Rollback failed after variant insert error:', rollbackError)
+          }
+          setError('Product submission failed while saving variant. No product was saved. Please try again.')
           setIsSaving(false)
           return
         }

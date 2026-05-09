@@ -1,0 +1,792 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Loader2, Search, X } from 'lucide-react'
+import Sidebar from '@/components/Sidebar'
+import Header from '@/components/Header'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  createProductAvailabilityRequest,
+  fetchProductAvailabilityRequests,
+  formatAvailabilityLabel,
+  formatDerivedStatusLabel,
+  formatStockStatusLabel,
+  getProductAvailabilityCounts,
+  ProductAvailabilityListFilter,
+  ProductAvailabilityRequestWithDetails,
+  submitProductAvailabilityResponse,
+  titleCaseWords,
+} from '@/lib/productAvailabilityHelpers'
+import { lookupInventoryBySkuPrefix, InventoryLookupResult } from '@/lib/productAvailabilityInventoryLookup'
+import { supabase } from '@/lib/supabase'
+
+const MARKET_OPTIONS = ['UAE', 'KSA', 'PAK', 'QTR', 'KWT', 'OMN', 'BHR', 'IRQ', 'USA']
+
+type FilterTab = 'new' | 'urgent' | 'normal_requests' | 'delayed' | 'completed' | 'all'
+
+type CreateFormState = {
+  productStatus: 'already_listed' | 'not_listed' | 'not_sure'
+  markets: string[]
+  resellerName: string
+  productName: string
+  sku: string
+  referenceLink: string
+  priorityLevel: 'urgent' | 'normal'
+  images: File[]
+}
+
+type PurchaserResponseState = {
+  availability: 'available' | 'not_available' | 'on_demand'
+  stockStatus: 'limited' | 'on_demand' | 'bulk_limited_both'
+  singleUnitPrice: string
+  bulkUnitPrice: string
+  remarks: string
+  images: File[]
+}
+
+const initialCreateForm: CreateFormState = {
+  productStatus: 'not_sure',
+  markets: [],
+  resellerName: '',
+  productName: '',
+  sku: '',
+  referenceLink: '',
+  priorityLevel: 'normal',
+  images: [],
+}
+
+const initialResponseForm: PurchaserResponseState = {
+  availability: 'available',
+  stockStatus: 'limited',
+  singleUnitPrice: '',
+  bulkUnitPrice: '',
+  remarks: '',
+  images: [],
+}
+
+async function uploadFilesToStorage(ownerId: string, files: File[]): Promise<string[]> {
+  const urls: string[] = []
+  for (const file of files) {
+    const ext = file.name.split('.').pop() || 'jpg'
+    const path = `${ownerId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+    const { data, error } = await supabase.storage
+      .from('product_images')
+      .upload(path, file, { cacheControl: '3600', upsert: false })
+    if (error) throw new Error(error.message)
+    const { data: urlData } = supabase.storage.from('product_images').getPublicUrl(data.path)
+    if (urlData.publicUrl) urls.push(urlData.publicUrl)
+  }
+  return urls
+}
+
+export default function ProductAvailabilityPage() {
+  const router = useRouter()
+  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } = useAuth()
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [filter, setFilter] = useState<FilterTab>('normal_requests')
+  const [counts, setCounts] = useState({
+    urgent: 0,
+    normalRequests: 0,
+    delayed: 0,
+    completed: 0,
+    all: 0,
+  })
+  const [requests, setRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
+  const [createForm, setCreateForm] = useState<CreateFormState>(initialCreateForm)
+  const [responseForm, setResponseForm] = useState<PurchaserResponseState>(initialResponseForm)
+  const [selectedAssignment, setSelectedAssignment] = useState<{ assignmentId: string; requestId: string } | null>(null)
+  const [inventoryLookup, setInventoryLookup] = useState<InventoryLookupResult | null>(null)
+  const [inventoryError, setInventoryError] = useState('')
+  const [isCheckingInventory, setIsCheckingInventory] = useState(false)
+  const [savingRequest, setSavingRequest] = useState(false)
+  const [savingResponse, setSavingResponse] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
+  const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null)
+  const [expandedWarehouses, setExpandedWarehouses] = useState<Record<string, boolean>>({})
+  const [selectedFeedbackRequest, setSelectedFeedbackRequest] = useState<ProductAvailabilityRequestWithDetails | null>(null)
+
+  const isAgent = userRole === 'agent'
+  const isPurchaser = userRole === 'purchaser'
+  const canAccess = Boolean(userRole)
+
+  const visibleRequests = useMemo(() => requests, [requests])
+
+  const getRequestThumbnail = (request: ProductAvailabilityRequestWithDetails): string | null => {
+    const images = Array.isArray(request.request_images) ? request.request_images : []
+    if (images.length === 0) return null
+    return String(images[0])
+  }
+
+  const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
+    if (filter === 'new') return 'all'
+    if (filter === 'urgent') return 'urgent_open'
+    if (filter === 'normal_requests') return 'normal_pending'
+    if (filter === 'delayed') return 'delayed'
+    if (filter === 'completed') return 'completed'
+    return 'all'
+  }, [filter])
+
+  const refreshData = useCallback(async () => {
+    if (!userFriendlyId || !userRole) return
+    setIsLoading(true)
+    try {
+      const [requestsData, countData] = await Promise.all([
+        fetchProductAvailabilityRequests({
+          userRole,
+          userFriendlyId,
+          statusFilter: dataFilter,
+        }),
+        getProductAvailabilityCounts(userRole, userFriendlyId),
+      ])
+      setRequests(requestsData)
+      setCounts(countData)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to load product availability requests')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [dataFilter, userFriendlyId, userRole])
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login')
+      return
+    }
+    if (!authLoading && isAuthenticated && !canAccess) {
+      router.push('/products')
+      return
+    }
+    if (isAuthenticated && canAccess && userFriendlyId) {
+      void refreshData()
+    }
+  }, [authLoading, isAuthenticated, canAccess, userFriendlyId, router, refreshData])
+
+  const handleCreateImageChange = (files: FileList | null) => {
+    const selected = Array.from(files || [])
+    const next = [...createForm.images, ...selected].slice(0, 5)
+    setCreateForm((prev) => ({ ...prev, images: next }))
+  }
+
+  const handleResponseImageChange = (files: FileList | null) => {
+    const selected = Array.from(files || [])
+    const next = [...responseForm.images, ...selected].slice(0, 5)
+    setResponseForm((prev) => ({ ...prev, images: next }))
+  }
+
+  const handleCheckInventory = async () => {
+    setInventoryError('')
+    setIsCheckingInventory(true)
+    try {
+      const result = await lookupInventoryBySkuPrefix(createForm.sku)
+      setInventoryLookup(result)
+      const defaults: Record<string, boolean> = {}
+      result.warehouseGroups.forEach((group) => {
+        defaults[group.warehouseName] = false
+      })
+      setExpandedWarehouses(defaults)
+    } catch (err) {
+      console.error(err)
+      setInventoryError('Unable to fetch inventory right now. You can still submit this request.')
+      setInventoryLookup(null)
+    } finally {
+      setIsCheckingInventory(false)
+    }
+  }
+
+  const handleCreateRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userFriendlyId || !userRole) return
+    setError('')
+    setSuccess('')
+
+    if (createForm.markets.length === 0) {
+      setError('Please select at least one market.')
+      return
+    }
+    if (!createForm.resellerName.trim() || !createForm.productName.trim()) {
+      setError('Reseller name and product name are required.')
+      return
+    }
+    if (createForm.images.length === 0) {
+      setError('Please upload at least one picture.')
+      return
+    }
+    if (createForm.productStatus === 'already_listed' && !createForm.sku.trim()) {
+      setError('SKU is required when product status is Already Listed.')
+      return
+    }
+
+    setSavingRequest(true)
+    try {
+      const imageUrls = await uploadFilesToStorage(userFriendlyId, createForm.images)
+      await createProductAvailabilityRequest({
+        requestedByUserId: userFriendlyId,
+        requestedByRole: userRole,
+        productStatus: createForm.productStatus,
+        markets: createForm.markets,
+        resellerName: createForm.resellerName,
+        productName: createForm.productName,
+        sku: createForm.sku || null,
+        referenceLink: createForm.referenceLink || null,
+        priorityLevel: createForm.priorityLevel,
+        requestImages: imageUrls,
+        inventoryMatches: inventoryLookup
+          ? inventoryLookup.warehouseGroups.flatMap((g) =>
+              g.rows.map((r) => ({
+                warehouse_name: g.warehouseName,
+                sku: r.sku,
+                quantity: r.quantity,
+              }))
+            )
+          : [],
+      })
+
+      setSuccess('Product availability request created successfully.')
+      setCreateForm(initialCreateForm)
+      setInventoryLookup(null)
+      await refreshData()
+    } catch (err) {
+      console.error(err)
+      setError(err instanceof Error ? err.message : 'Failed to create request')
+    } finally {
+      setSavingRequest(false)
+    }
+  }
+
+  const openRespondForm = (requestId: string, assignmentId: string) => {
+    setSelectedAssignment({ requestId, assignmentId })
+    setResponseForm(initialResponseForm)
+  }
+
+  const handleSubmitResponse = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAssignment || !userFriendlyId) return
+    setError('')
+    setSuccess('')
+
+    if (
+      responseForm.availability !== 'not_available' &&
+      responseForm.stockStatus !== 'bulk_limited_both' &&
+      (!responseForm.singleUnitPrice || Number(responseForm.singleUnitPrice) < 0)
+    ) {
+      setError('Single unit price is required for this stock status.')
+      return
+    }
+    if (responseForm.availability !== 'not_available' && responseForm.images.length === 0) {
+      setError('Please upload at least one picture for response.')
+      return
+    }
+
+    setSavingResponse(true)
+    try {
+      const imageUrls = await uploadFilesToStorage(userFriendlyId, responseForm.images)
+      await submitProductAvailabilityResponse({
+        assignmentId: selectedAssignment.assignmentId,
+        requestId: selectedAssignment.requestId,
+        respondedByUserId: userFriendlyId,
+        availability: responseForm.availability,
+        stockStatus: responseForm.availability === 'not_available' ? 'on_demand' : responseForm.stockStatus,
+        singleUnitPrice:
+          responseForm.availability === 'not_available'
+            ? null
+            : responseForm.singleUnitPrice
+              ? Number(responseForm.singleUnitPrice)
+              : null,
+        bulkUnitPrice:
+          responseForm.availability !== 'not_available' &&
+          responseForm.stockStatus === 'bulk_limited_both' &&
+          responseForm.bulkUnitPrice
+            ? Number(responseForm.bulkUnitPrice)
+            : null,
+        responseImages: responseForm.availability === 'not_available' ? [] : imageUrls,
+        remarks: responseForm.availability === 'not_available' ? null : responseForm.remarks,
+      })
+      setSuccess('Response submitted successfully.')
+      setSelectedAssignment(null)
+      setResponseForm(initialResponseForm)
+      await refreshData()
+    } catch (err) {
+      console.error(err)
+      setError(err instanceof Error ? err.message : 'Failed to submit response')
+    } finally {
+      setSavingResponse(false)
+    }
+  }
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Product Availability Requests</h1>
+              <p className="text-sm text-gray-600 mt-1">Create and track market availability requests.</p>
+            </div>
+
+            {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
+            {success && <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{success}</div>}
+
+            <div className={`grid grid-cols-2 ${isAgent ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-3`}>
+              {isAgent && (
+                <button onClick={() => setFilter('new')} className={`rounded-xl p-3 text-left border ${filter === 'new' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-xs text-gray-500">New</div>
+                  <div className="text-xl font-bold">+</div>
+                </button>
+              )}
+              <button onClick={() => setFilter('urgent')} className={`rounded-xl p-3 text-left border ${filter === 'urgent' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-xs text-gray-500">Urgent Requests</div>
+                <div className="text-xl font-bold">{counts.urgent}</div>
+              </button>
+              <button onClick={() => setFilter('normal_requests')} className={`rounded-xl p-3 text-left border ${filter === 'normal_requests' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-xs text-gray-500">Normal Requests</div>
+                <div className="text-xl font-bold">{counts.normalRequests}</div>
+              </button>
+              <button onClick={() => setFilter('delayed')} className={`rounded-xl p-3 text-left border ${filter === 'delayed' ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-xs text-red-600">Delayed</div>
+                <div className="text-xl font-bold text-red-700">{counts.delayed}</div>
+              </button>
+              <button onClick={() => setFilter('completed')} className={`rounded-xl p-3 text-left border ${filter === 'completed' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-xs text-gray-500">Completed</div>
+                <div className="text-xl font-bold">{counts.completed}</div>
+              </button>
+              <button onClick={() => setFilter('all')} className={`rounded-xl p-3 text-left border ${filter === 'all' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-xs text-gray-500">All</div>
+                <div className="text-xl font-bold">{counts.all}</div>
+              </button>
+            </div>
+
+            {isAgent && filter === 'new' && (
+              <form onSubmit={handleCreateRequest} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">Create New Request</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Product Status</label>
+                    <select
+                      value={createForm.productStatus}
+                      onChange={(e) => setCreateForm((p) => ({ ...p, productStatus: e.target.value as CreateFormState['productStatus'] }))}
+                      className="w-full border rounded-lg px-3 py-2"
+                    >
+                      <option value="already_listed">Already Listed</option>
+                      <option value="not_listed">Not Listed</option>
+                      <option value="not_sure">Not Sure</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Query Type</label>
+                    <select
+                      value={createForm.priorityLevel}
+                      onChange={(e) => setCreateForm((p) => ({ ...p, priorityLevel: e.target.value as CreateFormState['priorityLevel'] }))}
+                      className="w-full border rounded-lg px-3 py-2"
+                    >
+                      <option value="urgent">Urgent Requests</option>
+                      <option value="normal">Normal Requests</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Markets *</label>
+                  <div className="flex flex-wrap gap-2">
+                    {MARKET_OPTIONS.map((market) => {
+                      const checked = createForm.markets.includes(market)
+                      return (
+                        <button
+                          key={market}
+                          type="button"
+                          onClick={() =>
+                            setCreateForm((p) => ({
+                              ...p,
+                              markets: checked ? p.markets.filter((m) => m !== market) : [...p.markets, market],
+                            }))
+                          }
+                          className={`px-3 py-1.5 rounded-full text-sm border ${checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                        >
+                          {market}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input className="border rounded-lg px-3 py-2" placeholder="Reseller Name *" value={createForm.resellerName} onChange={(e) => setCreateForm((p) => ({ ...p, resellerName: e.target.value }))} />
+                  <input className="border rounded-lg px-3 py-2" placeholder="Product Name *" value={createForm.productName} onChange={(e) => setCreateForm((p) => ({ ...p, productName: e.target.value }))} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    className="border rounded-lg px-3 py-2"
+                    placeholder={createForm.productStatus === 'already_listed' ? 'SKU *' : 'SKU (optional)'}
+                    value={createForm.sku}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, sku: e.target.value }))}
+                  />
+                  <input className="border rounded-lg px-3 py-2" placeholder="Reference Link (optional)" value={createForm.referenceLink} onChange={(e) => setCreateForm((p) => ({ ...p, referenceLink: e.target.value }))} />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCheckInventory}
+                    disabled={isCheckingInventory || !createForm.sku.trim()}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900 text-white text-sm disabled:opacity-50"
+                  >
+                    {isCheckingInventory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    Check Inventory
+                  </button>
+                  {inventoryError && <span className="text-sm text-amber-600">{inventoryError}</span>}
+                </div>
+
+                {inventoryLookup && (
+                  <div className="border rounded-lg p-3 bg-gray-50">
+                    <p className="text-sm text-gray-700 mb-2">
+                      Matched prefix: <span className="font-semibold">{inventoryLookup.matchedPrefix || 'N/A'}</span> | Results: <span className="font-semibold">{inventoryLookup.totalMatches}</span>
+                    </p>
+                    <div className="space-y-2 max-h-56 overflow-auto">
+                      {inventoryLookup.warehouseGroups.map((group) => (
+                        <div key={group.warehouseName} className="bg-white border rounded-md p-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedWarehouses((prev) => ({
+                                ...prev,
+                                [group.warehouseName]: !prev[group.warehouseName],
+                              }))
+                            }
+                            className="w-full flex items-center justify-between text-sm font-semibold text-left"
+                          >
+                            <span>{group.warehouseName} (Qty: {group.totalQuantity})</span>
+                            <span className="text-xs text-blue-600">
+                              {expandedWarehouses[group.warehouseName] ? 'Hide SKUs' : 'Show SKUs'}
+                            </span>
+                          </button>
+                          {expandedWarehouses[group.warehouseName] && (
+                            <div className="mt-2 max-h-28 overflow-y-auto border rounded p-2 bg-gray-50">
+                              <ul className="text-xs text-gray-700 space-y-1">
+                                {group.rows.map((row) => (
+                                  <li key={`${group.warehouseName}-${row.sku}-${row.variant_id ?? ''}`}>
+                                    {row.sku} ({row.quantity})
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Pictures * (max 5)</label>
+                  <input type="file" accept="image/*" multiple onChange={(e) => handleCreateImageChange(e.target.files)} />
+                  <div className="text-xs text-gray-500 mt-1">{createForm.images.length}/5 selected</div>
+                </div>
+
+                <button type="submit" disabled={savingRequest} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm disabled:opacity-50">
+                  {savingRequest ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </form>
+            )}
+
+            {isPurchaser && selectedAssignment && (
+              <form onSubmit={handleSubmitResponse} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">Submit Purchaser Response</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <select value={responseForm.availability} onChange={(e) => setResponseForm((p) => ({ ...p, availability: e.target.value as PurchaserResponseState['availability'] }))} className="border rounded-lg px-3 py-2">
+                    <option value="available">Available</option>
+                    <option value="not_available">Not Available</option>
+                    <option value="on_demand">On-Demand</option>
+                  </select>
+                  {responseForm.availability !== 'not_available' && (
+                    <select value={responseForm.stockStatus} onChange={(e) => setResponseForm((p) => ({ ...p, stockStatus: e.target.value as PurchaserResponseState['stockStatus'] }))} className="border rounded-lg px-3 py-2">
+                      <option value="limited">Limited Quantity</option>
+                      <option value="on_demand">On Demand</option>
+                      <option value="bulk_limited_both">Available in Bulk &amp; Single Unit</option>
+                    </select>
+                  )}
+                </div>
+                {responseForm.availability !== 'not_available' && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input
+                        className="border rounded-lg px-3 py-2"
+                        placeholder={
+                          responseForm.stockStatus === 'bulk_limited_both'
+                            ? 'Single Unit Price (optional)'
+                            : 'Single Unit Price *'
+                        }
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={responseForm.singleUnitPrice}
+                        onChange={(e) => setResponseForm((p) => ({ ...p, singleUnitPrice: e.target.value }))}
+                      />
+                      {responseForm.stockStatus === 'bulk_limited_both' && (
+                        <input
+                          className="border rounded-lg px-3 py-2"
+                          placeholder="Bulk Unit Price (optional)"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={responseForm.bulkUnitPrice}
+                          onChange={(e) => setResponseForm((p) => ({ ...p, bulkUnitPrice: e.target.value }))}
+                        />
+                      )}
+                    </div>
+                    <textarea className="border rounded-lg px-3 py-2 w-full" placeholder="Remarks (optional)" value={responseForm.remarks} onChange={(e) => setResponseForm((p) => ({ ...p, remarks: e.target.value }))} />
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Pictures * (max 5)</label>
+                      <input type="file" accept="image/*" multiple onChange={(e) => handleResponseImageChange(e.target.files)} />
+                      <div className="text-xs text-gray-500 mt-1">{responseForm.images.length}/5 selected</div>
+                    </div>
+                  </>
+                )}
+                <button type="submit" disabled={savingResponse} className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm disabled:opacity-50">
+                  {savingResponse ? 'Submitting...' : 'Submit Response'}
+                </button>
+              </form>
+            )}
+
+            {filter !== 'new' && (
+            <div
+              className="rounded-xl overflow-hidden border border-white/10"
+              style={{
+                background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px rgba(0,0,0,0.25)',
+              }}
+            >
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-white/5">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Product</th>
+                      {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reseller</th>}
+                      {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Markets</th>}
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Created</th>
+                      {isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Action</th>}
+                      {isAgent && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRequests.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-8 text-center text-white/60" colSpan={isPurchaser ? 4 : 6}>
+                          No requests found for this tab.
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleRequests.map((request) => {
+                        const created = new Date(request.created_at).toLocaleString()
+                        const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
+                        const totalAssignments = request.assignments.length
+                        const completedAssignments = request.assignments.filter((a) => a.assignment_status === 'completed').length
+                        const unassignedMarkets = request.assignments
+                          .filter((a) => !a.assigned_purchaser_user_id)
+                          .map((a) => a.market)
+                        return (
+                          <tr key={request.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-3">
+                                {getRequestThumbnail(request) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setViewerImageUrl(getRequestThumbnail(request))
+                                      setIsImageViewerOpen(true)
+                                    }}
+                                    className="hover:opacity-80 transition-opacity"
+                                  >
+                                    <img
+                                      src={getRequestThumbnail(request) || ''}
+                                      alt={request.product_name}
+                                      className="w-10 h-10 rounded-lg object-cover"
+                                    />
+                                  </button>
+                                ) : null}
+                                <div>
+                                  <div className="font-medium text-white">{titleCaseWords(request.product_name)}</div>
+                                  {request.sku && (
+                                    <div className="text-xs text-white/60">
+                                      SKU: {request.sku.toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {unassignedMarkets.length > 0 && (
+                                <div className="text-xs text-amber-700 mt-1">
+                                  No purchaser mapped: {unassignedMarkets.join(', ')}
+                                </div>
+                              )}
+                            </td>
+                            {!isPurchaser && (
+                              <td className="px-3 py-2 text-white">{titleCaseWords(request.reseller_name)}</td>
+                            )}
+                            {!isPurchaser && (
+                              <td className="px-3 py-2 text-white">{request.markets.join(', ')}</td>
+                            )}
+                            <td className="px-3 py-2">
+                              <span className={`px-2 py-1 rounded-full text-xs ${request.derived_status === 'delayed' ? 'bg-red-100 text-red-700' : request.derived_status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {formatDerivedStatusLabel(request.derived_status)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-white/80">{created}</td>
+                            {isPurchaser && (
+                              <td className="px-3 py-2">
+                                {canRespondAssignments.length > 0 ? (
+                                  <button
+                                    onClick={() => openRespondForm(request.id, canRespondAssignments[0].id)}
+                                    className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs"
+                                  >
+                                    Respond
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-white/60">No pending assignment</span>
+                                )}
+                              </td>
+                            )}
+                            {isAgent && (
+                              <td className="px-3 py-2">
+                                {request.derived_status === 'completed' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedFeedbackRequest(request)}
+                                    className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs"
+                                  >
+                                    See Feedback
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-white/60">-</span>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            )}
+
+            {isImageViewerOpen && viewerImageUrl && (
+              <div
+                className="fixed inset-0 bg-black/80 z-[90] flex items-center justify-center p-4"
+                onClick={() => {
+                  setIsImageViewerOpen(false)
+                  setViewerImageUrl(null)
+                }}
+              >
+                <div className="relative max-w-3xl w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsImageViewerOpen(false)
+                      setViewerImageUrl(null)
+                    }}
+                    className="absolute -top-10 right-0 p-2 text-white/80 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <img src={viewerImageUrl} alt="Product preview" className="max-h-[80vh] w-auto rounded-xl object-contain" />
+                </div>
+              </div>
+            )}
+
+            {selectedFeedbackRequest && (
+              <div
+                className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+                onClick={() => setSelectedFeedbackRequest(null)}
+              >
+                <div
+                  className="w-full max-w-4xl rounded-xl border border-white/10 max-h-[85vh] overflow-y-auto"
+                  style={{
+                    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Purchaser Feedback</h3>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFeedbackRequest(null)}
+                      className="p-1 text-white/70 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <div className="text-white font-medium">{selectedFeedbackRequest.product_name}</div>
+                    {selectedFeedbackRequest.assignments.map((assignment) => {
+                      const response = selectedFeedbackRequest.responsesByAssignmentId[assignment.id]
+                      return (
+                        <div key={assignment.id} className="border border-white/10 rounded-lg p-3 bg-white/5">
+                          <div className="text-sm text-white/80 mb-2">Market: {assignment.market}</div>
+                          {!response ? (
+                            <div className="text-xs text-white/60">No feedback submitted for this market.</div>
+                          ) : (
+                            <div className="space-y-2 text-sm">
+                              {Array.isArray(response.response_images) && response.response_images.length > 0 && (
+                                <div>
+                                  <div className="text-white/90 mb-1">Pictures:</div>
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {response.response_images.map((img, idx) => (
+                                      <button
+                                        type="button"
+                                        key={`${assignment.id}-${idx}`}
+                                        onClick={() => {
+                                          setViewerImageUrl(String(img))
+                                          setIsImageViewerOpen(true)
+                                        }}
+                                        className="hover:opacity-80"
+                                      >
+                                        <img src={String(img)} alt="Feedback" className="w-20 h-20 rounded object-cover" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="text-white/90">Availability: <span className="text-white">{formatAvailabilityLabel(response.availability)}</span></div>
+                              <div className="text-white/90">Stock Status: <span className="text-white">{formatStockStatusLabel(response.stock_status)}</span></div>
+                              <div className="text-white/90">Single Unit Price: <span className="text-white">{response.single_unit_price ?? 'N/A'}</span></div>
+                              <div className="text-white/90">Bulk Unit Price: <span className="text-white">{response.bulk_unit_price ?? 'N/A'}</span></div>
+                              <div className="text-white/90">Remarks: <span className="text-white">{response.remarks || 'N/A'}</span></div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+

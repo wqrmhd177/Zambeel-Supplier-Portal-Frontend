@@ -425,7 +425,7 @@ export default function CreateSupplierPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <div className="max-w-4xl mx-auto">
             {/* Header */}
             <div className="mb-8">
@@ -442,7 +442,7 @@ export default function CreateSupplierPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="bg-white border border-gray-300 rounded-2xl p-8">
+            <form onSubmit={handleSubmit} className="bg-white border border-gray-300 rounded-2xl p-4 sm:p-6 lg:p-8">
               {error && (
                 <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
                   <p className="text-sm text-red-600 font-medium">{error}</p>

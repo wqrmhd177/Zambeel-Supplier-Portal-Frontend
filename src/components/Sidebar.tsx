@@ -1,22 +1,23 @@
 'use client'
 
-import { Package, LayoutDashboard, ShoppingCart, LogOut, List, Users, CheckCircle, Settings, MessageCircle, Phone } from 'lucide-react'
+import { Package, LayoutDashboard, ShoppingCart, LogOut, List, Users, CheckCircle, Settings, MessageCircle, Phone, X, ClipboardList } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { clearSessionCookie } from '@/lib/authCookie'
 import { getPendingListingsCount } from '@/lib/productHelpers'
 import { getPendingApprovalsCount } from '@/lib/priceHistoryHelpers'
+import { getPendingProductAvailabilityCount } from '@/lib/productAvailabilityHelpers'
 
 const supplierMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
+  { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 const agentMenuItems = [
-  { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
-  { icon: CheckCircle, label: 'Approvals', path: '/approvals', showPendingCount: true as const },
+  { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 const adminMenuItems = [
@@ -25,6 +26,7 @@ const adminMenuItems = [
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
+  { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
   { icon: Settings, label: 'User Settings', path: '/settings/users' },
 ]
 
@@ -33,31 +35,42 @@ const purchaserMenuItems = [
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
+  { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 export default function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
-  const { userRole, isLoading } = useAuth()
+  const { userRole, isLoading, userFriendlyId } = useAuth()
   const [activeItem, setActiveItem] = useState('Dashboard')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [listingPendingCount, setListingPendingCount] = useState<number | null>(null)
   const [approvalsPendingCount, setApprovalsPendingCount] = useState<number | null>(null)
+  const [availabilityPendingCount, setAvailabilityPendingCount] = useState<number | null>(null)
 
   // Fetch pending counts for Listings and Approvals when user is agent or admin
   useEffect(() => {
     let isMounted = true
     const loadCounts = async () => {
       if (!userRole) return
-      if (userRole === 'agent' || userRole === 'admin') {
+      if (userRole === 'admin') {
         // For the Agent screen, show only "New Products" count in the left panel.
         // (Matches Listings > New Products tab)
         const listings = await getPendingListingsCount()
         if (isMounted) setListingPendingCount(listings)
       }
       if (userRole === 'agent') {
+        if (isMounted) {
+          setListingPendingCount(null)
+          setApprovalsPendingCount(null)
+        }
+      } else if (userRole === 'admin') {
         const approvals = await getPendingApprovalsCount()
         if (isMounted) setApprovalsPendingCount(approvals)
+      }
+      if (userFriendlyId) {
+        const availability = await getPendingProductAvailabilityCount(userRole, userFriendlyId)
+        if (isMounted) setAvailabilityPendingCount(availability)
       }
     }
 
@@ -68,7 +81,7 @@ export default function Sidebar() {
       isMounted = false
       clearInterval(interval)
     }
-  }, [userRole, pathname])
+  }, [userRole, userFriendlyId, pathname])
 
   // Get menu items based on user role
   const getMenuItems = () => {
@@ -93,8 +106,30 @@ export default function Sidebar() {
     }
   }, [pathname, menuItems])
 
+  useEffect(() => {
+    const openMobileMenu = () => setIsMobileMenuOpen(true)
+    window.addEventListener('open-mobile-sidebar', openMobileMenu as EventListener)
+    return () => {
+      window.removeEventListener('open-mobile-sidebar', openMobileMenu as EventListener)
+    }
+  }, [])
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [isMobileMenuOpen])
+
   const handleMenuClick = (label: string, path: string) => {
     setActiveItem(label)
+    setIsMobileMenuOpen(false)
     router.push(path)
   }
 
@@ -110,37 +145,43 @@ export default function Sidebar() {
     localStorage.removeItem('userRole')
     
     // Redirect to login page
+    setIsMobileMenuOpen(false)
     router.push('/login')
   }
 
-  return (
-    <div
-      className="hidden lg:flex w-64 flex-col relative"
-      style={{
-        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
-        boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.04), 8px 0 24px rgba(0,0,0,0.25)',
-        borderRight: '1px solid rgba(0,0,0,0.3)',
-      }}
-    >
+  const renderSidebarContent = (isMobile: boolean) => (
+    <>
       {/* Logo */}
       <div className="p-6 border-b border-white/10 relative" style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.2)' }}>
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(145deg, rgba(124,58,237,0.4) 0%, rgba(79,70,229,0.2) 100%)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 6px rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
-          >
-            <Package className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{
+                background: 'linear-gradient(145deg, rgba(124,58,237,0.4) 0%, rgba(79,70,229,0.2) 100%)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 6px rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              <Package className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-lg sm:text-xl font-bold text-white drop-shadow-sm truncate">Zambeel Supplier Portal</span>
           </div>
-          <span className="text-xl font-bold text-white drop-shadow-sm">Zambeel Supplier Portal</span>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-2 rounded-lg text-white/85 hover:text-white hover:bg-white/10 transition-all"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Menu Items */}
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 p-4 overflow-y-auto">
         {isLoading ? (
           <>
             {[1, 2, 3].map((i) => (
@@ -156,7 +197,13 @@ export default function Sidebar() {
             const Icon = item.icon
             const isActive = activeItem === item.label
             const showCount = 'showPendingCount' in item && item.showPendingCount
-            const count = item.label === 'Listings' ? listingPendingCount : item.label === 'Approvals' ? approvalsPendingCount : null
+            const count = item.label === 'Listings'
+              ? listingPendingCount
+              : item.label === 'Approvals'
+                ? approvalsPendingCount
+                : item.label === 'Product Availability'
+                  ? availabilityPendingCount
+                  : null
             const displayLabel = showCount && count !== null ? `${item.label} (${count})` : item.label
 
             return (
@@ -214,7 +261,7 @@ export default function Sidebar() {
 
       {/* Logout */}
       <div className="p-4 border-t border-white/10 relative" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
-        <button 
+        <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-white/85 hover:text-white hover:bg-white/8 transition-all"
         >
@@ -222,7 +269,43 @@ export default function Sidebar() {
           <span className="font-medium">Logout</span>
         </button>
       </div>
-    </div>
+    </>
+  )
+
+  return (
+    <>
+      <div
+        className="hidden lg:flex w-64 flex-col relative"
+        style={{
+          background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+          boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.04), 8px 0 24px rgba(0,0,0,0.25)',
+          borderRight: '1px solid rgba(0,0,0,0.3)',
+        }}
+      >
+        {renderSidebarContent(false)}
+      </div>
+
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="Close mobile menu overlay"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <aside
+            className="absolute left-0 top-0 h-full w-[88vw] max-w-[320px] flex flex-col"
+            style={{
+              background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+              boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.04), 8px 0 24px rgba(0,0,0,0.35)',
+              borderRight: '1px solid rgba(0,0,0,0.3)',
+            }}
+          >
+            {renderSidebarContent(true)}
+          </aside>
+        </div>
+      )}
+    </>
   )
 }
 

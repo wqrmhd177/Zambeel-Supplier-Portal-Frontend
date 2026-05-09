@@ -69,6 +69,30 @@ type RequestWithProduct = (
     })
 )
 
+const VARIANT_DIMENSION_ORDER = [
+  'Battery Capacity',
+  'Charger Type',
+  'Material',
+  'Sizes',
+  'Bundle',
+  'Weight',
+  'Power Output',
+  'Pack SIZE',
+  'Color',
+  'Flavours',
+]
+
+function sortVariantOptionNames(optionNames: string[]): string[] {
+  return [...optionNames].sort((a, b) => {
+    const aIdx = VARIANT_DIMENSION_ORDER.indexOf(a)
+    const bIdx = VARIANT_DIMENSION_ORDER.indexOf(b)
+    const aOrder = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx
+    const bOrder = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return a.localeCompare(b)
+  })
+}
+
 export default function ApprovalsPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } = useAuth()
@@ -316,7 +340,9 @@ export default function ApprovalsPage() {
       return 'All Variants'
     }
     if (request.option_values) {
-      const optionParts = Object.values(request.option_values).filter(Boolean)
+      const optionParts = sortVariantOptionNames(Object.keys(request.option_values))
+        .map((key) => request.option_values?.[key])
+        .filter(Boolean)
       if (optionParts.length > 0) return optionParts.join(' / ')
     }
     const parts = []
@@ -378,7 +404,7 @@ export default function ApprovalsPage() {
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
@@ -393,7 +419,7 @@ export default function ApprovalsPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
             {/* Header */}
             <div className="mb-6">
@@ -406,12 +432,12 @@ export default function ApprovalsPage() {
             </div>
 
             {/* Filters */}
-            <div className="mb-6 flex items-center gap-4">
+            <div className="mb-6 flex flex-wrap items-center gap-3">
               <Filter className="w-5 h-5 text-gray-500" />
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setFilter('pending')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     filter === 'pending'
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -421,7 +447,7 @@ export default function ApprovalsPage() {
                 </button>
                 <button
                   onClick={() => setFilter('approved')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     filter === 'approved'
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -431,7 +457,7 @@ export default function ApprovalsPage() {
                 </button>
                 <button
                   onClick={() => setFilter('rejected')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     filter === 'rejected'
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -441,7 +467,7 @@ export default function ApprovalsPage() {
                 </button>
                 <button
                   onClick={() => setFilter('all')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     filter === 'all'
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -475,7 +501,48 @@ export default function ApprovalsPage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="md:hidden divide-y divide-gray-200">
+                  {requests.map((request) => (
+                    <div key={`mobile-${request.id}`} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{request.product_title || 'Unknown Product'}</p>
+                          <p className="text-xs text-gray-500">{formatVariant(request)}</p>
+                        </div>
+                        <div className="flex justify-center">
+                          {getStatusBadge(request.status)}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Type: {request.request_type === 'price' ? 'Price' : request.request_type === 'status' ? 'Status' : 'Price + Status'}
+                      </p>
+                      <p className="text-xs text-gray-600">{formatDate(request.created_at)}</p>
+                      <p className="text-xs text-gray-600">
+                        Requested By: {requesterNameById.get(String(request.created_by_supplier_id ?? '')) || request.created_by_supplier_id || 'Unknown'}
+                      </p>
+                      {filter === 'pending' && (
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => handleApprove(request)}
+                            disabled={processingId === request.id}
+                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {processingId === request.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Approve'}
+                          </button>
+                          <button
+                            onClick={() => handleReject(request)}
+                            disabled={processingId === request.id}
+                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {processingId === request.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Reject'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -643,6 +710,7 @@ export default function ApprovalsPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
           </div>
