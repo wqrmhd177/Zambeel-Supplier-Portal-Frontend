@@ -1,60 +1,40 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  ShoppingCart, 
-  Search, 
+import {
+  ShoppingCart,
+  Search,
   Filter,
   Download,
   Calendar,
   Phone,
   MapPin,
-  Package,
   Banknote,
   CheckCircle,
   XCircle,
   Clock,
   Truck,
-  RefreshCw
+  RefreshCw,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
-import { getCurrencyForUserId, getCurrenciesForUserIds } from '@/lib/currencyHelpers'
-
-interface Order {
-  id: number
-  order_id: number
-  vendor_id: string
-  order_date: string
-  phone: string
-  country: string
-  title: string | null
-  sku: string
-  total_payable: number
-  status: string
-  supplier_selling_price?: number  // Historical supplier selling price (stored by backend)
-  supplier_price?: number  // Mapped from supplier_selling_price for display
-}
+import type { MetabaseOrder } from '@/app/api/orders/route'
 
 export default function OrdersPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading, userRole, userId, userFriendlyId } = useAuth()
-  const [orders, setOrders] = useState<Order[]>([])
-  const [allOrders, setAllOrders] = useState<Order[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [filterSupplier, setFilterSupplier] = useState<string>('all')
-  const [suppliers, setSuppliers] = useState<SupplierInfo[]>([])
-  const [supplierMap, setSupplierMap] = useState<Map<string, SupplierInfo>>(new Map())
-  const [currentUserCurrency, setCurrentUserCurrency] = useState<string>('USD')
-  const [currencyByVendorId, setCurrencyByVendorId] = useState<Map<string, string>>(new Map())
+  const { isAuthenticated, isLoading: authLoading, userRole } = useAuth()
 
-  // Stats
+  const [allOrders, setAllOrders] = useState<MetabaseOrder[]>([])
+  const [orders, setOrders] = useState<MetabaseOrder[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterCountry, setFilterCountry] = useState('all')
+
   const [stats, setStats] = useState({
     total: 0,
     delivered: 0,
@@ -64,338 +44,140 @@ export default function OrdersPage() {
   })
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login')
-      return
-    }
+    if (!authLoading && !isAuthenticated) router.push('/login')
+  }, [authLoading, isAuthenticated, router])
 
-    if (isAuthenticated) {
-      fetchOrders()
-    }
-  }, [isAuthenticated, authLoading, router])
-
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setIsLoading(true)
+    setFetchError('')
     try {
-      let ordersData: Order[] = []
-
-      if (userRole === 'purchaser' && userId) {
-        // For purchasers: fetch orders from their suppliers
-        const supplierList = await fetchSuppliersForPurchaser(userId)
-        setSuppliers(supplierList)
-        
-        const supplierIds = supplierList.map(s => s.user_id).filter(Boolean)
-        
-        if (supplierIds.length > 0) {
-            const { data, error } = await supabase
-              .from('orders')
-              .select('*')
-              .in('vendor_id', supplierIds)
-              .order('order_date', { ascending: false })
-
-            if (error) {
-              console.error('Error fetching orders:', error)
-              setOrders([])
-              setAllOrders([])
-              setIsLoading(false)
-              return
-            }
-
-            ordersData = data || []
-          }
-
-        // Create supplier map
-        const map = new Map<string, SupplierInfo>()
-        supplierList.forEach(s => {
-          if (s.user_id) {
-            map.set(s.user_id, s)
-          }
-        })
-        setSupplierMap(map)
-      } else if (userRole === 'admin') {
-        // For admin: fetch all orders
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .order('order_date', { ascending: false })
-
-        if (error) {
-          console.error('Error fetching orders:', error)
-          setOrders([])
-          setAllOrders([])
-          setIsLoading(false)
-          return
-        }
-
-        ordersData = data || []
-
-        // Fetch all suppliers for filter
-        const { data: supplierData, error: supplierError } = await supabase
-          .from('users')
-          .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
-          .eq('role', 'supplier')
-          .order('created_at', { ascending: false })
-
-        if (!supplierError && supplierData) {
-          setSuppliers(supplierData)
-          const map = new Map<string, SupplierInfo>()
-          supplierData.forEach(s => {
-            if (s.user_id) {
-              map.set(s.user_id, s)
-            }
-          })
-          setSupplierMap(map)
-        }
-      } else {
-        // For suppliers: fetch their own orders
-        if (!userFriendlyId) {
-          setIsLoading(false)
-          return
-        }
-
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('vendor_id', userFriendlyId)
-          .order('order_date', { ascending: false })
-
-        if (error) {
-          console.error('Error fetching orders:', error)
-          setOrders([])
-          setAllOrders([])
-          setIsLoading(false)
-          return
-        }
-
-        ordersData = data || []
-      }
-
-      // Map supplier_selling_price to supplier_price for display
-      const ordersWithPrices = ordersData.map(order => ({
-        ...order,
-        supplier_price: order.supplier_selling_price  // Use backend-stored historical price
-      }))
-
-      setAllOrders(ordersWithPrices)
-      applyFilters(ordersWithPrices)
-      calculateStats(ordersWithPrices)
-
-      // Currency: current user when supplier, per-vendor when purchaser/admin
-      if (userRole === 'supplier') {
-        const id = userFriendlyId || userId
-        if (id) {
-          const currency = await getCurrencyForUserId(id)
-          setCurrentUserCurrency(currency)
-        }
-      } else if ((userRole === 'purchaser' || userRole === 'admin') && ordersWithPrices.length > 0) {
-        const vendorIds = Array.from(new Set(ordersWithPrices.map((o) => o.vendor_id).filter(Boolean)))
-        const map = await getCurrenciesForUserIds(vendorIds)
-        setCurrencyByVendorId(map)
-      }
+      const res = await fetch('/api/orders')
+      if (!res.ok) throw new Error('Failed to fetch orders')
+      const json = await res.json() as { orders: MetabaseOrder[] }
+      const rows = json.orders ?? []
+      setAllOrders(rows)
+      applyFilters(rows, searchQuery, filterStatus, filterCountry)
+      calculateStats(rows)
     } catch (err) {
-      console.error('Unexpected error:', err)
-      setOrders([])
-      setAllOrders([])
+      console.error(err)
+      setFetchError('Unable to load orders right now. Please refresh and try again.')
     } finally {
       setIsLoading(false)
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  const applyFilters = (ordersToFilter: Order[] = allOrders) => {
-    let filtered = [...ordersToFilter]
+  useEffect(() => {
+    if (isAuthenticated) fetchOrders()
+  }, [isAuthenticated, fetchOrders])
 
-    // Apply supplier filter (for purchasers and admin)
-    if ((userRole === 'purchaser' || userRole === 'admin') && filterSupplier !== 'all') {
-      filtered = filtered.filter(o => o.vendor_id === filterSupplier)
+  const applyFilters = (
+    source: MetabaseOrder[],
+    search: string,
+    status: string,
+    country: string
+  ) => {
+    let filtered = [...source]
+
+    if (status !== 'all') {
+      filtered = filtered.filter(
+        (o) => o.status?.toLowerCase().includes(status.toLowerCase())
+      )
     }
 
-    // Apply status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(o => o.status?.toLowerCase() === filterStatus.toLowerCase())
+    if (country !== 'all') {
+      filtered = filtered.filter(
+        (o) => o.country?.toLowerCase() === country.toLowerCase()
+      )
     }
 
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(order => {
-        return (
-          order.order_id?.toString().includes(query) ||
-          order.sku?.toLowerCase().includes(query) ||
-          order.title?.toLowerCase().includes(query) ||
-          order.phone?.toLowerCase().includes(query) ||
-          order.country?.toLowerCase().includes(query)
-        )
-      })
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      filtered = filtered.filter(
+        (o) =>
+          o.order_number?.toLowerCase().includes(q) ||
+          o.sku?.toLowerCase().includes(q) ||
+          o.title?.toLowerCase().includes(q) ||
+          o.full_name?.toLowerCase().includes(q) ||
+          o.phone?.toLowerCase().includes(q) ||
+          o.city?.toLowerCase().includes(q) ||
+          o.country?.toLowerCase().includes(q) ||
+          o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
+          o.Courier_tracking_id?.toLowerCase().includes(q)
+      )
     }
 
     setOrders(filtered)
   }
 
   useEffect(() => {
-    if (allOrders.length > 0 || orders.length > 0) {
-      applyFilters()
-    }
-  }, [filterStatus, filterSupplier, searchQuery])
+    applyFilters(allOrders, searchQuery, filterStatus, filterCountry)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, filterStatus, filterCountry, allOrders])
 
-  const calculateStats = (ordersData: Order[]) => {
-    const total = ordersData.length
-    let delivered = 0
-    let pending = 0
-    let returned = 0
-    let totalRevenue = 0
-
-    ordersData.forEach(order => {
-      const status = order.status?.toLowerCase() || ''
-      if (status.includes('delivered')) {
-        delivered++
-        // Only use supplier_price (no fallback to total_payable)
-        if (order.supplier_price !== undefined && order.supplier_price !== null) {
-          totalRevenue += Number(order.supplier_price)
-        }
-      } else if (status.includes('return')) {
-        returned++
-      } else {
-        pending++
-      }
+  const calculateStats = (rows: MetabaseOrder[]) => {
+    let delivered = 0, pending = 0, returned = 0, totalRevenue = 0
+    rows.forEach((o) => {
+      const s = o.status?.toLowerCase() || ''
+      if (s.includes('delivered')) { delivered++; totalRevenue += Number(o.total_payable || 0) }
+      else if (s.includes('return')) returned++
+      else pending++
     })
-
-    setStats({
-      total,
-      delivered,
-      pending,
-      returned,
-      totalRevenue,
-    })
+    setStats({ total: rows.length, delivered, pending, returned, totalRevenue })
   }
 
   const getStatusBadge = (status: string) => {
-    const statusLower = status?.toLowerCase() || ''
-    
-    if (statusLower.includes('delivered')) {
-      return {
-        icon: CheckCircle,
-        className: 'bg-green-100 text-green-800 border-green-200',
-        label: status
-      }
-    } else if (statusLower.includes('return')) {
-      return {
-        icon: XCircle,
-        className: 'bg-red-100 text-red-800 border-red-200',
-        label: status
-      }
-    } else if (statusLower.includes('shipped') || statusLower.includes('dispatch')) {
-      return {
-        icon: Truck,
-        className: 'bg-blue-100 text-blue-800 border-blue-200',
-        label: status
-      }
-    } else {
-      return {
-        icon: Clock,
-        className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        label: status
-      }
-    }
+    const s = status?.toLowerCase() || ''
+    if (s.includes('delivered'))
+      return { icon: CheckCircle, className: 'bg-green-100 text-green-800 border-green-200', label: status }
+    if (s.includes('return'))
+      return { icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200', label: status }
+    if (s.includes('shipped') || s.includes('dispatch') || s.includes('transit'))
+      return { icon: Truck, className: 'bg-blue-100 text-blue-800 border-blue-200', label: status }
+    return { icon: Clock, className: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: status }
   }
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A'
+  const fmt = (d: string | null | undefined) => {
+    if (!d) return '—'
     try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      return new Date(d).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric',
       })
-    } catch {
-      return dateString
-    }
+    } catch { return d }
   }
 
-  const formatDateForCSV = (dateString: string) => {
-    if (!dateString) return ''
-    try {
-      const date = new Date(dateString)
-      return date.toISOString()
-    } catch {
-      return dateString
-    }
-  }
+  const uniqueCountries = Array.from(new Set(allOrders.map((o) => o.country).filter(Boolean))).sort()
 
   const exportToCSV = () => {
-    if (orders.length === 0) {
-      alert('No orders to export')
-      return
-    }
-
-    // Define CSV headers
+    if (orders.length === 0) return
     const headers = [
-      'Order ID',
-      ...(userRole === 'purchaser' || userRole === 'admin' ? ['Supplier'] : []),
-      'Date',
-      'Product Title',
-      'SKU',
-      'Phone',
-      'Country',
-      'Selling Price',
-      'Status'
+      'Order #', 'Customer', 'Phone', 'City', 'Country',
+      'Product', 'SKU', 'Qty', 'Total Payable',
+      'Zambeel Tracking', 'Courier Tracking',
+      'Status', 'Substatus', 'Tag',
+      'Order Date', 'Shipment Date', 'Delivered Date',
+      'Platform', 'Vendor ID',
     ]
-
-    // Convert orders to CSV rows
-    const csvRows = [
-      headers.join(','),
-      ...orders.map(order => {
-        const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') 
-          ? supplierMap.get(order.vendor_id) 
-          : null
-        const supplierName = supplierInfo 
-          ? (supplierInfo.shop_name_on_zambeel || supplierInfo.email || 'Unknown')
-          : ''
-
-        // Escape values that contain commas, quotes, or newlines
-        const escapeCSV = (value: any) => {
-          if (value === null || value === undefined) return ''
-          const stringValue = String(value)
-          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-            return `"${stringValue.replace(/"/g, '""')}"`
-          }
-          return stringValue
-        }
-
-        return [
-          escapeCSV(order.order_id),
-          ...(userRole === 'purchaser' || userRole === 'admin' ? [escapeCSV(supplierName)] : []),
-          escapeCSV(formatDateForCSV(order.order_date)),
-          escapeCSV(order.title || ''),
-          escapeCSV(order.sku),
-          escapeCSV(order.phone),
-          escapeCSV(order.country),
-          escapeCSV(order.supplier_price ?? 'N/A'),
-          escapeCSV(order.status || '')
-        ].join(',')
-      })
-    ]
-
-    // Create CSV content
-    const csvContent = csvRows.join('\n')
-
-    // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    
-    link.setAttribute('href', url)
-    link.setAttribute('download', `orders_${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    URL.revokeObjectURL(url)
+    const esc = (v: any) => {
+      if (v === null || v === undefined) return ''
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = orders.map((o) => [
+      esc(o.order_number), esc(o.full_name), esc(o.phone), esc(o.city), esc(o.country),
+      esc(o.title), esc(o.sku), esc(o.quantity), esc(o.total_payable),
+      esc(o.System_gen_tracking_id_removed), esc(o.Courier_tracking_id),
+      esc(o.status), esc(o.substatus), esc(o.tag),
+      esc(o.Order_date), esc(o.shipment_date), esc(o.delivered_date),
+      esc(o.PLATFORM), esc(o.vendor_id),
+    ].join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `orders_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
   }
 
   if (authLoading || isLoading) {
@@ -404,328 +186,207 @@ export default function OrdersPage() {
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading orders...</p>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="mt-4 text-gray-600">Loading orders…</p>
           </div>
         </div>
       </div>
     )
   }
 
-  if (!isAuthenticated) {
-    return null
-  }
+  if (!isAuthenticated) return null
 
   return (
-    <div className="flex h-screen bg-gray-100 transition-colors">
+    <div className="flex h-screen bg-gray-100">
       <Sidebar />
-      
       <div className="flex-1 overflow-auto">
         <Header />
-        
         <main className="p-4 sm:p-6 lg:p-8">
-          {/* Header Section */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
+
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Orders</h2>
-              <p className="text-gray-600">View and manage your orders</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Orders</h2>
+              <p className="text-gray-600 text-sm">Live data from Metabase</p>
             </div>
-            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2 sm:gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={exportToCSV}
                 disabled={orders.length === 0}
-                className="w-full sm:w-auto justify-center px-4 sm:px-6 py-3 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2.5 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50"
               >
-                <Download className="w-5 h-5" />
-                Export CSV
+                <Download className="w-4 h-4" />Export CSV
               </button>
               <button
                 onClick={fetchOrders}
-                className="w-full sm:w-auto justify-center px-4 sm:px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
               >
-                <RefreshCw className="w-5 h-5" />
-                Refresh
+                <RefreshCw className="w-4 h-4" />Refresh
               </button>
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-gray-600 text-sm mb-1">Total Orders</p>
-                  <h3 className="text-3xl font-bold text-gray-900">{stats.total}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
-                  <ShoppingCart className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </div>
+          {fetchError && (
+            <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm mb-4">{fetchError}</div>
+          )}
 
-            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-gray-600 text-sm mb-1">Delivered</p>
-                  <h3 className="text-3xl font-bold text-gray-900">{stats.delivered}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-white" />
+          {/* Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            {[
+              { label: 'Total', value: stats.total, icon: ShoppingCart, gradient: 'from-cyan-500 to-blue-500' },
+              { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
+              { label: 'Pending', value: stats.pending, icon: Clock, gradient: 'from-yellow-500 to-orange-500' },
+              { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
+              { label: 'Revenue (Delivered)', value: `${stats.totalRevenue.toLocaleString()}`, icon: Banknote, gradient: 'from-purple-500 to-pink-500' },
+            ].map(({ label, value, icon: Icon, gradient }) => (
+              <div key={label} className="bg-white border border-gray-200 rounded-2xl p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-gray-500 text-xs mb-1">{label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{value}</p>
+                  </div>
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
+          </div>
 
-            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-gray-600 text-sm mb-1">Pending</p>
-                  <h3 className="text-3xl font-bold text-gray-900">{stats.pending}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-white" />
-                </div>
-              </div>
+          {/* Filters */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5 flex flex-col md:flex-row gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search order #, SKU, name, phone, tracking…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
             </div>
-
-            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-gray-600 text-sm mb-1">Returned</p>
-                  <h3 className="text-3xl font-bold text-gray-900">{stats.returned}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center">
-                  <XCircle className="w-6 h-6 text-white" />
-                </div>
-              </div>
+            <div className="relative">
+              <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
+              <select
+                value={filterCountry}
+                onChange={(e) => setFilterCountry(e.target.value)}
+                className="pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="all">All Countries</option>
+                {uniqueCountries.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
-
-            <div className="bg-white border border-gray-300 rounded-2xl p-6 hover:border-gray-400 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-gray-600 text-sm mb-1">Total Revenue</p>
-                  <h3 className="text-3xl font-bold text-gray-900">
-                    {userRole === 'supplier' ? currentUserCurrency : (currencyByVendorId.size > 0 ? Array.from(currencyByVendorId.values())[0] : 'USD')} {stats.totalRevenue.toLocaleString()}
-                    {(userRole === 'purchaser' || userRole === 'admin') && currencyByVendorId.size > 1 && (
-                      <span className="text-sm font-normal text-gray-500 ml-1">(mixed currencies)</span>
-                    )}
-                  </h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                  <Banknote className="w-6 h-6 text-white" />
-                </div>
-              </div>
+            <div className="relative">
+              <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="all">All Status</option>
+                <option value="delivered">Delivered</option>
+                <option value="shipped">Shipped</option>
+                <option value="return">Return</option>
+                <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
           </div>
 
-          {/* Search and Filter Bar */}
-          <div className="bg-white border border-gray-300 rounded-2xl p-6 mb-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search by order ID, SKU, title, phone, or country..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400"
-                />
-              </div>
-              {(userRole === 'purchaser' || userRole === 'admin') && suppliers.length > 0 && (
-                <div className="relative">
-                  <Filter className="absolute left-4 top-3.5 text-gray-400" size={20} />
-                  <select
-                    value={filterSupplier}
-                    onChange={(e) => setFilterSupplier(e.target.value)}
-                    className="pl-12 pr-10 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none appearance-none cursor-pointer"
-                  >
-                    <option value="all">All Suppliers</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.user_id} value={supplier.user_id}>
-                        {supplier.shop_name_on_zambeel || supplier.email}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="relative">
-                <Filter className="absolute left-4 top-3.5 text-gray-400" size={20} />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="pl-12 pr-10 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none appearance-none cursor-pointer"
-                >
-                  <option value="all">All Status</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="pending">Pending</option>
-                  <option value="return">Return</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Orders Table */}
-          <div className="bg-white border border-gray-300 rounded-2xl overflow-hidden">
+          {/* Table */}
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
             {orders.length === 0 ? (
               <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <ShoppingCart className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {allOrders.length === 0 ? 'No orders yet' : 'No orders found'}
+                <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  {allOrders.length === 0 ? 'No orders found' : 'No results'}
                 </h3>
-                <p className="text-gray-600 mb-6">
-                  {allOrders.length === 0 
-                    ? 'Orders will appear here once they are synced from Metabase' 
-                    : 'Try adjusting your search or filter criteria'}
+                <p className="text-gray-500 text-sm">
+                  {allOrders.length === 0
+                    ? 'Orders will appear here once data is available from Metabase.'
+                    : 'Try adjusting your search or filters.'}
                 </p>
-                {allOrders.length === 0 && (
-                  <button
-                    onClick={fetchOrders}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white inline-flex items-center gap-2"
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                    Refresh Orders
-                  </button>
-                )}
               </div>
             ) : (
-              <>
-              <div className="md:hidden divide-y divide-gray-200">
-                {orders.map((order) => {
-                  const statusBadge = getStatusBadge(order.status)
-                  const StatusIcon = statusBadge.icon
-                  const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') ? supplierMap.get(order.vendor_id) : null
-
-                  return (
-                    <div key={`${order.order_id}-${order.sku}`} className="p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">#{order.order_id}</p>
-                          <p className="text-xs text-gray-500">{formatDate(order.order_date)}</p>
-                        </div>
-                        <div className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${statusBadge.className}`}>
-                          <StatusIcon className="w-3.5 h-3.5" />
-                          {statusBadge.label}
-                        </div>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">{order.title || 'N/A'}</p>
-                      <p className="text-xs font-mono text-gray-600 break-all">{order.sku}</p>
-                      {(userRole === 'purchaser' || userRole === 'admin') && (
-                        <p className="text-xs text-gray-600">
-                          Supplier: {supplierInfo?.shop_name_on_zambeel || 'Unknown'}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-900">
-                        {order.supplier_price !== undefined && order.supplier_price !== null
-                          ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByVendorId.get(order.vendor_id) ?? 'USD')} ${Number(order.supplier_price).toLocaleString()}`
-                          : 'N/A'}
-                      </p>
-                      <div className="text-xs text-gray-600">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <Phone className="w-3.5 h-3.5 text-gray-400" />
-                          {order.phone}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                          {order.country}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Order ID</th>
-                      {(userRole === 'purchaser' || userRole === 'admin') && (
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Supplier</th>
-                      )}
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Product</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">SKU</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Selling Price</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                      {[
+                        'Order #', 'Customer', 'Product', 'SKU', 'Qty',
+                        'Total Payable', 'Tracking', 'Status', 'Order Date',
+                      ].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-100">
                     {orders.map((order) => {
-                      const statusBadge = getStatusBadge(order.status)
-                      const StatusIcon = statusBadge.icon
-                      const supplierInfo = (userRole === 'purchaser' || userRole === 'admin') ? supplierMap.get(order.vendor_id) : null
-
+                      const badge = getStatusBadge(order.status)
+                      const BadgeIcon = badge.icon
                       return (
-                        <tr key={`${order.order_id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              #{order.order_id}
+                        <tr key={`${order.id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                            #{order.order_number}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-900">{order.full_name}</div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3" />{order.phone}
+                            </div>
+                            <div className="text-xs text-gray-400 flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />{order.city}, {order.country}
                             </div>
                           </td>
-                          {(userRole === 'purchaser' || userRole === 'admin') && (
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900">
-                                {supplierInfo ? (
-                                  <div>
-                                    <div className="font-medium">{supplierInfo.shop_name_on_zambeel || 'Unnamed'}</div>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">Unknown</span>
-                                )}
+                          <td className="px-4 py-3 max-w-[200px]">
+                            <div className="text-gray-900 line-clamp-2">{order.title || '—'}</div>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{order.sku}</td>
+                          <td className="px-4 py-3 text-center text-gray-900">{order.quantity}</td>
+                          <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                            {Number(order.total_payable).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            {order.System_gen_tracking_id_removed && (
+                              <div className="text-xs text-gray-700 font-mono">Z: {order.System_gen_tracking_id_removed}</div>
+                            )}
+                            {order.Courier_tracking_id && (
+                              <div className="text-xs text-gray-500 font-mono">C: {order.Courier_tracking_id}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${badge.className}`}>
+                              <BadgeIcon className="w-3 h-3" />
+                              {badge.label}
+                            </span>
+                            {order.substatus && order.substatus !== order.status && (
+                              <div className="text-xs text-gray-400 mt-0.5">{order.substatus}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              {fmt(order.Order_date)}
+                            </div>
+                            {order.delivered_date && (
+                              <div className="text-xs text-green-600 mt-0.5">
+                                Del: {fmt(order.delivered_date)}
                               </div>
-                            </td>
-                          )}
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 text-sm text-gray-900">
-                              <Calendar className="w-4 h-4 text-gray-400" />
-                              {formatDate(order.order_date)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">
-                              {order.title || 'N/A'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-mono text-gray-900">
-                              {order.sku}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Phone className="w-4 h-4 text-gray-400" />
-                                {order.phone}
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-gray-500">
-                                <MapPin className="w-3 h-3" />
-                                {order.country}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-semibold text-gray-900">
-                              {order.supplier_price !== undefined && order.supplier_price !== null
-                                ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByVendorId.get(order.vendor_id) ?? 'USD')} ${Number(order.supplier_price).toLocaleString()}`
-                                : 'N/A'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border-2 ${statusBadge.className}`}>
-                              <StatusIcon className="w-3.5 h-3.5" />
-                              {statusBadge.label}
-                            </div>
+                            )}
                           </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
+                <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
+                  Showing {orders.length} of {allOrders.length} orders
+                </div>
               </div>
-              </>
             )}
           </div>
         </main>
@@ -733,4 +394,3 @@ export default function OrdersPage() {
     </div>
   )
 }
-
