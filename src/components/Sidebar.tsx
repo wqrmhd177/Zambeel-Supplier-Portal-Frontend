@@ -34,7 +34,6 @@ const purchaserMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
   { icon: Package, label: 'Products', path: '/products' },
-  { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
