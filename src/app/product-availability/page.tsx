@@ -7,14 +7,18 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import {
+  BulkUploadRowValidated,
+  createBulkDraftRequests,
   createProductAvailabilityRequest,
   fetchProductAvailabilityRequests,
   formatAvailabilityLabel,
   formatDerivedStatusLabel,
   formatStockStatusLabel,
   getProductAvailabilityCounts,
+  parseBulkUploadCsv,
   ProductAvailabilityListFilter,
   ProductAvailabilityRequestWithDetails,
+  submitDraftRequest,
   submitProductAvailabilityResponse,
   titleCaseWords,
 } from '@/lib/productAvailabilityHelpers'
@@ -23,7 +27,10 @@ import { supabase } from '@/lib/supabase'
 
 const MARKET_OPTIONS = ['UAE', 'KSA', 'PAK', 'QTR', 'KWT', 'OMN', 'BHR', 'IRQ', 'USA']
 
-type FilterTab = 'new' | 'urgent' | 'normal_requests' | 'delayed' | 'completed' | 'all'
+type FilterTab = 'new' | 'drafts' | 'urgent' | 'normal_requests' | 'delayed' | 'completed' | 'all'
+
+/** Sub-mode within the New tab */
+type NewTabMode = 'single' | 'bulk'
 
 type CreateFormState = {
   productStatus: 'already_listed' | 'not_listed' | 'not_sure'
@@ -86,13 +93,24 @@ export default function ProductAvailabilityPage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<FilterTab>('normal_requests')
+  const [newTabMode, setNewTabMode] = useState<NewTabMode>('single')
   const [counts, setCounts] = useState({
     urgent: 0,
     normalRequests: 0,
     delayed: 0,
     completed: 0,
+    drafts: 0,
     all: 0,
   })
+  // Bulk upload state
+  const [bulkCsvRows, setBulkCsvRows] = useState<BulkUploadRowValidated[]>([])
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const [bulkImportResult, setBulkImportResult] = useState<{ successCount: number; failedRows: number[] } | null>(null)
+  // Draft photo upload state: maps requestId → File[]
+  const [draftPhotoFiles, setDraftPhotoFiles] = useState<Record<string, File[]>>({})
+  const [draftPhotoOpen, setDraftPhotoOpen] = useState<string | null>(null)
+  const [draftSubmitting, setDraftSubmitting] = useState<string | null>(null)
+  const [draftRequests, setDraftRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
   const [requests, setRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
   const [createForm, setCreateForm] = useState<CreateFormState>(initialCreateForm)
   const [responseForm, setResponseForm] = useState<PurchaserResponseState>(initialResponseForm)
@@ -123,6 +141,7 @@ export default function ProductAvailabilityPage() {
 
   const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
     if (filter === 'new') return 'all'
+    if (filter === 'drafts') return 'draft'
     if (filter === 'urgent') return 'urgent_open'
     if (filter === 'normal_requests') return 'normal_pending'
     if (filter === 'delayed') return 'delayed'
@@ -134,16 +153,17 @@ export default function ProductAvailabilityPage() {
     if (!userFriendlyId || !userRole) return
     setIsLoading(true)
     try {
-      const [requestsData, countData] = await Promise.all([
-        fetchProductAvailabilityRequests({
-          userRole,
-          userFriendlyId,
-          statusFilter: dataFilter,
-        }),
+      const fetches: Promise<any>[] = [
+        fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: dataFilter }),
         getProductAvailabilityCounts(userRole, userFriendlyId),
-      ])
+      ]
+      if (userRole === 'agent') {
+        fetches.push(fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'draft' }))
+      }
+      const [requestsData, countData, draftsData] = await Promise.all(fetches)
       setRequests(requestsData)
       setCounts(countData)
+      if (draftsData) setDraftRequests(draftsData)
     } catch (err) {
       console.error(err)
       setError('Failed to load product availability requests')
@@ -258,6 +278,83 @@ export default function ProductAvailabilityPage() {
     }
   }
 
+  // ── Bulk upload handlers ─────────────────────────────────────────────────
+
+  const handleBulkCsvChange = (files: FileList | null) => {
+    setBulkCsvRows([])
+    setBulkImportResult(null)
+    const file = files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const parsed = parseBulkUploadCsv(text)
+      setBulkCsvRows(parsed)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleDownloadTemplate = () => {
+    const header = 'product_name,reseller_name,markets,sku,reference_link,product_status,priority_level'
+    const example = 'Example Product,Reseller Co,"UAE;KSA",,https://example.com,not_sure,normal'
+    const blob = new Blob([header + '\n' + example], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'bulk_upload_template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleBulkImport = async () => {
+    if (!userFriendlyId || !userRole) return
+    const validRows = bulkCsvRows.filter((r) => r.errors.length === 0)
+    if (validRows.length === 0) return
+    setBulkImporting(true)
+    setError('')
+    try {
+      const result = await createBulkDraftRequests(validRows, userFriendlyId, userRole)
+      setBulkImportResult(result)
+      setBulkCsvRows([])
+      await refreshData()
+      setFilter('drafts')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk import failed')
+    } finally {
+      setBulkImporting(false)
+    }
+  }
+
+  // ── Draft photo submission handlers ──────────────────────────────────────
+
+  const handleDraftPhotoChange = (requestId: string, files: FileList | null) => {
+    const selected = Array.from(files || []).slice(0, 5)
+    setDraftPhotoFiles((prev) => ({ ...prev, [requestId]: selected }))
+  }
+
+  const handleSubmitDraft = async (requestId: string) => {
+    if (!userFriendlyId) return
+    const files = draftPhotoFiles[requestId] || []
+    if (files.length === 0) {
+      setError('Please select at least one photo before submitting.')
+      return
+    }
+    setError('')
+    setDraftSubmitting(requestId)
+    try {
+      const imageUrls = await uploadFilesToStorage(userFriendlyId, files)
+      await submitDraftRequest(requestId, imageUrls)
+      setDraftPhotoOpen(null)
+      setDraftPhotoFiles((prev) => { const n = { ...prev }; delete n[requestId]; return n })
+      setSuccess('Request submitted successfully.')
+      await refreshData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit request')
+    } finally {
+      setDraftSubmitting(null)
+    }
+  }
+
   const openRespondForm = (requestId: string, assignmentId: string) => {
     setSelectedAssignment({ requestId, assignmentId })
     setResponseForm(initialResponseForm)
@@ -347,11 +444,17 @@ export default function ProductAvailabilityPage() {
             {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
             {success && <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{success}</div>}
 
-            <div className={`grid grid-cols-2 ${isAgent ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-3`}>
+            <div className={`grid grid-cols-2 ${isAgent ? 'md:grid-cols-7' : 'md:grid-cols-5'} gap-3`}>
               {isAgent && (
                 <button onClick={() => setFilter('new')} className={`rounded-xl p-3 text-left border ${filter === 'new' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'}`}>
                   <div className="text-xs text-gray-500">New</div>
                   <div className="text-xl font-bold">+</div>
+                </button>
+              )}
+              {isAgent && (
+                <button onClick={() => setFilter('drafts')} className={`rounded-xl p-3 text-left border ${filter === 'drafts' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-xs text-gray-500">Drafts</div>
+                  <div className="text-xl font-bold">{counts.drafts}</div>
                 </button>
               )}
               <button onClick={() => setFilter('urgent')} className={`rounded-xl p-3 text-left border ${filter === 'urgent' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white'}`}>
@@ -377,8 +480,114 @@ export default function ProductAvailabilityPage() {
             </div>
 
             {isAgent && filter === 'new' && (
-              <form onSubmit={handleCreateRequest} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Create New Request</h2>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-lg font-semibold text-gray-900">Create New Request</h2>
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setNewTabMode('single')}
+                      className={`px-4 py-1.5 ${newTabMode === 'single' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Single
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTabMode('bulk')}
+                      className={`px-4 py-1.5 border-l border-gray-200 ${newTabMode === 'bulk' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Bulk Upload
+                    </button>
+                  </div>
+                </div>
+
+                {newTabMode === 'bulk' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleDownloadTemplate}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Download CSV Template
+                      </button>
+                      <span className="text-xs text-gray-500">Fill the template and upload it below. Use semicolons to separate multiple markets (e.g. UAE;KSA).</span>
+                    </div>
+
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => handleBulkCsvChange(e.target.files)}
+                      className="block text-sm"
+                    />
+
+                    {bulkCsvRows.length > 0 && (
+                      <div className="overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-2 py-2 text-left text-gray-600">#</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Product</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Reseller</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Markets</th>
+                              <th className="px-2 py-2 text-left text-gray-600">SKU</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Status</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Priority</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Issues</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bulkCsvRows.map((row) => (
+                              <tr
+                                key={row.rowIndex}
+                                className={`border-t ${row.errors.length > 0 ? 'bg-red-50' : 'bg-white'}`}
+                              >
+                                <td className="px-2 py-1.5 text-gray-500">{row.rowIndex}</td>
+                                <td className="px-2 py-1.5">{row.product_name || '—'}</td>
+                                <td className="px-2 py-1.5">{row.reseller_name || '—'}</td>
+                                <td className="px-2 py-1.5">{row.markets.join(', ') || '—'}</td>
+                                <td className="px-2 py-1.5">{row.sku || '—'}</td>
+                                <td className="px-2 py-1.5">{row.product_status || '—'}</td>
+                                <td className="px-2 py-1.5">{row.priority_level || '—'}</td>
+                                <td className="px-2 py-1.5 text-red-600">
+                                  {row.errors.length > 0 ? row.errors.join('; ') : <span className="text-green-600">OK</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="px-3 py-2 bg-gray-50 text-xs text-gray-600 border-t">
+                          {bulkCsvRows.filter((r) => r.errors.length === 0).length} valid /{' '}
+                          {bulkCsvRows.filter((r) => r.errors.length > 0).length} with errors
+                        </div>
+                      </div>
+                    )}
+
+                    {bulkImportResult && (
+                      <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+                        {bulkImportResult.successCount} draft{bulkImportResult.successCount !== 1 ? 's' : ''} created.
+                        {bulkImportResult.failedRows.length > 0 && ` Rows failed: ${bulkImportResult.failedRows.join(', ')}.`}
+                        {' '}Open the Drafts tab to add photos and submit.
+                      </div>
+                    )}
+
+                    {bulkCsvRows.length > 0 && bulkCsvRows.some((r) => r.errors.length === 0) && (
+                      <button
+                        type="button"
+                        onClick={handleBulkImport}
+                        disabled={bulkImporting}
+                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm disabled:opacity-50 inline-flex items-center gap-2"
+                      >
+                        {bulkImporting && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {bulkImporting ? 'Importing…' : `Import ${bulkCsvRows.filter((r) => r.errors.length === 0).length} Valid Row(s) as Drafts`}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {newTabMode === 'single' && (
+              <form onSubmit={handleCreateRequest} className="space-y-4">
+                <p className="sr-only">Create New Request</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Product Status</label>
@@ -507,6 +716,70 @@ export default function ProductAvailabilityPage() {
                   {savingRequest ? 'Submitting...' : 'Submit Request'}
                 </button>
               </form>
+                )}
+              </div>
+            )}
+
+            {/* ── Drafts tab ────────────────────────────────────────────── */}
+            {isAgent && filter === 'drafts' && (
+              <div className="rounded-xl overflow-hidden border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-amber-700">Drafts — Add Photos to Submit</span>
+                  <span className="text-xs text-amber-600">({draftRequests.length} pending photo upload)</span>
+                </div>
+                {draftRequests.length === 0 && (
+                  <p className="text-sm text-amber-600">No drafts yet. Use Bulk Upload in the New tab to create drafts.</p>
+                )}
+                {draftRequests.map((req) => (
+                  <div key={req.id} className="bg-white border border-amber-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div>
+                        <div className="font-medium text-gray-900">{titleCaseWords(req.product_name)}</div>
+                        <div className="text-xs text-gray-500">
+                          {req.reseller_name} · {req.markets.join(', ')} · {req.priority_level === 'urgent' ? 'Urgent' : 'Normal'}
+                          {req.sku && ` · SKU: ${req.sku}`}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDraftPhotoOpen(draftPhotoOpen === req.id ? null : req.id)}
+                        className="px-3 py-1.5 rounded-md bg-amber-500 text-white text-xs hover:bg-amber-600"
+                      >
+                        {draftPhotoOpen === req.id ? 'Cancel' : 'Add Photos & Submit'}
+                      </button>
+                    </div>
+
+                    {draftPhotoOpen === req.id && (
+                      <div className="border-t border-amber-100 pt-2 space-y-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Photos * (1–5 images)
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => handleDraftPhotoChange(req.id, e.target.files)}
+                            className="block text-sm"
+                          />
+                          {draftPhotoFiles[req.id]?.length ? (
+                            <p className="text-xs text-gray-500 mt-1">{draftPhotoFiles[req.id].length}/5 selected</p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={draftSubmitting === req.id}
+                          onClick={() => handleSubmitDraft(req.id)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm disabled:opacity-50"
+                        >
+                          {draftSubmitting === req.id && <Loader2 className="w-4 h-4 animate-spin" />}
+                          {draftSubmitting === req.id ? 'Submitting…' : 'Submit to Purchaser'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
 
             {isPurchaser && selectedAssignment && (
@@ -568,7 +841,7 @@ export default function ProductAvailabilityPage() {
               </form>
             )}
 
-            {filter !== 'new' && (
+            {filter !== 'new' && filter !== 'drafts' && (
             <div
               className="rounded-xl overflow-hidden border border-white/10"
               style={{

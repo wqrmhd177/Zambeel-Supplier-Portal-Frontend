@@ -605,7 +605,7 @@ function LoginPageContent() {
             </p>
           </form>
 
-          <div className="text-center mt-6">
+          <div className="text-center mt-6 space-y-2">
             <p className="text-xs md:text-sm text-gray-600">
               {isSignUp ? (
                 <>
@@ -650,6 +650,10 @@ function LoginPageContent() {
                   </a>
                 </>
               )}
+            </p>
+            <p className="text-xs text-gray-400">
+              Are you a team member?{' '}
+              <span className="text-gray-500">Use the invite link shared by your admin to join.</span>
             </p>
           </div>
           </div>
