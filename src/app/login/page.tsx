@@ -653,7 +653,7 @@ function LoginPageContent() {
             </p>
             <p className="text-xs text-gray-400">
               Are you a team member?{' '}
-              <span className="text-gray-500">Use the invite link shared by your admin to join.</span>
+              <a href="/join" className="text-violet-600 hover:underline">Register here</a>
             </p>
           </div>
           </div>

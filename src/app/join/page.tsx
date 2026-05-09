@@ -1,30 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { setSessionCookie, updateLastActivity } from '@/lib/authCookie'
 
-const VALID_ROLES = ['agent', 'purchaser', 'admin'] as const
-type InternalRole = (typeof VALID_ROLES)[number]
-
-const ROLE_LABELS: Record<InternalRole, string> = {
-  agent: 'Agent',
-  purchaser: 'Purchaser',
-  admin: 'Admin',
-}
+type InternalRole = 'agent' | 'purchaser' | 'admin'
 
 const COUNTRIES = ['UAE', 'KSA', 'PAK'] as const
 const TEAMS = ['Growth', 'Operations', 'CS', 'Finance', 'Listing', 'Strategy'] as const
 
-function isValidRole(role: string): role is InternalRole {
-  return (VALID_ROLES as readonly string[]).includes(role)
-}
-
 export default function JoinPage() {
   const router = useRouter()
-  const params = useParams()
-  const rawRole = Array.isArray(params.role) ? params.role[0] : params.role ?? ''
 
   const [form, setForm] = useState({
     fullName: '',
@@ -34,28 +21,14 @@ export default function JoinPage() {
     phone: '',
     country: '',
     team: '',
+    role: '' as InternalRole | '',
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  if (!isValidRole(rawRole)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Invite Link</h1>
-          <p className="text-gray-600">
-            This invite link is not valid. Please ask your administrator for a valid link.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  const role: InternalRole = rawRole
-  const roleLabel = ROLE_LABELS[role]
-
-  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((prev) => ({ ...prev, [field]: e.target.value }))
+  const set = (field: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,14 +38,14 @@ export default function JoinPage() {
     if (!form.email.trim()) { setError('Email is required.'); return }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
     if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
-    if (!form.country) { setError('Please select a country.'); return }
-    if (!form.team) { setError('Please select a team.'); return }
+    if (!form.role) { setError('Please select your role.'); return }
+    if (!form.country) { setError('Please select your country.'); return }
+    if (!form.team) { setError('Please select your team.'); return }
 
     setIsLoading(true)
     try {
       const emailNormalized = form.email.trim().toLowerCase()
 
-      // Check if email is already in use
       const { data: existing } = await supabase
         .from('users')
         .select('id, archived')
@@ -85,7 +58,6 @@ export default function JoinPage() {
         return
       }
 
-      // Insert new internal user — pre-approved, onboarded, correct role
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([
@@ -96,7 +68,7 @@ export default function JoinPage() {
             phone_number: form.phone.trim() || null,
             country: form.country,
             team: form.team,
-            role,
+            role: form.role,
             account_approval: 'approved',
             onboarded: true,
             created_at: new Date().toISOString(),
@@ -116,11 +88,11 @@ export default function JoinPage() {
       localStorage.setItem('userFriendlyId', newUser.user_id || '')
       localStorage.setItem('userEmail', emailNormalized)
       localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('userRole', role)
+      localStorage.setItem('userRole', form.role)
       setSessionCookie()
       updateLastActivity()
 
-      if (role === 'agent') {
+      if (form.role === 'agent') {
         router.push('/product-availability')
       } else {
         router.push('/dashboard')
@@ -136,7 +108,7 @@ export default function JoinPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header
-        className="flex items-center justify-center h-20 w-full text-white"
+        className="flex items-center justify-center h-20 w-full"
         style={{
           background: 'linear-gradient(180deg, #a78bfa 0%, #8b5cf6 18%, #7c3aed 45%, #6d28d9 72%, #5b21b6 100%)',
           boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.2)',
@@ -148,8 +120,8 @@ export default function JoinPage() {
       <main className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-200 p-8 space-y-6">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Join as {roleLabel}</h1>
-            <p className="text-sm text-gray-500 mt-1">Create your internal team account</p>
+            <h1 className="text-2xl font-bold text-gray-900">Team Registration</h1>
+            <p className="text-sm text-gray-500 mt-1">Create your internal Zambeel account</p>
           </div>
 
           {error && (
@@ -244,18 +216,24 @@ export default function JoinPage() {
               </div>
             </div>
 
-            {/* Role is set by URL — show read-only badge */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Role:</span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 capitalize">
-                {roleLabel}
-              </span>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+              <select
+                value={form.role}
+                onChange={set('role')}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              >
+                <option value="">Select your role</option>
+                <option value="agent">Agent</option>
+                <option value="purchaser">Purchaser</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold text-sm disabled:opacity-60"
+              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold text-sm disabled:opacity-60 hover:opacity-90 transition-opacity"
             >
               {isLoading ? 'Creating account…' : 'Create Account & Sign In'}
             </button>
@@ -263,7 +241,7 @@ export default function JoinPage() {
 
           <p className="text-center text-xs text-gray-400">
             Already have an account?{' '}
-            <a href="/login" className="text-violet-600 hover:underline">Sign in</a>
+            <a href="/login" className="text-violet-600 hover:underline">Sign in here</a>
           </p>
         </div>
       </main>
