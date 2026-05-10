@@ -375,7 +375,15 @@ export default function OrdersPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {['Order ID', 'Shipment Date', 'Product', 'Quantity', 'Courier Tracking ID', 'Status'].map((h) => (
+                      {[
+                        'Order ID',
+                        'Shipment Date',
+                        'Product',
+                        'Quantity',
+                        'Courier Tracking ID',
+                        'Status',
+                        ...(isAdmin ? ['Vendor ID'] : []),
+                      ].map((h) => (
                         <th
                           key={h}
                           className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
@@ -392,9 +400,9 @@ export default function OrdersPage() {
                       return (
                         <tr key={`${order.id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
 
-                          {/* Order ID */}
+                          {/* Order ID — uses the id field from Metabase */}
                           <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                            #{order.order_number}
+                            {order.id}
                           </td>
 
                           {/* Shipment Date */}
@@ -423,6 +431,13 @@ export default function OrdersPage() {
                               {badge.label}
                             </span>
                           </td>
+
+                          {/* Vendor ID — admin only */}
+                          {isAdmin && (
+                            <td className="px-4 py-3 text-gray-600 whitespace-nowrap font-mono text-xs">
+                              {order.vendor_id ?? '—'}
+                            </td>
+                          )}
                         </tr>
                       )
                     })}
