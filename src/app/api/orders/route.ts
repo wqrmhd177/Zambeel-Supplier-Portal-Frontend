@@ -42,10 +42,10 @@ export interface MetabaseOrder {
 
 export interface OrderStats {
   total: number
+  inTransit: number
+  toBeDispatch: number
   delivered: number
-  pending: number
   returned: number
-  totalRevenue: number
 }
 
 export interface OrdersResponse {
@@ -59,8 +59,7 @@ export interface OrdersResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Server-side in-memory cache (survives across requests within the same
-// Node.js process; reset every CACHE_TTL_MS or on explicit refresh)
+// Server-side in-memory cache
 // ---------------------------------------------------------------------------
 let _cache: { data: MetabaseOrder[]; expires: number } | null = null
 
@@ -76,15 +75,36 @@ async function getAll(forceRefresh = false): Promise<MetabaseOrder[]> {
   return data
 }
 
+// Statuses excluded from "In-Transit"
+const EXCLUDED_FROM_IN_TRANSIT = [
+  'delivered',
+  'return',
+  'approved',
+  'dispatching in process',
+  'cancelled',
+  'confirmation pending',
+]
+
 function computeStats(rows: MetabaseOrder[]): OrderStats {
-  let delivered = 0, pending = 0, returned = 0, totalRevenue = 0
+  let inTransit = 0, toBeDispatch = 0, delivered = 0, returned = 0
+
   for (const o of rows) {
     const s = o.status?.toLowerCase() || ''
-    if (s.includes('delivered')) { delivered++; totalRevenue += Number(o.total_payable || 0) }
-    else if (s.includes('return')) returned++
-    else pending++
+
+    if (s.includes('delivered')) {
+      delivered++
+    } else if (s.includes('return')) {
+      returned++
+    } else if (s.includes('dispatching in process')) {
+      toBeDispatch++
+    } else {
+      // In-Transit = not any of the excluded statuses
+      const isExcluded = EXCLUDED_FROM_IN_TRANSIT.some((ex) => s.includes(ex))
+      if (!isExcluded) inTransit++
+    }
   }
-  return { total: rows.length, delivered, pending, returned, totalRevenue }
+
+  return { total: rows.length, inTransit, toBeDispatch, delivered, returned }
 }
 
 function filterRows(
@@ -110,14 +130,12 @@ function filterRows(
     out = out.filter(
       (o) =>
         o.order_number?.toLowerCase().includes(q) ||
+        o.Courier_tracking_id?.toLowerCase().includes(q) ||
+        o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
         o.sku?.toLowerCase().includes(q) ||
         o.title?.toLowerCase().includes(q) ||
         o.full_name?.toLowerCase().includes(q) ||
-        o.phone?.toLowerCase().includes(q) ||
-        o.city?.toLowerCase().includes(q) ||
-        o.country?.toLowerCase().includes(q) ||
-        o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
-        o.Courier_tracking_id?.toLowerCase().includes(q)
+        o.phone?.toLowerCase().includes(q)
     )
   }
 
@@ -132,13 +150,21 @@ export async function GET(request: NextRequest) {
     const search = sp.get('search') || ''
     const status = sp.get('status') || 'all'
     const country = sp.get('country') || 'all'
+    const vendorId = sp.get('vendorId') || ''
     const forceRefresh = sp.get('refresh') === '1'
-    // ?export=1 returns all filtered rows (no pagination) for CSV export
     const isExport = sp.get('export') === '1'
 
-    const all = await getAll(forceRefresh)
+    let all = await getAll(forceRefresh)
 
-    // Global stats always computed over the entire unfiltered dataset
+    // Scope to vendor when provided (supplier view)
+    if (vendorId) {
+      const vid = Number(vendorId)
+      if (!isNaN(vid)) {
+        all = all.filter((o) => o.vendor_id === vid)
+      }
+    }
+
+    // Stats always over the vendor-scoped (but unfiltered by search/status/country) dataset
     const stats = computeStats(all)
     const countries = Array.from(new Set(all.map((o) => o.country).filter(Boolean))).sort() as string[]
 

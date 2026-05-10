@@ -5,12 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ShoppingCart,
   Search,
-  Filter,
   Download,
-  Calendar,
-  Phone,
-  MapPin,
-  Banknote,
   CheckCircle,
   XCircle,
   Clock,
@@ -18,6 +13,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  Package,
+  ArrowRightLeft,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -29,7 +26,7 @@ const SEARCH_DEBOUNCE_MS = 400
 
 export default function OrdersPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } = useAuth()
 
   const [orders, setOrders] = useState<MetabaseOrder[]>([])
   const [page, setPage] = useState(1)
@@ -47,14 +44,17 @@ export default function OrdersPage() {
 
   const [stats, setStats] = useState({
     total: 0,
+    inTransit: 0,
+    toBeDispatch: 0,
     delivered: 0,
-    pending: 0,
     returned: 0,
-    totalRevenue: 0,
   })
   const [countries, setCountries] = useState<string[]>([])
 
   const prevDebouncedSearch = useRef(debouncedSearch)
+
+  const isSupplier = userRole === 'supplier'
+  const isAdmin = userRole === 'admin'
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login')
@@ -71,6 +71,7 @@ export default function OrdersPage() {
       search: string
       status: string
       country: string
+      vendorId: string
       refresh?: boolean
     }) => {
       setFetchError('')
@@ -83,6 +84,7 @@ export default function OrdersPage() {
           status: opts.status,
           country: opts.country,
         })
+        if (opts.vendorId) params.set('vendorId', opts.vendorId)
         if (opts.refresh) params.set('refresh', '1')
 
         const res = await fetch(`/api/orders?${params.toString()}`)
@@ -106,6 +108,9 @@ export default function OrdersPage() {
     []
   )
 
+  // Supplier: always scope to their vendor_id. Admin: no vendor filter.
+  const vendorId = isSupplier ? (userFriendlyId ?? '') : ''
+
   useEffect(() => {
     if (!isAuthenticated) return
 
@@ -124,15 +129,17 @@ export default function OrdersPage() {
       search: debouncedSearch,
       status: filterStatus,
       country: filterCountry,
+      vendorId,
     })
-  }, [isAuthenticated, page, debouncedSearch, filterStatus, filterCountry, loadOrders])
+  }, [isAuthenticated, page, debouncedSearch, filterStatus, filterCountry, vendorId, loadOrders])
 
   const handleRefresh = () => {
-    loadOrders({
+    void loadOrders({
       page,
       search: debouncedSearch,
       status: filterStatus,
       country: filterCountry,
+      vendorId,
       refresh: true,
     })
   }
@@ -169,6 +176,8 @@ export default function OrdersPage() {
         status: filterStatus,
         country: filterCountry,
       })
+      if (vendorId) params.set('vendorId', vendorId)
+
       const res = await fetch(`/api/orders?${params.toString()}`)
       if (!res.ok) throw new Error('Export failed')
       const json = (await res.json()) as { orders: MetabaseOrder[] }
@@ -176,54 +185,24 @@ export default function OrdersPage() {
       if (rowsData.length === 0) return
 
       const headers = [
-        'Order #',
-        'Customer',
-        'Phone',
-        'City',
-        'Country',
-        'Product',
-        'SKU',
-        'Qty',
-        'Total Payable',
-        'Zambeel Tracking',
-        'Courier Tracking',
-        'Status',
-        'Substatus',
-        'Tag',
-        'Order Date',
-        'Shipment Date',
-        'Delivered Date',
-        'Platform',
-        'Vendor ID',
+        'Order ID', 'Shipment Date', 'Product Title', 'SKU',
+        'Quantity', 'Courier Tracking ID', 'Status',
       ]
       const esc = (v: unknown) => {
         if (v === null || v === undefined) return ''
         const s = String(v)
         return s.includes(',') || s.includes('"') || s.includes('\n')
-          ? `"${s.replace(/"/g, '""')}"`
-          : s
+          ? `"${s.replace(/"/g, '""')}"` : s
       }
       const rows = rowsData.map((o) =>
         [
           esc(o.order_number),
-          esc(o.full_name),
-          esc(o.phone),
-          esc(o.city),
-          esc(o.country),
+          esc(o.shipment_date),
           esc(o.title),
           esc(o.sku),
           esc(o.quantity),
-          esc(o.total_payable),
-          esc(o.System_gen_tracking_id_removed),
           esc(o.Courier_tracking_id),
           esc(o.status),
-          esc(o.substatus),
-          esc(o.tag),
-          esc(o.Order_date),
-          esc(o.shipment_date),
-          esc(o.delivered_date),
-          esc(o.PLATFORM),
-          esc(o.vendor_id),
         ].join(',')
       )
       const csv = [headers.join(','), ...rows].join('\n')
@@ -241,20 +220,13 @@ export default function OrdersPage() {
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase() || ''
     if (s.includes('delivered'))
-      return {
-        icon: CheckCircle,
-        className: 'bg-green-100 text-green-800 border-green-200',
-        label: status,
-      }
+      return { icon: CheckCircle, className: 'bg-green-100 text-green-800 border-green-200', label: status }
     if (s.includes('return'))
       return { icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200', label: status }
-    if (s.includes('shipped') || s.includes('dispatch') || s.includes('transit'))
+    if (s.includes('dispatching') || s.includes('shipped') || s.includes('dispatch') || s.includes('transit'))
       return { icon: Truck, className: 'bg-blue-100 text-blue-800 border-blue-200', label: status }
     return { icon: Clock, className: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: status }
   }
-
-  const startRow = totalFiltered === 0 ? 0 : (page - 1) * limit + 1
-  const endRow = Math.min(page * limit, totalFiltered)
 
   if (authLoading || (isFetching && orders.length === 0)) {
     return (
@@ -272,17 +244,26 @@ export default function OrdersPage() {
 
   if (!isAuthenticated) return null
 
+  const statCards = [
+    { label: 'All Orders', value: stats.total, icon: ShoppingCart, gradient: 'from-cyan-500 to-blue-500' },
+    { label: 'In-Transit', value: stats.inTransit, icon: ArrowRightLeft, gradient: 'from-blue-500 to-indigo-500' },
+    { label: 'To be Dispatch', value: stats.toBeDispatch, icon: Package, gradient: 'from-yellow-500 to-orange-500' },
+    { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
+    { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
+  ]
+
   return (
     <div className="flex h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 overflow-auto">
         <Header />
         <main className="p-4 sm:p-6 lg:p-8">
-          {/* Header */}
+
+          {/* Page header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Orders</h2>
-              <p className="text-gray-600 text-sm">Live data from Metabase (50 per page)</p>
+              <p className="text-gray-600 text-sm">50 per page · data from Metabase</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -310,25 +291,14 @@ export default function OrdersPage() {
             <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm mb-4">{fetchError}</div>
           )}
 
-          {/* Stats */}
+          {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            {[
-              { label: 'Total', value: stats.total, icon: ShoppingCart, gradient: 'from-cyan-500 to-blue-500' },
-              { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
-              { label: 'Pending', value: stats.pending, icon: Clock, gradient: 'from-yellow-500 to-orange-500' },
-              { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
-              {
-                label: 'Revenue (Delivered)',
-                value: `${stats.totalRevenue.toLocaleString()}`,
-                icon: Banknote,
-                gradient: 'from-purple-500 to-pink-500',
-              },
-            ].map(({ label, value, icon: Icon, gradient }) => (
+            {statCards.map(({ label, value, icon: Icon, gradient }) => (
               <div key={label} className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-gray-500 text-xs mb-1">{label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{value}</p>
+                    <p className="text-2xl font-bold text-gray-900">{value.toLocaleString()}</p>
                   </div>
                   <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center`}>
                     <Icon className="w-5 h-5 text-white" />
@@ -344,42 +314,44 @@ export default function OrdersPage() {
               <Search className="absolute left-3 top-3 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Search order #, SKU, name, phone, tracking…"
+                placeholder="Search by Order ID or Tracking ID…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
-              <select
-                value={filterCountry}
-                onChange={(e) => setFilterCountryAndReset(e.target.value)}
-                className="pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                <option value="all">All Countries</option>
-                {countries.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatusAndReset(e.target.value)}
-                className="pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                <option value="all">All Status</option>
-                <option value="delivered">Delivered</option>
-                <option value="shipped">Shipped</option>
-                <option value="return">Return</option>
-                <option value="pending">Pending</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+
+            {/* Country and Status filters — admin only */}
+            {isAdmin && (
+              <>
+                <div className="relative">
+                  <select
+                    value={filterCountry}
+                    onChange={(e) => setFilterCountryAndReset(e.target.value)}
+                    className="pl-4 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    <option value="all">All Countries</option>
+                    {countries.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="relative">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatusAndReset(e.target.value)}
+                    className="pl-4 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="dispatching in process">To be Dispatch</option>
+                    <option value="return">Returned</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="confirmation pending">Confirmation Pending</option>
+                  </select>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Table */}
@@ -391,33 +363,26 @@ export default function OrdersPage() {
                 </span>
               </div>
             )}
+
             {orders.length === 0 && !isFetching ? (
               <div className="p-12 text-center">
                 <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                  {totalFiltered === 0 ? 'No orders found' : 'No results'}
-                </h3>
-                <p className="text-gray-500 text-sm">
-                  {totalFiltered === 0
-                    ? 'Orders will appear here once data is available from Metabase.'
-                    : 'Try adjusting your search or filters.'}
-                </p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No orders found</h3>
+                <p className="text-gray-500 text-sm">Try adjusting your search or filters.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {['Order #', 'Customer', 'Product', 'SKU', 'Qty', 'Total Payable', 'Tracking', 'Status', 'Order Date'].map(
-                        (h) => (
-                          <th
-                            key={h}
-                            className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
-                          >
-                            {h}
-                          </th>
-                        )
-                      )}
+                      {['Order ID', 'Shipment Date', 'Product', 'Quantity', 'Courier Tracking ID', 'Status'].map((h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -426,63 +391,47 @@ export default function OrdersPage() {
                       const BadgeIcon = badge.icon
                       return (
                         <tr key={`${order.id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">#{order.order_number}</td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-gray-900">{order.full_name}</div>
-                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3" />
-                              {order.phone}
-                            </div>
-                            <div className="text-xs text-gray-400 flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {order.city}, {order.country}
-                            </div>
+
+                          {/* Order ID */}
+                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                            #{order.order_number}
                           </td>
-                          <td className="px-4 py-3 max-w-[200px]">
-                            <div className="text-gray-900 line-clamp-2">{order.title || '—'}</div>
+
+                          {/* Shipment Date */}
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            {fmt(order.shipment_date)}
                           </td>
-                          <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{order.sku}</td>
+
+                          {/* Product: title + SKU */}
+                          <td className="px-4 py-3 max-w-[220px]">
+                            <div className="font-medium text-gray-900 line-clamp-2">{order.title || '—'}</div>
+                            <div className="text-xs text-gray-400 font-mono mt-0.5">{order.sku}</div>
+                          </td>
+
+                          {/* Quantity */}
                           <td className="px-4 py-3 text-center text-gray-900">{order.quantity}</td>
-                          <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
-                            {Number(order.total_payable).toLocaleString()}
+
+                          {/* Courier Tracking ID */}
+                          <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">
+                            {order.Courier_tracking_id || '—'}
                           </td>
-                          <td className="px-4 py-3">
-                            {order.System_gen_tracking_id_removed && (
-                              <div className="text-xs text-gray-700 font-mono">Z: {order.System_gen_tracking_id_removed}</div>
-                            )}
-                            {order.Courier_tracking_id && (
-                              <div className="text-xs text-gray-500 font-mono">C: {order.Courier_tracking_id}</div>
-                            )}
-                          </td>
+
+                          {/* Status */}
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${badge.className}`}
-                            >
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${badge.className}`}>
                               <BadgeIcon className="w-3 h-3" />
                               {badge.label}
                             </span>
-                            {order.substatus && order.substatus !== order.status && (
-                              <div className="text-xs text-gray-400 mt-0.5">{order.substatus}</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-gray-400" />
-                              {fmt(order.Order_date)}
-                            </div>
-                            {order.delivered_date && (
-                              <div className="text-xs text-green-600 mt-0.5">Del: {fmt(order.delivered_date)}</div>
-                            )}
                           </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-                <div className="px-4 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-gray-500">
-                  <span>
-                    Showing {startRow}-{endRow} of {totalFiltered} orders (page {page} of {totalPages})
-                  </span>
+
+                {/* Pagination */}
+                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                  <span>Page {page} of {totalPages}</span>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -507,6 +456,7 @@ export default function OrdersPage() {
               </div>
             )}
           </div>
+
         </main>
       </div>
     </div>

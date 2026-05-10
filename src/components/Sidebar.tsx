@@ -1,6 +1,9 @@
 'use client'
 
-import { Package, LayoutDashboard, ShoppingCart, LogOut, List, Users, CheckCircle, Settings, MessageCircle, Phone, X, ClipboardList } from 'lucide-react'
+import {
+  Package, LayoutDashboard, ShoppingCart, LogOut, List, Users,
+  Settings, MessageCircle, Phone, X, ClipboardList, RotateCcw,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
@@ -13,6 +16,7 @@ const supplierMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
+  { icon: RotateCcw, label: 'Return Management', path: '/returns' },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
@@ -25,6 +29,7 @@ const adminMenuItems = [
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
+  { icon: RotateCcw, label: 'Return Management', path: '/returns' },
   { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
   { icon: Settings, label: 'User Settings', path: '/settings/users' },
@@ -47,14 +52,11 @@ export default function Sidebar() {
   const [approvalsPendingCount, setApprovalsPendingCount] = useState<number | null>(null)
   const [availabilityPendingCount, setAvailabilityPendingCount] = useState<number | null>(null)
 
-  // Fetch pending counts for Listings and Approvals when user is agent or admin
   useEffect(() => {
     let isMounted = true
     const loadCounts = async () => {
       if (!userRole) return
       if (userRole === 'admin') {
-        // For the Agent screen, show only "New Products" count in the left panel.
-        // (Matches Listings > New Products tab)
         const listings = await getPendingListingsCount()
         if (isMounted) setListingPendingCount(listings)
       }
@@ -75,55 +77,39 @@ export default function Sidebar() {
 
     loadCounts()
     const interval = setInterval(loadCounts, 15000)
-
     return () => {
       isMounted = false
       clearInterval(interval)
     }
   }, [userRole, userFriendlyId, pathname])
 
-  // Get menu items based on user role
   const getMenuItems = () => {
-    if (!userRole) return [] // Return empty array while loading
-    if (userRole === 'admin') {
-      return adminMenuItems
-    } else if (userRole === 'agent') {
-      return agentMenuItems
-    } else if (userRole === 'purchaser') {
-      return purchaserMenuItems
-    } else {
-      return supplierMenuItems
-    }
+    if (!userRole) return []
+    if (userRole === 'admin') return adminMenuItems
+    if (userRole === 'agent') return agentMenuItems
+    if (userRole === 'purchaser') return purchaserMenuItems
+    return supplierMenuItems
   }
   const menuItems = getMenuItems()
 
   useEffect(() => {
-    // Set active item based on current pathname
-    const currentItem = menuItems.find(item => pathname?.startsWith(item.path))
-    if (currentItem) {
-      setActiveItem(currentItem.label)
-    }
+    const currentItem = menuItems.find((item) => pathname?.startsWith(item.path))
+    if (currentItem) setActiveItem(currentItem.label)
   }, [pathname, menuItems])
 
   useEffect(() => {
     const openMobileMenu = () => setIsMobileMenuOpen(true)
     window.addEventListener('open-mobile-sidebar', openMobileMenu as EventListener)
-    return () => {
-      window.removeEventListener('open-mobile-sidebar', openMobileMenu as EventListener)
-    }
+    return () => window.removeEventListener('open-mobile-sidebar', openMobileMenu as EventListener)
   }, [])
 
-  useEffect(() => {
-    setIsMobileMenuOpen(false)
-  }, [pathname])
+  useEffect(() => { setIsMobileMenuOpen(false) }, [pathname])
 
   useEffect(() => {
     if (!isMobileMenuOpen) return
     const originalOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = originalOverflow
-    }
+    return () => { document.body.style.overflow = originalOverflow }
   }, [isMobileMenuOpen])
 
   const handleMenuClick = (label: string, path: string) => {
@@ -134,7 +120,6 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     clearSessionCookie()
-    // Clear all user data from localStorage
     localStorage.removeItem('userId')
     localStorage.removeItem('userFriendlyId')
     localStorage.removeItem('userEmail')
@@ -142,8 +127,6 @@ export default function Sidebar() {
     localStorage.removeItem('supplierInfo')
     localStorage.removeItem('isOnboarded')
     localStorage.removeItem('userRole')
-    
-    // Redirect to login page
     setIsMobileMenuOpen(false)
     router.push('/login')
   }
@@ -151,26 +134,29 @@ export default function Sidebar() {
   const renderSidebarContent = (isMobile: boolean) => (
     <>
       {/* Logo */}
-      <div className="p-6 border-b border-white/10 relative" style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.2)' }}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="px-4 py-4 border-b border-white/10 relative" style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.2)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+              className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{
                 background: 'linear-gradient(145deg, rgba(124,58,237,0.4) 0%, rgba(79,70,229,0.2) 100%)',
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 6px rgba(0,0,0,0.3)',
                 border: '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              <Package className="w-6 h-6 text-white" />
+              <Package className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg sm:text-xl font-bold text-white drop-shadow-sm truncate">Zambeel Supplier Portal</span>
+            <span className="text-base font-bold text-white drop-shadow-sm leading-tight">
+              Zambeel<br />
+              <span className="text-xs font-medium text-white/80">Supplier Portal</span>
+            </span>
           </div>
           {isMobile && (
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="p-2 rounded-lg text-white/85 hover:text-white hover:bg-white/10 transition-all"
+              className="p-2 rounded-lg text-white/85 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
               aria-label="Close menu"
             >
               <X className="w-5 h-5" />
@@ -180,13 +166,13 @@ export default function Sidebar() {
       </div>
 
       {/* Menu Items */}
-      <nav className="flex-1 p-4 overflow-y-auto">
+      <nav className="flex-1 p-3 overflow-y-auto">
         {isLoading ? (
           <>
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="w-full h-12 rounded-lg mb-2 animate-pulse"
+                className="w-full h-11 rounded-lg mb-1.5 animate-pulse"
                 style={{ background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }}
               />
             ))}
@@ -196,20 +182,21 @@ export default function Sidebar() {
             const Icon = item.icon
             const isActive = activeItem === item.label
             const showCount = 'showPendingCount' in item && item.showPendingCount
-            const count = item.label === 'Listings'
-              ? listingPendingCount
-              : item.label === 'Approvals'
-                ? approvalsPendingCount
-                : item.label === 'Product Availability'
-                  ? availabilityPendingCount
-                  : null
+            const count =
+              item.label === 'Listings'
+                ? listingPendingCount
+                : item.label === 'Approvals'
+                  ? approvalsPendingCount
+                  : item.label === 'Product Availability'
+                    ? availabilityPendingCount
+                    : null
             const displayLabel = showCount && count !== null ? `${item.label} (${count})` : item.label
 
             return (
               <button
                 key={item.label}
                 onClick={() => handleMenuClick(item.label, item.path)}
-                className={`w-full flex items-center gap-3 py-3 rounded-lg mb-2 transition-all relative overflow-hidden pl-4 ${
+                className={`w-full flex items-center gap-3 py-2.5 rounded-lg mb-1 transition-all relative overflow-hidden pl-4 ${
                   isActive
                     ? 'text-white font-medium'
                     : 'text-white/85 hover:text-white hover:bg-white/8'
@@ -226,47 +213,44 @@ export default function Sidebar() {
                     style={{ background: '#f59e0b', boxShadow: '0 0 8px rgba(245,158,11,0.5)' }}
                   />
                 )}
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium">{displayLabel}</span>
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span className="font-medium text-sm">{displayLabel}</span>
               </button>
             )
           })
         )}
       </nav>
 
-      {/* Zambeel WhatsApp Support */}
-      <div
-        className="mx-4 mb-4 p-4 rounded-xl"
-        style={{
-          background: 'linear-gradient(145deg, rgba(30,27,75,0.9) 0%, rgba(45,27,105,0.6) 100%)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2)',
-          border: '1px solid rgba(255,255,255,0.08)',
-        }}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)', boxShadow: '0 2px 8px rgba(13,148,136,0.4)' }}
+      {/* Compact WhatsApp Support + Logout row */}
+      <div className="px-3 pb-3 border-t border-white/10 pt-3" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center gap-2">
+          {/* WhatsApp link — compact icon button */}
+          <a
+            href="https://wa.me/923054094932"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Zambeel WhatsApp Support: +92-305-4094932"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/8 transition-all flex-1 min-w-0"
           >
-            <MessageCircle className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-sm font-semibold text-white">Zambeel WhatsApp Support</span>
-        </div>
-        <a href="https://wa.me/923054094932" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-white/90 hover:text-white text-sm transition-colors">
-          <Phone className="w-4 h-4" />
-          <span>+92-305-4094932</span>
-        </a>
-      </div>
+            <span
+              className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)' }}
+            >
+              <MessageCircle className="w-4 h-4 text-white" />
+            </span>
+            <span className="text-xs font-medium truncate">WhatsApp Support</span>
+            <Phone className="w-3 h-3 flex-shrink-0 text-white/50" />
+          </a>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-white/10 relative" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-white/85 hover:text-white hover:bg-white/8 transition-all"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Logout</span>
-        </button>
+          {/* Logout */}
+          <button
+            onClick={handleLogout}
+            title="Logout"
+            className="flex items-center justify-center w-9 h-9 rounded-lg text-white/80 hover:text-white hover:bg-white/8 transition-all flex-shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </>
   )
@@ -274,7 +258,7 @@ export default function Sidebar() {
   return (
     <>
       <div
-        className="hidden lg:flex w-64 flex-col relative"
+        className="hidden lg:flex w-60 flex-col relative"
         style={{
           background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
           boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.04), 8px 0 24px rgba(0,0,0,0.25)',
@@ -293,7 +277,7 @@ export default function Sidebar() {
             onClick={() => setIsMobileMenuOpen(false)}
           />
           <aside
-            className="absolute left-0 top-0 h-full w-[88vw] max-w-[320px] flex flex-col"
+            className="absolute left-0 top-0 h-full w-[88vw] max-w-[300px] flex flex-col"
             style={{
               background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
               boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.04), 8px 0 24px rgba(0,0,0,0.35)',
@@ -307,4 +291,3 @@ export default function Sidebar() {
     </>
   )
 }
-
