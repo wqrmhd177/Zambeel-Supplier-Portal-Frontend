@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ShoppingCart,
@@ -16,22 +16,32 @@ import {
   Clock,
   Truck,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import type { MetabaseOrder } from '@/app/api/orders/route'
+import type { MetabaseOrder, OrdersResponse } from '@/app/api/orders/route'
+
+const PAGE_SIZE = 50
+const SEARCH_DEBOUNCE_MS = 400
 
 export default function OrdersPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading, userRole } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
 
-  const [allOrders, setAllOrders] = useState<MetabaseOrder[]>([])
   const [orders, setOrders] = useState<MetabaseOrder[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalFiltered, setTotalFiltered] = useState(0)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+
+  const [isFetching, setIsFetching] = useState(true)
   const [fetchError, setFetchError] = useState('')
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterCountry, setFilterCountry] = useState('all')
 
@@ -42,94 +52,200 @@ export default function OrdersPage() {
     returned: 0,
     totalRevenue: 0,
   })
+  const [countries, setCountries] = useState<string[]>([])
+
+  const prevDebouncedSearch = useRef(debouncedSearch)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login')
   }, [authLoading, isAuthenticated, router])
 
-  const fetchOrders = useCallback(async () => {
-    setIsLoading(true)
-    setFetchError('')
-    try {
-      const res = await fetch('/api/orders')
-      if (!res.ok) throw new Error('Failed to fetch orders')
-      const json = await res.json() as { orders: MetabaseOrder[] }
-      const rows = json.orders ?? []
-      setAllOrders(rows)
-      applyFilters(rows, searchQuery, filterStatus, filterCountry)
-      calculateStats(rows)
-    } catch (err) {
-      console.error(err)
-      setFetchError('Unable to load orders right now. Please refresh and try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  const loadOrders = useCallback(
+    async (opts: {
+      page: number
+      search: string
+      status: string
+      country: string
+      refresh?: boolean
+    }) => {
+      setFetchError('')
+      setIsFetching(true)
+      try {
+        const params = new URLSearchParams({
+          page: String(opts.page),
+          limit: String(PAGE_SIZE),
+          search: opts.search,
+          status: opts.status,
+          country: opts.country,
+        })
+        if (opts.refresh) params.set('refresh', '1')
+
+        const res = await fetch(`/api/orders?${params.toString()}`)
+        if (!res.ok) throw new Error('Failed to fetch orders')
+        const json = (await res.json()) as OrdersResponse
+
+        setOrders(json.orders ?? [])
+        setPage(json.page)
+        setTotalPages(json.totalPages)
+        setTotalFiltered(json.total)
+        setLimit(json.limit)
+        if (json.stats) setStats(json.stats)
+        if (json.countries) setCountries(json.countries)
+      } catch (err) {
+        console.error(err)
+        setFetchError('Unable to load orders right now. Please refresh and try again.')
+      } finally {
+        setIsFetching(false)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
-    if (isAuthenticated) fetchOrders()
-  }, [isAuthenticated, fetchOrders])
+    if (!isAuthenticated) return
 
-  const applyFilters = (
-    source: MetabaseOrder[],
-    search: string,
-    status: string,
-    country: string
-  ) => {
-    let filtered = [...source]
-
-    if (status !== 'all') {
-      filtered = filtered.filter(
-        (o) => o.status?.toLowerCase().includes(status.toLowerCase())
-      )
+    let effectivePage = page
+    if (prevDebouncedSearch.current !== debouncedSearch) {
+      prevDebouncedSearch.current = debouncedSearch
+      effectivePage = 1
+      if (page !== 1) {
+        setPage(1)
+        return
+      }
     }
 
-    if (country !== 'all') {
-      filtered = filtered.filter(
-        (o) => o.country?.toLowerCase() === country.toLowerCase()
-      )
-    }
+    void loadOrders({
+      page: effectivePage,
+      search: debouncedSearch,
+      status: filterStatus,
+      country: filterCountry,
+    })
+  }, [isAuthenticated, page, debouncedSearch, filterStatus, filterCountry, loadOrders])
 
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      filtered = filtered.filter(
-        (o) =>
-          o.order_number?.toLowerCase().includes(q) ||
-          o.sku?.toLowerCase().includes(q) ||
-          o.title?.toLowerCase().includes(q) ||
-          o.full_name?.toLowerCase().includes(q) ||
-          o.phone?.toLowerCase().includes(q) ||
-          o.city?.toLowerCase().includes(q) ||
-          o.country?.toLowerCase().includes(q) ||
-          o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
-          o.Courier_tracking_id?.toLowerCase().includes(q)
-      )
-    }
-
-    setOrders(filtered)
+  const handleRefresh = () => {
+    loadOrders({
+      page,
+      search: debouncedSearch,
+      status: filterStatus,
+      country: filterCountry,
+      refresh: true,
+    })
   }
 
-  useEffect(() => {
-    applyFilters(allOrders, searchQuery, filterStatus, filterCountry)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, filterStatus, filterCountry, allOrders])
+  const setFilterCountryAndReset = (value: string) => {
+    setFilterCountry(value)
+    setPage(1)
+  }
 
-  const calculateStats = (rows: MetabaseOrder[]) => {
-    let delivered = 0, pending = 0, returned = 0, totalRevenue = 0
-    rows.forEach((o) => {
-      const s = o.status?.toLowerCase() || ''
-      if (s.includes('delivered')) { delivered++; totalRevenue += Number(o.total_payable || 0) }
-      else if (s.includes('return')) returned++
-      else pending++
-    })
-    setStats({ total: rows.length, delivered, pending, returned, totalRevenue })
+  const setFilterStatusAndReset = (value: string) => {
+    setFilterStatus(value)
+    setPage(1)
+  }
+
+  const fmt = (d: string | null | undefined) => {
+    if (!d) return '—'
+    try {
+      return new Date(d).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    } catch {
+      return d
+    }
+  }
+
+  const exportToCSV = async () => {
+    setFetchError('')
+    try {
+      const params = new URLSearchParams({
+        export: '1',
+        search: debouncedSearch,
+        status: filterStatus,
+        country: filterCountry,
+      })
+      const res = await fetch(`/api/orders?${params.toString()}`)
+      if (!res.ok) throw new Error('Export failed')
+      const json = (await res.json()) as { orders: MetabaseOrder[] }
+      const rowsData = json.orders ?? []
+      if (rowsData.length === 0) return
+
+      const headers = [
+        'Order #',
+        'Customer',
+        'Phone',
+        'City',
+        'Country',
+        'Product',
+        'SKU',
+        'Qty',
+        'Total Payable',
+        'Zambeel Tracking',
+        'Courier Tracking',
+        'Status',
+        'Substatus',
+        'Tag',
+        'Order Date',
+        'Shipment Date',
+        'Delivered Date',
+        'Platform',
+        'Vendor ID',
+      ]
+      const esc = (v: unknown) => {
+        if (v === null || v === undefined) return ''
+        const s = String(v)
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? `"${s.replace(/"/g, '""')}"`
+          : s
+      }
+      const rows = rowsData.map((o) =>
+        [
+          esc(o.order_number),
+          esc(o.full_name),
+          esc(o.phone),
+          esc(o.city),
+          esc(o.country),
+          esc(o.title),
+          esc(o.sku),
+          esc(o.quantity),
+          esc(o.total_payable),
+          esc(o.System_gen_tracking_id_removed),
+          esc(o.Courier_tracking_id),
+          esc(o.status),
+          esc(o.substatus),
+          esc(o.tag),
+          esc(o.Order_date),
+          esc(o.shipment_date),
+          esc(o.delivered_date),
+          esc(o.PLATFORM),
+          esc(o.vendor_id),
+        ].join(',')
+      )
+      const csv = [headers.join(','), ...rows].join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `orders_${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+    } catch (e) {
+      console.error(e)
+      setFetchError('Could not export CSV. Try again.')
+    }
   }
 
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase() || ''
     if (s.includes('delivered'))
-      return { icon: CheckCircle, className: 'bg-green-100 text-green-800 border-green-200', label: status }
+      return {
+        icon: CheckCircle,
+        className: 'bg-green-100 text-green-800 border-green-200',
+        label: status,
+      }
     if (s.includes('return'))
       return { icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200', label: status }
     if (s.includes('shipped') || s.includes('dispatch') || s.includes('transit'))
@@ -137,50 +253,10 @@ export default function OrdersPage() {
     return { icon: Clock, className: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: status }
   }
 
-  const fmt = (d: string | null | undefined) => {
-    if (!d) return '—'
-    try {
-      return new Date(d).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'short', day: 'numeric',
-      })
-    } catch { return d }
-  }
+  const startRow = totalFiltered === 0 ? 0 : (page - 1) * limit + 1
+  const endRow = Math.min(page * limit, totalFiltered)
 
-  const uniqueCountries = Array.from(new Set(allOrders.map((o) => o.country).filter(Boolean))).sort()
-
-  const exportToCSV = () => {
-    if (orders.length === 0) return
-    const headers = [
-      'Order #', 'Customer', 'Phone', 'City', 'Country',
-      'Product', 'SKU', 'Qty', 'Total Payable',
-      'Zambeel Tracking', 'Courier Tracking',
-      'Status', 'Substatus', 'Tag',
-      'Order Date', 'Shipment Date', 'Delivered Date',
-      'Platform', 'Vendor ID',
-    ]
-    const esc = (v: any) => {
-      if (v === null || v === undefined) return ''
-      const s = String(v)
-      return s.includes(',') || s.includes('"') || s.includes('\n')
-        ? `"${s.replace(/"/g, '""')}"` : s
-    }
-    const rows = orders.map((o) => [
-      esc(o.order_number), esc(o.full_name), esc(o.phone), esc(o.city), esc(o.country),
-      esc(o.title), esc(o.sku), esc(o.quantity), esc(o.total_payable),
-      esc(o.System_gen_tracking_id_removed), esc(o.Courier_tracking_id),
-      esc(o.status), esc(o.substatus), esc(o.tag),
-      esc(o.Order_date), esc(o.shipment_date), esc(o.delivered_date),
-      esc(o.PLATFORM), esc(o.vendor_id),
-    ].join(','))
-    const csv = [headers.join(','), ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `orders_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-  }
-
-  if (authLoading || isLoading) {
+  if (authLoading || (isFetching && orders.length === 0)) {
     return (
       <div className="flex h-screen bg-gray-100">
         <Sidebar />
@@ -202,26 +278,30 @@ export default function OrdersPage() {
       <div className="flex-1 overflow-auto">
         <Header />
         <main className="p-4 sm:p-6 lg:p-8">
-
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Orders</h2>
-              <p className="text-gray-600 text-sm">Live data from Metabase</p>
+              <p className="text-gray-600 text-sm">Live data from Metabase (50 per page)</p>
             </div>
             <div className="flex gap-2">
               <button
-                onClick={exportToCSV}
-                disabled={orders.length === 0}
+                type="button"
+                onClick={() => void exportToCSV()}
+                disabled={totalFiltered === 0 || isFetching}
                 className="px-4 py-2.5 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50"
               >
-                <Download className="w-4 h-4" />Export CSV
+                <Download className="w-4 h-4" />
+                Export CSV
               </button>
               <button
-                onClick={fetchOrders}
-                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2"
+                type="button"
+                onClick={handleRefresh}
+                disabled={isFetching}
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-all text-white flex items-center gap-2 disabled:opacity-60"
               >
-                <RefreshCw className="w-4 h-4" />Refresh
+                <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+                Refresh
               </button>
             </div>
           </div>
@@ -237,7 +317,12 @@ export default function OrdersPage() {
               { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
               { label: 'Pending', value: stats.pending, icon: Clock, gradient: 'from-yellow-500 to-orange-500' },
               { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
-              { label: 'Revenue (Delivered)', value: `${stats.totalRevenue.toLocaleString()}`, icon: Banknote, gradient: 'from-purple-500 to-pink-500' },
+              {
+                label: 'Revenue (Delivered)',
+                value: `${stats.totalRevenue.toLocaleString()}`,
+                icon: Banknote,
+                gradient: 'from-purple-500 to-pink-500',
+              },
             ].map(({ label, value, icon: Icon, gradient }) => (
               <div key={label} className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-start justify-between">
@@ -269,12 +354,14 @@ export default function OrdersPage() {
               <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
               <select
                 value={filterCountry}
-                onChange={(e) => setFilterCountry(e.target.value)}
+                onChange={(e) => setFilterCountryAndReset(e.target.value)}
                 className="pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
                 <option value="all">All Countries</option>
-                {uniqueCountries.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                {countries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </div>
@@ -282,7 +369,7 @@ export default function OrdersPage() {
               <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => setFilterStatusAndReset(e.target.value)}
                 className="pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
                 <option value="all">All Status</option>
@@ -296,15 +383,22 @@ export default function OrdersPage() {
           </div>
 
           {/* Table */}
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-            {orders.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden relative">
+            {isFetching && orders.length > 0 && (
+              <div className="absolute inset-0 bg-white/50 z-10 flex items-start justify-center pt-4 pointer-events-none">
+                <span className="text-sm text-gray-600 bg-white px-3 py-1 rounded-full shadow border border-gray-200">
+                  Loading…
+                </span>
+              </div>
+            )}
+            {orders.length === 0 && !isFetching ? (
               <div className="p-12 text-center">
                 <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                  {allOrders.length === 0 ? 'No orders found' : 'No results'}
+                  {totalFiltered === 0 ? 'No orders found' : 'No results'}
                 </h3>
                 <p className="text-gray-500 text-sm">
-                  {allOrders.length === 0
+                  {totalFiltered === 0
                     ? 'Orders will appear here once data is available from Metabase.'
                     : 'Try adjusting your search or filters.'}
                 </p>
@@ -314,14 +408,16 @@ export default function OrdersPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {[
-                        'Order #', 'Customer', 'Product', 'SKU', 'Qty',
-                        'Total Payable', 'Tracking', 'Status', 'Order Date',
-                      ].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
-                          {h}
-                        </th>
-                      ))}
+                      {['Order #', 'Customer', 'Product', 'SKU', 'Qty', 'Total Payable', 'Tracking', 'Status', 'Order Date'].map(
+                        (h) => (
+                          <th
+                            key={h}
+                            className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
+                          >
+                            {h}
+                          </th>
+                        )
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -330,16 +426,16 @@ export default function OrdersPage() {
                       const BadgeIcon = badge.icon
                       return (
                         <tr key={`${order.id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                            #{order.order_number}
-                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">#{order.order_number}</td>
                           <td className="px-4 py-3">
                             <div className="font-medium text-gray-900">{order.full_name}</div>
                             <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3" />{order.phone}
+                              <Phone className="w-3 h-3" />
+                              {order.phone}
                             </div>
                             <div className="text-xs text-gray-400 flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />{order.city}, {order.country}
+                              <MapPin className="w-3 h-3" />
+                              {order.city}, {order.country}
                             </div>
                           </td>
                           <td className="px-4 py-3 max-w-[200px]">
@@ -359,7 +455,9 @@ export default function OrdersPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${badge.className}`}>
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${badge.className}`}
+                            >
                               <BadgeIcon className="w-3 h-3" />
                               {badge.label}
                             </span>
@@ -373,9 +471,7 @@ export default function OrdersPage() {
                               {fmt(order.Order_date)}
                             </div>
                             {order.delivered_date && (
-                              <div className="text-xs text-green-600 mt-0.5">
-                                Del: {fmt(order.delivered_date)}
-                              </div>
+                              <div className="text-xs text-green-600 mt-0.5">Del: {fmt(order.delivered_date)}</div>
                             )}
                           </td>
                         </tr>
@@ -383,8 +479,30 @@ export default function OrdersPage() {
                     })}
                   </tbody>
                 </table>
-                <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
-                  Showing {orders.length} of {allOrders.length} orders
+                <div className="px-4 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-gray-500">
+                  <span>
+                    Showing {startRow}-{endRow} of {totalFiltered} orders (page {page} of {totalPages})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1 || isFetching}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages || isFetching}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
