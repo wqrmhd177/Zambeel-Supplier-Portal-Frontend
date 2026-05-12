@@ -220,18 +220,23 @@ export async function createProductAvailabilityRequest(
   }
 
   // Find the purchaser for this market
-  const { data: purchasers } = await supabase
+  const { data: purchasers, error: purchasersError } = await supabase
     .from('users')
-    .select('user_id, country, stock_location_country')
+    .select('user_id, country, stock_location_country, role')
     .eq('role', 'purchaser')
 
   // #region agent log
   console.log('[DBG:create-purchaser-lookup] H-1/H-2', {
     market: normalizedMarket,
+    queryError: purchasersError?.message ?? null,
+    purchaserCount: (purchasers || []).length,
     allPurchasers: (purchasers || []).map((p: any) => ({
       user_id: p.user_id,
+      role: p.role,
       country: p.country,
       stock_location_country: p.stock_location_country,
+      countryUpper: (p.country || '').toUpperCase(),
+      matchesUAE: countryMatchesMarket('UAE', p.country || p.stock_location_country),
     })),
   })
   // #endregion
