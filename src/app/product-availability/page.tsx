@@ -39,6 +39,7 @@ type CreateFormState = {
   productName: string
   sku: string
   referenceLink: string
+  remarks: string
   priorityLevel: 'urgent' | 'normal'
   images: File[]
 }
@@ -59,6 +60,7 @@ const initialCreateForm: CreateFormState = {
   productName: '',
   sku: '',
   referenceLink: '',
+  remarks: '',
   priorityLevel: 'normal',
   images: [],
 }
@@ -115,6 +117,8 @@ export default function ProductAvailabilityPage() {
   const [createForm, setCreateForm] = useState<CreateFormState>(initialCreateForm)
   const [responseForm, setResponseForm] = useState<PurchaserResponseState>(initialResponseForm)
   const [selectedAssignment, setSelectedAssignment] = useState<{ assignmentId: string; requestId: string } | null>(null)
+  const [showResponseForm, setShowResponseForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [inventoryLookup, setInventoryLookup] = useState<InventoryLookupResult | null>(null)
   const [inventoryError, setInventoryError] = useState('')
   const [isCheckingInventory, setIsCheckingInventory] = useState(false)
@@ -131,7 +135,17 @@ export default function ProductAvailabilityPage() {
   const isPurchaser = userRole === 'purchaser'
   const canAccess = Boolean(userRole)
 
-  const visibleRequests = useMemo(() => requests, [requests])
+  const displayedRequests = useMemo(() => {
+    if (!searchQuery.trim()) return requests
+    const q = searchQuery.toLowerCase()
+    return requests.filter((r) =>
+      String(r.request_number ?? '').includes(q) ||
+      (r.reseller_name?.toLowerCase().includes(q) ?? false) ||
+      (r.product_name?.toLowerCase().includes(q) ?? false) ||
+      (r.sku?.toLowerCase().includes(q) ?? false) ||
+      (r.markets?.join(' ').toLowerCase().includes(q) ?? false)
+    )
+  }, [requests, searchQuery])
 
   const getRequestThumbnail = (request: ProductAvailabilityRequestWithDetails): string | null => {
     const images = Array.isArray(request.request_images) ? request.request_images : []
@@ -253,6 +267,7 @@ export default function ProductAvailabilityPage() {
         productName: createForm.productName,
         sku: createForm.sku || null,
         referenceLink: createForm.referenceLink || null,
+        remarks: createForm.remarks || null,
         priorityLevel: createForm.priorityLevel,
         requestImages: imageUrls,
         inventoryMatches: inventoryLookup
@@ -295,8 +310,8 @@ export default function ProductAvailabilityPage() {
   }
 
   const handleDownloadTemplate = () => {
-    const header = 'product_name,reseller_name,markets,sku,reference_link,product_status,priority_level'
-    const example = 'Example Product,Reseller Co,"UAE;KSA",,https://example.com,not_sure,normal'
+    const header = 'product_name,reseller_name,markets,sku,reference_link,product_status,priority_level,remarks'
+    const example = 'Example Product,Reseller Co,"UAE;KSA",,https://example.com,not_sure,normal,Optional notes here'
     const blob = new Blob([header + '\n' + example], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -358,6 +373,10 @@ export default function ProductAvailabilityPage() {
   const openRespondForm = (requestId: string, assignmentId: string) => {
     setSelectedAssignment({ requestId, assignmentId })
     setResponseForm(initialResponseForm)
+    setShowResponseForm(true)
+    setError('')
+    setSuccess('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSubmitResponse = async (e: React.FormEvent) => {
@@ -405,6 +424,7 @@ export default function ProductAvailabilityPage() {
       })
       setSuccess('Response submitted successfully.')
       setSelectedAssignment(null)
+      setShowResponseForm(false)
       setResponseForm(initialResponseForm)
       await refreshData()
     } catch (err) {
@@ -511,7 +531,39 @@ export default function ProductAvailabilityPage() {
                       >
                         Download CSV Template
                       </button>
-                      <span className="text-xs text-gray-500">Fill the template and upload it below. Use semicolons to separate multiple markets (e.g. UAE;KSA).</span>
+                      <span className="text-xs text-gray-500">Fill in the CSV and upload it below. Use the valid values reference below for constrained columns.</span>
+                    </div>
+
+                    {/* Valid options reference panel */}
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs space-y-1.5">
+                      <div className="font-semibold text-blue-800">Valid Column Values</div>
+                      <div className="text-blue-900">
+                        <span className="font-medium">markets:</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">UAE</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">KSA</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">PAK</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">QTR</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">KWT</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">OMN</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">BHR</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">IRQ</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">USA</span>
+                        <span className="text-blue-600 ml-1">(separate multiple with semicolons, e.g. UAE;KSA)</span>
+                      </div>
+                      <div className="text-blue-900">
+                        <span className="font-medium">product_status:</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">already_listed</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">not_listed</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">not_sure</span>
+                      </div>
+                      <div className="text-blue-900">
+                        <span className="font-medium">priority_level:</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">urgent</span>{' '}
+                        <span className="font-mono bg-white/70 px-1 rounded">normal</span>
+                      </div>
+                      <div className="text-blue-700 pt-0.5">
+                        <span className="font-medium">remarks:</span> Optional free-text notes for this request.
+                      </div>
                     </div>
 
                     <input
@@ -653,6 +705,14 @@ export default function ProductAvailabilityPage() {
                   <input className="border rounded-lg px-3 py-2" placeholder="Reference Link (optional)" value={createForm.referenceLink} onChange={(e) => setCreateForm((p) => ({ ...p, referenceLink: e.target.value }))} />
                 </div>
 
+                <textarea
+                  className="border rounded-lg px-3 py-2 w-full"
+                  rows={2}
+                  placeholder="Remarks (optional) — any notes or context about this request"
+                  value={createForm.remarks}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, remarks: e.target.value }))}
+                />
+
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -782,9 +842,19 @@ export default function ProductAvailabilityPage() {
               </div>
             )}
 
-            {isPurchaser && selectedAssignment && (
+            {isPurchaser && showResponseForm && selectedAssignment && (
               <form onSubmit={handleSubmitResponse} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Submit Purchaser Response</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Submit Purchaser Response</h2>
+                  <button
+                    type="button"
+                    onClick={() => { setShowResponseForm(false); setSelectedAssignment(null); setError('') }}
+                    className="p-1 text-gray-400 hover:text-gray-600"
+                    aria-label="Cancel"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <select value={responseForm.availability} onChange={(e) => setResponseForm((p) => ({ ...p, availability: e.target.value as PurchaserResponseState['availability'] }))} className="border rounded-lg px-3 py-2">
                     <option value="available">Available</option>
@@ -795,7 +865,7 @@ export default function ProductAvailabilityPage() {
                     <select value={responseForm.stockStatus} onChange={(e) => setResponseForm((p) => ({ ...p, stockStatus: e.target.value as PurchaserResponseState['stockStatus'] }))} className="border rounded-lg px-3 py-2">
                       <option value="limited">Limited Quantity</option>
                       <option value="on_demand">On Demand</option>
-                      <option value="bulk_limited_both">Available in Bulk &amp; Single Unit</option>
+                      <option value="bulk_limited_both">Normal Qty (Single/Bulk)</option>
                     </select>
                   )}
                 </div>
@@ -842,6 +912,19 @@ export default function ProductAvailabilityPage() {
             )}
 
             {filter !== 'new' && filter !== 'drafts' && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by request ID, seller name, product, SKU, or market…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            )}
+
+            {filter !== 'new' && filter !== 'drafts' && (
             <div
               className="rounded-xl overflow-hidden border border-white/10"
               style={{
@@ -853,6 +936,7 @@ export default function ProductAvailabilityPage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-white/5">
                     <tr>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Req. No.</th>
                       <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Product</th>
                       {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reseller</th>}
                       {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Markets</th>}
@@ -863,14 +947,14 @@ export default function ProductAvailabilityPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleRequests.length === 0 ? (
+                    {displayedRequests.length === 0 ? (
                       <tr>
-                        <td className="px-3 py-8 text-center text-white/60" colSpan={isPurchaser ? 4 : 6}>
-                          No requests found for this tab.
+                        <td className="px-3 py-8 text-center text-white/60" colSpan={isPurchaser ? 5 : 7}>
+                          {searchQuery.trim() ? 'No requests match your search.' : 'No requests found for this tab.'}
                         </td>
                       </tr>
                     ) : (
-                      visibleRequests.map((request) => {
+                      displayedRequests.map((request) => {
                         const created = new Date(request.created_at).toLocaleString()
                         const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
                         const totalAssignments = request.assignments.length
@@ -880,6 +964,9 @@ export default function ProductAvailabilityPage() {
                           .map((a) => a.market)
                         return (
                           <tr key={request.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
+                            <td className="px-3 py-2 text-white/50 text-sm font-mono whitespace-nowrap">
+                              {request.request_number ? `#${request.request_number}` : '—'}
+                            </td>
                             <td className="px-3 py-2">
                               <div className="flex items-center gap-3">
                                 {getRequestThumbnail(request) ? (
@@ -904,6 +991,16 @@ export default function ProductAvailabilityPage() {
                                     <div className="text-xs text-white/60">
                                       SKU: {request.sku.toUpperCase()}
                                     </div>
+                                  )}
+                                  {request.reference_link && (
+                                    <div className="text-xs text-blue-400 max-w-[240px] truncate">
+                                      <a href={request.reference_link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                                        {request.reference_link}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {request.remarks && (
+                                    <div className="text-xs text-white/55 italic mt-0.5 max-w-[240px]">{request.remarks}</div>
                                   )}
                                 </div>
                               </div>

@@ -8,6 +8,7 @@ export type StockStatusOption = 'limited' | 'on_demand' | 'bulk_limited_both'
 
 export interface ProductAvailabilityRequest {
   id: string
+  request_number?: number
   requested_by_user_id: string
   requested_by_role: string
   product_status: ProductStatusInput
@@ -16,6 +17,7 @@ export interface ProductAvailabilityRequest {
   product_name: string
   sku: string | null
   reference_link: string | null
+  remarks: string | null
   priority_level: PriorityLevel
   request_images: string[]
   inventory_matches: unknown[]
@@ -66,6 +68,7 @@ export interface CreateProductAvailabilityInput {
   productName: string
   sku?: string | null
   referenceLink?: string | null
+  remarks?: string | null
   priorityLevel: PriorityLevel
   requestImages: string[]
   inventoryMatches?: unknown[]
@@ -81,6 +84,7 @@ export interface BulkUploadRow {
   reference_link: string
   product_status: ProductStatusInput
   priority_level: PriorityLevel
+  remarks: string
 }
 
 /** Validation result for a single parsed CSV row */
@@ -191,7 +195,7 @@ export function formatStockStatusLabel(stock: StockStatusOption): string {
     case 'on_demand':
       return 'On Demand'
     case 'bulk_limited_both':
-      return 'Available in Bulk & Single Unit'
+      return 'Normal Qty (Single/Bulk)'
     default:
       return stock
   }
@@ -283,6 +287,7 @@ export async function createProductAvailabilityRequest(
         product_name: input.productName.trim(),
         sku: input.sku?.trim() || null,
         reference_link: input.referenceLink?.trim() || null,
+        remarks: input.remarks?.trim() || null,
         priority_level: input.priorityLevel,
         request_images: isDraft ? [] : input.requestImages,
         inventory_matches: input.inventoryMatches || [],
@@ -573,6 +578,7 @@ export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
       reference_link: get('reference_link'),
       product_status,
       priority_level,
+      remarks: get('remarks'),
       errors,
     } satisfies BulkUploadRowValidated
   })
@@ -599,6 +605,7 @@ export async function createBulkDraftRequests(
         productName: row.product_name,
         sku: row.sku || null,
         referenceLink: row.reference_link || null,
+        remarks: row.remarks || null,
         priorityLevel: row.priority_level,
         requestImages: [],
         isDraft: true,
