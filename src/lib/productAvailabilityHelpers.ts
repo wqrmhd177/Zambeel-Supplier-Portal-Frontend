@@ -502,6 +502,12 @@ export async function fetchProductAvailabilityRequests(params: {
         responsibleAssignments.length > 0 &&
         responsibleAssignments.every((a: any) => a.assignment_status === 'completed')
 
+      // #region agent log
+      if (responsibleAssignments.length > 0) {
+        fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:derive-status',message:'deriving status for request',data:{requestId:request.id,requestNumber:request.request_number,dbStatus:request.status,totalAssignments:assignments.length,responsibleCount:responsibleAssignments.length,allResponsibleDone,assignmentStatuses:responsibleAssignments.map((a:any)=>({id:a.id,status:a.assignment_status,purchaserId:a.assigned_purchaser_user_id}))},timestamp:Date.now(),hypothesisId:'H-B,H-C'})}).catch(()=>{})
+      }
+      // #endregion
+
       const derived: ProductAvailabilityStatus = allResponsibleDone
         ? 'completed'
         : deriveStatus(request.status, request.created_at)
@@ -575,21 +581,34 @@ export async function submitProductAvailabilityResponse(
     remarks: input.remarks?.trim() || null,
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:submit-start',message:'submitProductAvailabilityResponse called',data:{assignmentId:input.assignmentId,requestId:input.requestId,availability:input.availability,stockStatus:input.stockStatus,singleUnitPrice:input.singleUnitPrice},timestamp:Date.now(),hypothesisId:'H-D'})}).catch(()=>{})
+  // #endregion
+
   const { error: responseError } = await supabase
     .from('product_availability_responses')
     .upsert(payload, { onConflict: 'assignment_id' })
+
+  // #region agent log
+  fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:after-response-upsert',message:'response upsert result',data:{error:responseError ? responseError.message : null,code:responseError ? responseError.code : null},timestamp:Date.now(),hypothesisId:'H-D'})}).catch(()=>{})
+  // #endregion
 
   if (responseError) {
     throw new Error(responseError.message || 'Failed to save purchaser response')
   }
 
-  const { error: assignmentError } = await supabase
+  const { data: assignmentUpdateData, error: assignmentError, count: assignmentCount } = await supabase
     .from('product_availability_request_markets')
     .update({
       assignment_status: 'completed',
       responded_at: new Date().toISOString(),
     })
     .eq('id', input.assignmentId)
+    .select('id, assignment_status')
+
+  // #region agent log
+  fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:after-assignment-update',message:'assignment update result',data:{error:assignmentError ? assignmentError.message : null,code:assignmentError ? assignmentError.code : null,rowsReturned: assignmentUpdateData ? assignmentUpdateData.length : 0,updatedRows:assignmentUpdateData},timestamp:Date.now(),hypothesisId:'H-A'})}).catch(()=>{})
+  // #endregion
 
   if (assignmentError) {
     throw new Error(assignmentError.message || 'Failed to update assignment status')
