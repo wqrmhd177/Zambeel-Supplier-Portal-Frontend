@@ -312,6 +312,15 @@ export async function fetchProductAvailabilityRequests(params: {
   }
 
   const { data: requestRows, error: requestError } = await requestQuery
+
+  // #region agent log
+  console.log('[DBG:fetch-result] H-RLS', {
+    role,
+    rowCount: (requestRows || []).length,
+    error: requestError?.message ?? null,
+  })
+  // #endregion
+
   if (requestError) {
     throw new Error(requestError.message || 'Failed to fetch availability requests')
   }
