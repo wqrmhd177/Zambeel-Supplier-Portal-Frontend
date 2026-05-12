@@ -12,7 +12,15 @@ export interface ProductAvailabilityRequest {
   requested_by_user_id: string
   requested_by_role: string
   product_status: ProductStatusInput
+  /** Legacy array kept for display of old multi-market requests */
   markets: string[]
+  /** Single market for this request (new style) */
+  market: string | null
+  /** Purchaser assigned to respond */
+  assigned_purchaser_user_id: string | null
+  /** Whether the purchaser has responded */
+  assignment_status: 'pending' | 'completed'
+  responded_at: string | null
   reseller_name: string
   product_name: string
   sku: string | null
@@ -27,21 +35,10 @@ export interface ProductAvailabilityRequest {
   updated_at: string
 }
 
-export interface ProductAvailabilityAssignment {
-  id: string
-  request_id: string
-  market: string
-  assigned_purchaser_user_id: string | null
-  assignment_status: 'pending' | 'completed'
-  responded_at: string | null
-  created_at: string
-  updated_at: string
-}
-
 export interface ProductAvailabilityResponse {
   id: string
   request_id: string
-  assignment_id: string
+  assignment_id: string | null
   responded_by_user_id: string
   availability: AvailabilityOption
   stock_status: StockStatusOption
@@ -55,15 +52,14 @@ export interface ProductAvailabilityResponse {
 
 export interface ProductAvailabilityRequestWithDetails extends ProductAvailabilityRequest {
   derived_status: ProductAvailabilityStatus
-  assignments: ProductAvailabilityAssignment[]
-  responsesByAssignmentId: Record<string, ProductAvailabilityResponse>
+  response: ProductAvailabilityResponse | null
 }
 
 export interface CreateProductAvailabilityInput {
   requestedByUserId: string
   requestedByRole: string
   productStatus: ProductStatusInput
-  markets: string[]
+  market: string
   resellerName: string
   productName: string
   sku?: string | null
@@ -79,7 +75,7 @@ export interface CreateProductAvailabilityInput {
 export interface BulkUploadRow {
   product_name: string
   reseller_name: string
-  markets: string[]
+  market: string
   sku: string
   reference_link: string
   product_status: ProductStatusInput
@@ -94,7 +90,6 @@ export interface BulkUploadRowValidated extends BulkUploadRow {
 }
 
 export interface SubmitProductAvailabilityResponseInput {
-  assignmentId: string
   requestId: string
   respondedByUserId: string
   availability: AvailabilityOption
@@ -121,21 +116,18 @@ function normalizeMarket(market: string): string {
   return market.trim().toUpperCase()
 }
 
-function deriveStatus(status: ProductAvailabilityStatus, createdAt: string): ProductAvailabilityStatus {
-  if (status === 'completed') return 'completed'
-  const createdMs = new Date(createdAt).getTime()
-  const nowMs = Date.now()
-  const elapsedHours = (nowMs - createdMs) / (1000 * 60 * 60)
+function deriveStatus(
+  dbStatus: ProductAvailabilityStatus,
+  assignmentStatus: 'pending' | 'completed',
+  createdAt: string
+): ProductAvailabilityStatus {
+  if (dbStatus === 'completed' || assignmentStatus === 'completed') return 'completed'
+  const elapsedHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60)
   return elapsedHours >= 48 ? 'delayed' : 'pending'
 }
 
 /**
- * Tab filters — each open request appears in exactly one tab:
- * - draft: is_draft = true (only visible to the agent who created it)
- * - urgent_open: urgent priority, still within 48h (derived pending), not draft
- * - normal_pending: normal priority, still within 48h (derived pending), not draft
- * - delayed: past 48h for any priority (normal or urgent); never also in urgent/normal tabs
- * - completed, all: standard
+ * Tab filters — each open request appears in exactly one tab.
  */
 export type ProductAvailabilityListFilter =
   | 'all'
@@ -150,8 +142,7 @@ function matchesProductAvailabilityListFilter(
   filter: ProductAvailabilityListFilter
 ): boolean {
   if (filter === 'draft') return row.is_draft === true
-  // All non-draft filters exclude drafts
-  if (row.is_draft) return filter === 'all' ? false : false
+  if (row.is_draft) return false
   if (filter === 'all') return true
   const priority = row.priority_level as PriorityLevel
   if (filter === 'completed') return row.derived_status === 'completed'
@@ -163,41 +154,28 @@ function matchesProductAvailabilityListFilter(
 
 export function formatDerivedStatusLabel(status: ProductAvailabilityStatus): string {
   switch (status) {
-    case 'pending':
-      return 'Pending'
-    case 'delayed':
-      return 'Delayed'
-    case 'completed':
-      return 'Completed'
-    default:
-      return status
+    case 'pending': return 'Pending'
+    case 'delayed': return 'Delayed'
+    case 'completed': return 'Completed'
+    default: return status
   }
 }
 
 export function formatAvailabilityLabel(av: AvailabilityOption): string {
   switch (av) {
-    case 'available':
-      return 'Available'
-    case 'not_available':
-      return 'Not Available'
-    case 'on_demand':
-      return 'On Demand'
-    default:
-      return av
+    case 'available': return 'Available'
+    case 'not_available': return 'Not Available'
+    case 'on_demand': return 'On Demand'
+    default: return av
   }
 }
 
-/** Labels shown to agents in feedback; purchaser form uses the same values with purchaser-specific wording for stock types */
 export function formatStockStatusLabel(stock: StockStatusOption): string {
   switch (stock) {
-    case 'limited':
-      return 'Limited Quantity'
-    case 'on_demand':
-      return 'On Demand'
-    case 'bulk_limited_both':
-      return 'Normal Qty (Single/Bulk)'
-    default:
-      return stock
+    case 'limited': return 'Limited Quantity'
+    case 'on_demand': return 'On Demand'
+    case 'bulk_limited_both': return 'Normal Qty (Single/Bulk)'
+    default: return stock
   }
 }
 
@@ -225,105 +203,14 @@ async function maybeSyncDelayedRequests(): Promise<void> {
     .lte('created_at', thresholdIso)
 }
 
-async function refreshRequestStatus(requestId: string): Promise<void> {
-  const { data: assignments } = await supabase
-    .from('product_availability_request_markets')
-    .select('assignment_status, assigned_purchaser_user_id')
-    .eq('request_id', requestId)
-
-  // Only count assignments that have an actual purchaser assigned.
-  // Markets with no purchaser (null) will never complete on their own, so
-  // they should not block the request from being marked as completed.
-  const responsibleAssignments = (assignments || []).filter(
-    (a) => a.assigned_purchaser_user_id !== null && a.assigned_purchaser_user_id !== undefined
-  )
-
-  const allCompleted =
-    responsibleAssignments.length > 0 &&
-    responsibleAssignments.every((a) => a.assignment_status === 'completed')
-
-  if (allCompleted) {
-    await supabase
-      .from('product_availability_requests')
-      .update({ status: 'completed' })
-      .eq('id', requestId)
-    return
-  }
-
-  const { data: requestRow } = await supabase
-    .from('product_availability_requests')
-    .select('created_at, status')
-    .eq('id', requestId)
-    .single()
-
-  if (!requestRow) return
-  const next = deriveStatus('pending', requestRow.created_at)
-  await supabase
-    .from('product_availability_requests')
-    .update({ status: next })
-    .eq('id', requestId)
-}
-
-/**
- * Proactively mark requests as completed if all assigned-purchaser assignments
- * are done. Catches cases where refreshRequestStatus was skipped (e.g. old data).
- */
-async function maybeSyncCompletedRequests(): Promise<void> {
-  // Find all non-draft requests still in pending/delayed state
-  const { data: openRequests } = await supabase
-    .from('product_availability_requests')
-    .select('id')
-    .in('status', ['pending', 'delayed'])
-    .eq('is_draft', false)
-
-  if (!openRequests || openRequests.length === 0) return
-
-  const openIds = openRequests.map((r: any) => r.id)
-
-  // Fetch all their assignments in one query
-  const { data: allAssignments } = await supabase
-    .from('product_availability_request_markets')
-    .select('request_id, assignment_status, assigned_purchaser_user_id')
-    .in('request_id', openIds)
-
-  if (!allAssignments || allAssignments.length === 0) return
-
-  // Group by request
-  const byRequest = new Map<string, typeof allAssignments>()
-  for (const a of allAssignments) {
-    const existing = byRequest.get(a.request_id) || []
-    existing.push(a)
-    byRequest.set(a.request_id, existing)
-  }
-
-  const nowCompleted: string[] = []
-  byRequest.forEach((assigns, requestId) => {
-    const responsible = assigns.filter(
-      (a) => a.assigned_purchaser_user_id !== null && a.assigned_purchaser_user_id !== undefined
-    )
-    if (responsible.length > 0 && responsible.every((a) => a.assignment_status === 'completed')) {
-      nowCompleted.push(requestId)
-    }
-  })
-
-  if (nowCompleted.length > 0) {
-    await supabase
-      .from('product_availability_requests')
-      .update({ status: 'completed' })
-      .in('id', nowCompleted)
-  }
-}
-
 export async function createProductAvailabilityRequest(
   input: CreateProductAvailabilityInput
 ): Promise<ProductAvailabilityRequest | null> {
   const isDraft = input.isDraft === true
-  const normalizedMarkets = Array.from(
-    new Set(input.markets.map(normalizeMarket).filter(Boolean))
-  )
+  const normalizedMarket = normalizeMarket(input.market)
 
-  if (normalizedMarkets.length === 0) {
-    throw new Error('At least one market is required')
+  if (!normalizedMarket) {
+    throw new Error('A market is required')
   }
   if (!isDraft && (input.requestImages.length === 0 || input.requestImages.length > 5)) {
     throw new Error('Request images must contain between 1 and 5 files')
@@ -332,6 +219,16 @@ export async function createProductAvailabilityRequest(
     throw new Error('SKU is required when product status is Already Listed')
   }
 
+  // Find the purchaser for this market
+  const { data: purchasers } = await supabase
+    .from('users')
+    .select('user_id, country, stock_location_country')
+    .eq('role', 'purchaser')
+
+  const matchingPurchaser = (purchasers || []).find((p: any) =>
+    countryMatchesMarket(normalizedMarket, p.country || p.stock_location_country)
+  )
+
   const { data: createdRequest, error: requestError } = await supabase
     .from('product_availability_requests')
     .insert([
@@ -339,7 +236,10 @@ export async function createProductAvailabilityRequest(
         requested_by_user_id: input.requestedByUserId,
         requested_by_role: input.requestedByRole,
         product_status: input.productStatus,
-        markets: normalizedMarkets,
+        markets: [normalizedMarket],
+        market: normalizedMarket,
+        assigned_purchaser_user_id: matchingPurchaser ? String(matchingPurchaser.user_id || '') : null,
+        assignment_status: 'pending',
         reseller_name: input.resellerName.trim(),
         product_name: input.productName.trim(),
         sku: input.sku?.trim() || null,
@@ -359,51 +259,6 @@ export async function createProductAvailabilityRequest(
     throw new Error(requestError?.message || 'Failed to create product availability request')
   }
 
-  const { data: purchasers } = await supabase
-    .from('users')
-    .select('user_id, country, stock_location_country')
-    .eq('role', 'purchaser')
-
-  const assignmentsToInsert: Array<{
-    request_id: string
-    market: string
-    assigned_purchaser_user_id: string | null
-    assignment_status: 'pending'
-  }> = []
-
-  normalizedMarkets.forEach((market) => {
-    const matchingPurchasers = (purchasers || []).filter((p: any) =>
-      countryMatchesMarket(market, p.country || p.stock_location_country)
-    )
-
-    if (matchingPurchasers.length === 0) {
-      assignmentsToInsert.push({
-        request_id: createdRequest.id,
-        market,
-        assigned_purchaser_user_id: null,
-        assignment_status: 'pending',
-      })
-      return
-    }
-
-    matchingPurchasers.forEach((p: any) => {
-      assignmentsToInsert.push({
-        request_id: createdRequest.id,
-        market,
-        assigned_purchaser_user_id: String(p.user_id || ''),
-        assignment_status: 'pending',
-      })
-    })
-  })
-
-  const { error: assignmentError } = await supabase
-    .from('product_availability_request_markets')
-    .insert(assignmentsToInsert)
-
-  if (assignmentError) {
-    throw new Error(assignmentError.message || 'Failed to create market assignments')
-  }
-
   return createdRequest
 }
 
@@ -412,25 +267,9 @@ export async function fetchProductAvailabilityRequests(params: {
   userFriendlyId: string
   statusFilter: ProductAvailabilityListFilter
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
-  await Promise.all([maybeSyncDelayedRequests(), maybeSyncCompletedRequests()])
+  await maybeSyncDelayedRequests()
 
   const role = (params.userRole || '').toLowerCase()
-  let requestIdsForPurchaser: string[] = []
-
-  if (role === 'purchaser') {
-    const { data: assignedRows, error: assignedError } = await supabase
-      .from('product_availability_request_markets')
-      .select('request_id')
-      .eq('assigned_purchaser_user_id', params.userFriendlyId)
-
-    if (assignedError) {
-      throw new Error(assignedError.message || 'Failed to fetch purchaser assignments')
-    }
-    requestIdsForPurchaser = Array.from(
-      new Set((assignedRows || []).map((row: any) => row.request_id))
-    )
-    if (requestIdsForPurchaser.length === 0) return []
-  }
 
   let requestQuery = supabase
     .from('product_availability_requests')
@@ -440,10 +279,10 @@ export async function fetchProductAvailabilityRequests(params: {
   if (role === 'agent') {
     requestQuery = requestQuery.eq('requested_by_user_id', params.userFriendlyId)
   } else if (role === 'purchaser') {
-    // Purchasers never see draft requests
-    requestQuery = requestQuery.in('id', requestIdsForPurchaser).eq('is_draft', false)
+    requestQuery = requestQuery
+      .eq('assigned_purchaser_user_id', params.userFriendlyId)
+      .eq('is_draft', false)
   } else {
-    // Admin and other roles: exclude drafts from normal views
     if (params.statusFilter !== 'draft') {
       requestQuery = requestQuery.eq('is_draft', false)
     }
@@ -457,83 +296,53 @@ export async function fetchProductAvailabilityRequests(params: {
   const requestIds = (requestRows || []).map((row: any) => row.id)
   if (requestIds.length === 0) return []
 
-  const { data: assignmentRows, error: assignmentError } = await supabase
-    .from('product_availability_request_markets')
-    .select('*')
-    .in('request_id', requestIds)
-
-  if (assignmentError) {
-    throw new Error(assignmentError.message || 'Failed to fetch request assignments')
-  }
-
-  const assignmentIds = (assignmentRows || []).map((row: any) => row.id)
-  const { data: responseRows, error: responseError } = await supabase
+  // Fetch responses linked directly by request_id (new style, assignment_id IS NULL)
+  const { data: newStyleResponses } = await supabase
     .from('product_availability_responses')
     .select('*')
-    .in('assignment_id', assignmentIds.length > 0 ? assignmentIds : ['00000000-0000-0000-0000-000000000000'])
+    .in('request_id', requestIds)
+    .is('assignment_id', null)
 
-  if (responseError && assignmentIds.length > 0) {
-    throw new Error(responseError.message || 'Failed to fetch availability responses')
-  }
+  // Also fetch old-style responses (assignment_id IS NOT NULL) for legacy requests
+  const { data: oldStyleResponses } = await supabase
+    .from('product_availability_responses')
+    .select('*')
+    .in('request_id', requestIds)
+    .not('assignment_id', 'is', null)
 
-  const assignmentsByRequest = new Map<string, ProductAvailabilityAssignment[]>()
-  ;(assignmentRows || []).forEach((row: any) => {
-    const existing = assignmentsByRequest.get(row.request_id) || []
-    existing.push(row)
-    assignmentsByRequest.set(row.request_id, existing)
+  const responseByRequestId: Record<string, ProductAvailabilityResponse> = {}
+  // Old-style first (lower priority), new-style overwrites
+  ;(oldStyleResponses || []).forEach((r: any) => {
+    responseByRequestId[r.request_id] = r
   })
-
-  const responsesByAssignmentId: Record<string, ProductAvailabilityResponse> = {}
-  ;(responseRows || []).forEach((row: any) => {
-    responsesByAssignmentId[row.assignment_id] = row
+  ;(newStyleResponses || []).forEach((r: any) => {
+    responseByRequestId[r.request_id] = r
   })
 
   const withDerived = (requestRows || [])
     .map((request: any) => {
-      const assignments = assignmentsByRequest.get(request.id) || []
-
-      // Derive completion from assignments directly — never rely solely on the DB
-      // status field, which may lag behind due to RLS preventing updates by
-      // purchaser/agent roles.
-      const responsibleAssignments = assignments.filter(
-        (a: any) => a.assigned_purchaser_user_id !== null && a.assigned_purchaser_user_id !== undefined
-      )
-      const allResponsibleDone =
-        responsibleAssignments.length > 0 &&
-        responsibleAssignments.every((a: any) => a.assignment_status === 'completed')
-
       // #region agent log
-      if (responsibleAssignments.length > 0) {
-        fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:derive-status',message:'deriving status for request',data:{requestId:request.id,requestNumber:request.request_number,dbStatus:request.status,totalAssignments:assignments.length,responsibleCount:responsibleAssignments.length,allResponsibleDone,assignmentStatuses:responsibleAssignments.map((a:any)=>({id:a.id,status:a.assignment_status,purchaserId:a.assigned_purchaser_user_id}))},timestamp:Date.now(),hypothesisId:'H-B,H-C'})}).catch(()=>{})
-      }
+      console.log('[DBG:derive-status] H-1', {
+        requestId: request.id,
+        reqNo: request.request_number,
+        dbStatus: request.status,
+        assignmentStatus: request.assignment_status,
+        assignedTo: request.assigned_purchaser_user_id,
+      })
       // #endregion
 
-      const derived: ProductAvailabilityStatus = allResponsibleDone
-        ? 'completed'
-        : deriveStatus(request.status, request.created_at)
-
-      const responsesMapForRequest: Record<string, ProductAvailabilityResponse> = {}
-      assignments.forEach((assignment) => {
-        const response = responsesByAssignmentId[assignment.id]
-        if (response) responsesMapForRequest[assignment.id] = response
-      })
+      const derived = deriveStatus(
+        request.status,
+        request.assignment_status ?? 'pending',
+        request.created_at
+      )
       return {
         ...request,
         derived_status: derived,
-        assignments,
-        responsesByAssignmentId: responsesMapForRequest,
+        response: responseByRequestId[request.id] ?? null,
       } as ProductAvailabilityRequestWithDetails
     })
     .filter((row) => matchesProductAvailabilityListFilter(row, params.statusFilter))
-
-  if (role === 'purchaser') {
-    return withDerived.map((row) => ({
-      ...row,
-      assignments: row.assignments.filter(
-        (assignment) => assignment.assigned_purchaser_user_id === params.userFriendlyId
-      ),
-    }))
-  }
 
   return withDerived
 }
@@ -547,6 +356,7 @@ export async function submitProductAvailabilityResponse(
   ) {
     throw new Error('Response images must contain between 1 and 5 files')
   }
+
   const singleUnitPrice =
     input.singleUnitPrice === null || input.singleUnitPrice === undefined
       ? null
@@ -564,57 +374,40 @@ export async function submitProductAvailabilityResponse(
     throw new Error('Single unit price is required for this stock status')
   }
 
-  const payload = {
-    request_id: input.requestId,
-    assignment_id: input.assignmentId,
-    responded_by_user_id: input.respondedByUserId,
+  // #region agent log
+  console.log('[DBG:submit-start] H-1', {
+    requestId: input.requestId,
     availability: input.availability,
-    stock_status: input.availability === 'not_available' ? 'on_demand' : input.stockStatus,
-    single_unit_price: input.availability === 'not_available' ? null : singleUnitPrice,
-    bulk_unit_price:
+    stockStatus: input.stockStatus,
+    singleUnitPrice: input.singleUnitPrice,
+  })
+  // #endregion
+
+  const { data, error } = await supabase.rpc('submit_availability_response', {
+    p_request_id:           input.requestId,
+    p_responded_by_user_id: input.respondedByUserId,
+    p_availability:         input.availability === 'not_available' ? 'not_available' : input.availability,
+    p_stock_status:         input.availability === 'not_available' ? 'on_demand' : input.stockStatus,
+    p_single_unit_price:    input.availability === 'not_available' ? null : singleUnitPrice,
+    p_bulk_unit_price:
       input.availability === 'not_available'
         ? null
         : input.stockStatus === 'bulk_limited_both'
           ? bulkUnitPrice
           : null,
-    response_images: input.availability === 'not_available' ? [] : input.responseImages,
-    remarks: input.remarks?.trim() || null,
-  }
+    p_response_images: input.availability === 'not_available' ? [] : input.responseImages,
+    p_remarks:         input.availability === 'not_available' ? null : (input.remarks?.trim() || null),
+  })
 
   // #region agent log
-  fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:submit-start',message:'submitProductAvailabilityResponse called',data:{assignmentId:input.assignmentId,requestId:input.requestId,availability:input.availability,stockStatus:input.stockStatus,singleUnitPrice:input.singleUnitPrice},timestamp:Date.now(),hypothesisId:'H-D'})}).catch(()=>{})
+  if (error) console.error('[DBG:rpc-error] H-1', { error: error.message, code: error.code })
+  else console.log('[DBG:rpc-ok] H-1', data)
   // #endregion
 
-  const { error: responseError } = await supabase
-    .from('product_availability_responses')
-    .upsert(payload, { onConflict: 'assignment_id' })
-
-  // #region agent log
-  fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:after-response-upsert',message:'response upsert result',data:{error:responseError ? responseError.message : null,code:responseError ? responseError.code : null},timestamp:Date.now(),hypothesisId:'H-D'})}).catch(()=>{})
-  // #endregion
-
-  if (responseError) {
-    throw new Error(responseError.message || 'Failed to save purchaser response')
+  if (error) {
+    throw new Error(error.message || 'Failed to save purchaser response')
   }
 
-  const { data: assignmentUpdateData, error: assignmentError, count: assignmentCount } = await supabase
-    .from('product_availability_request_markets')
-    .update({
-      assignment_status: 'completed',
-      responded_at: new Date().toISOString(),
-    })
-    .eq('id', input.assignmentId)
-    .select('id, assignment_status')
-
-  // #region agent log
-  fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'productAvailabilityHelpers.ts:after-assignment-update',message:'assignment update result',data:{error:assignmentError ? assignmentError.message : null,code:assignmentError ? assignmentError.code : null,rowsReturned: assignmentUpdateData ? assignmentUpdateData.length : 0,updatedRows:assignmentUpdateData},timestamp:Date.now(),hypothesisId:'H-A'})}).catch(()=>{})
-  // #endregion
-
-  if (assignmentError) {
-    throw new Error(assignmentError.message || 'Failed to update assignment status')
-  }
-
-  await refreshRequestStatus(input.requestId)
   return true
 }
 
@@ -630,14 +423,11 @@ export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
   const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
 
   return lines.slice(1).map((line, i) => {
-    const rowIndex = i + 2 // 1-based, header is row 1
+    const rowIndex = i + 2
     const cells = line.split(',').map((c) => c.trim())
     const get = (col: string) => cells[headers.indexOf(col)] || ''
 
-    const rawMarkets = get('markets')
-      .split(';')
-      .map((m) => m.trim().toUpperCase())
-      .filter(Boolean)
+    const rawMarket = get('market').trim().toUpperCase()
     const product_status = get('product_status') as ProductStatusInput
     const priority_level = get('priority_level') as PriorityLevel
 
@@ -645,15 +435,13 @@ export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
 
     if (!get('product_name')) errors.push('product_name is required')
     if (!get('reseller_name')) errors.push('reseller_name is required')
-    if (rawMarkets.length === 0) errors.push('at least one market is required')
-    rawMarkets.forEach((m) => {
-      if (!VALID_MARKETS.has(m)) errors.push(`unknown market "${m}"`)
-    })
+    if (!rawMarket) errors.push('market is required')
+    else if (!VALID_MARKETS.has(rawMarket)) errors.push(`unknown market "${rawMarket}"`)
     if (!VALID_PRODUCT_STATUSES.has(product_status)) {
-      errors.push(`product_status must be already_listed, not_listed, or not_sure`)
+      errors.push('product_status must be already_listed, not_listed, or not_sure')
     }
     if (!VALID_PRIORITIES.has(priority_level)) {
-      errors.push(`priority_level must be urgent or normal`)
+      errors.push('priority_level must be urgent or normal')
     }
     if (product_status === 'already_listed' && !get('sku')) {
       errors.push('sku is required when product_status is already_listed')
@@ -663,7 +451,7 @@ export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
       rowIndex,
       product_name: get('product_name'),
       reseller_name: get('reseller_name'),
-      markets: rawMarkets,
+      market: rawMarket,
       sku: get('sku'),
       reference_link: get('reference_link'),
       product_status,
@@ -690,7 +478,7 @@ export async function createBulkDraftRequests(
         requestedByUserId: agentUserId,
         requestedByRole: agentRole,
         productStatus: row.product_status,
-        markets: row.markets,
+        market: row.market,
         resellerName: row.reseller_name,
         productName: row.product_name,
         sku: row.sku || null,
@@ -774,4 +562,3 @@ export async function getPendingProductAvailabilityCount(
   const counts = await getProductAvailabilityCounts(userRole, userFriendlyId)
   return counts.all
 }
-

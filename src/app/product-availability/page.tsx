@@ -34,7 +34,7 @@ type NewTabMode = 'single' | 'bulk'
 
 type CreateFormState = {
   productStatus: 'already_listed' | 'not_listed' | 'not_sure'
-  markets: string[]
+  market: string
   resellerName: string
   productName: string
   sku: string
@@ -55,7 +55,7 @@ type PurchaserResponseState = {
 
 const initialCreateForm: CreateFormState = {
   productStatus: 'not_sure',
-  markets: [],
+  market: '',
   resellerName: '',
   productName: '',
   sku: '',
@@ -116,7 +116,7 @@ export default function ProductAvailabilityPage() {
   const [requests, setRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
   const [createForm, setCreateForm] = useState<CreateFormState>(initialCreateForm)
   const [responseForm, setResponseForm] = useState<PurchaserResponseState>(initialResponseForm)
-  const [selectedAssignment, setSelectedAssignment] = useState<{ assignmentId: string; requestId: string } | null>(null)
+  const [selectedAssignment, setSelectedAssignment] = useState<{ requestId: string } | null>(null)
   const [showResponseForm, setShowResponseForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [inventoryLookup, setInventoryLookup] = useState<InventoryLookupResult | null>(null)
@@ -143,6 +143,7 @@ export default function ProductAvailabilityPage() {
       (r.reseller_name?.toLowerCase().includes(q) ?? false) ||
       (r.product_name?.toLowerCase().includes(q) ?? false) ||
       (r.sku?.toLowerCase().includes(q) ?? false) ||
+      (r.market?.toLowerCase().includes(q) ?? false) ||
       (r.markets?.join(' ').toLowerCase().includes(q) ?? false)
     )
   }, [requests, searchQuery])
@@ -238,8 +239,8 @@ export default function ProductAvailabilityPage() {
     setError('')
     setSuccess('')
 
-    if (createForm.markets.length === 0) {
-      setError('Please select at least one market.')
+    if (!createForm.market) {
+      setError('Please select a market.')
       return
     }
     if (!createForm.resellerName.trim() || !createForm.productName.trim()) {
@@ -262,7 +263,7 @@ export default function ProductAvailabilityPage() {
         requestedByUserId: userFriendlyId,
         requestedByRole: userRole,
         productStatus: createForm.productStatus,
-        markets: createForm.markets,
+        market: createForm.market,
         resellerName: createForm.resellerName,
         productName: createForm.productName,
         sku: createForm.sku || null,
@@ -349,7 +350,7 @@ export default function ProductAvailabilityPage() {
     sheet.columns = [
       { header: 'product_name', key: 'product_name', width: 28 },
       { header: 'reseller_name', key: 'reseller_name', width: 22 },
-      { header: 'markets', key: 'markets', width: 22 },
+      { header: 'market', key: 'market', width: 12 },
       { header: 'sku', key: 'sku', width: 16 },
       { header: 'reference_link', key: 'reference_link', width: 32 },
       { header: 'product_status', key: 'product_status', width: 20 },
@@ -363,9 +364,17 @@ export default function ProductAvailabilityPage() {
     headerRow.alignment = { horizontal: 'center' }
     headerRow.commit()
 
-    sheet.addRow(['Example Product', 'Reseller Co', 'UAE;KSA', '', 'https://example.com', 'not_sure', 'normal', 'Optional notes here'])
+    sheet.addRow(['Example Product', 'Reseller Co', 'UAE', '', 'https://example.com', 'not_sure', 'normal', 'Optional notes here'])
 
     for (let row = 2; row <= 100; row++) {
+      sheet.getCell(`C${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: ['"UAE,KSA,PAK,QTR,KWT,OMN,BHR,IRQ,USA"'],
+        error: 'Choose one market: UAE, KSA, PAK, QTR, KWT, OMN, BHR, IRQ, USA',
+        errorTitle: 'Invalid market',
+        showErrorMessage: true,
+      }
       sheet.getCell(`F${row}`).dataValidation = {
         type: 'list',
         allowBlank: true,
@@ -384,15 +393,13 @@ export default function ProductAvailabilityPage() {
       }
     }
 
-    sheet.getCell('C1').note = 'Valid markets: UAE, KSA, PAK, QTR, KWT, OMN, BHR, IRQ, USA\nSeparate multiple with semicolons (e.g. UAE;KSA;PAK)'
-
     const optSheet = workbook.addWorksheet('Valid Options')
     optSheet.columns = [
       { header: 'Column', key: 'col', width: 20 },
       { header: 'Valid Values', key: 'vals', width: 55 },
     ]
     optSheet.getRow(1).font = { bold: true }
-    optSheet.addRow(['markets', 'UAE, KSA, PAK, QTR, KWT, OMN, BHR, IRQ, USA  (separate with semicolons)'])
+    optSheet.addRow(['market', 'UAE  |  KSA  |  PAK  |  QTR  |  KWT  |  OMN  |  BHR  |  IRQ  |  USA  (one market per request)'])
     optSheet.addRow(['product_status', 'already_listed  |  not_listed  |  not_sure'])
     optSheet.addRow(['priority_level', 'urgent  |  normal'])
     optSheet.addRow(['remarks', 'Free-text notes (optional)'])
@@ -456,8 +463,8 @@ export default function ProductAvailabilityPage() {
     }
   }
 
-  const openRespondForm = (requestId: string, assignmentId: string) => {
-    setSelectedAssignment({ requestId, assignmentId })
+  const openRespondForm = (requestId: string) => {
+    setSelectedAssignment({ requestId })
     setResponseForm(initialResponseForm)
     setShowResponseForm(true)
     setError('')
@@ -488,7 +495,6 @@ export default function ProductAvailabilityPage() {
     try {
       const imageUrls = await uploadFilesToStorage(userFriendlyId, responseForm.images)
       await submitProductAvailabilityResponse({
-        assignmentId: selectedAssignment.assignmentId,
         requestId: selectedAssignment.requestId,
         respondedByUserId: userFriendlyId,
         availability: responseForm.availability,
@@ -624,7 +630,7 @@ export default function ProductAvailabilityPage() {
                     <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs space-y-1.5">
                       <div className="font-semibold text-blue-800">Valid Column Values</div>
                       <div className="text-blue-900">
-                        <span className="font-medium">markets:</span>{' '}
+                        <span className="font-medium">market:</span>{' '}
                         <span className="font-mono bg-white/70 px-1 rounded">UAE</span>{' '}
                         <span className="font-mono bg-white/70 px-1 rounded">KSA</span>{' '}
                         <span className="font-mono bg-white/70 px-1 rounded">PAK</span>{' '}
@@ -634,7 +640,7 @@ export default function ProductAvailabilityPage() {
                         <span className="font-mono bg-white/70 px-1 rounded">BHR</span>{' '}
                         <span className="font-mono bg-white/70 px-1 rounded">IRQ</span>{' '}
                         <span className="font-mono bg-white/70 px-1 rounded">USA</span>
-                        <span className="text-blue-600 ml-1">(separate multiple with semicolons, e.g. UAE;KSA)</span>
+                        <span className="text-blue-600 ml-1">(one market per request)</span>
                       </div>
                       <div className="text-blue-900">
                         <span className="font-medium">product_status:</span>{' '}
@@ -667,7 +673,7 @@ export default function ProductAvailabilityPage() {
                               <th className="px-2 py-2 text-left text-gray-600">#</th>
                               <th className="px-2 py-2 text-left text-gray-600">Product</th>
                               <th className="px-2 py-2 text-left text-gray-600">Reseller</th>
-                              <th className="px-2 py-2 text-left text-gray-600">Markets</th>
+                              <th className="px-2 py-2 text-left text-gray-600">Market</th>
                               <th className="px-2 py-2 text-left text-gray-600">SKU</th>
                               <th className="px-2 py-2 text-left text-gray-600">Status</th>
                               <th className="px-2 py-2 text-left text-gray-600">Priority</th>
@@ -683,7 +689,7 @@ export default function ProductAvailabilityPage() {
                                 <td className="px-2 py-1.5 text-gray-500">{row.rowIndex}</td>
                                 <td className="px-2 py-1.5">{row.product_name || '—'}</td>
                                 <td className="px-2 py-1.5">{row.reseller_name || '—'}</td>
-                                <td className="px-2 py-1.5">{row.markets.join(', ') || '—'}</td>
+                                <td className="px-2 py-1.5">{row.market || '—'}</td>
                                 <td className="px-2 py-1.5">{row.sku || '—'}</td>
                                 <td className="px-2 py-1.5">{row.product_status || '—'}</td>
                                 <td className="px-2 py-1.5">{row.priority_level || '—'}</td>
@@ -753,27 +759,18 @@ export default function ProductAvailabilityPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Markets *</label>
-                  <div className="flex flex-wrap gap-2">
-                    {MARKET_OPTIONS.map((market) => {
-                      const checked = createForm.markets.includes(market)
-                      return (
-                        <button
-                          key={market}
-                          type="button"
-                          onClick={() =>
-                            setCreateForm((p) => ({
-                              ...p,
-                              markets: checked ? p.markets.filter((m) => m !== market) : [...p.markets, market],
-                            }))
-                          }
-                          className={`px-3 py-1.5 rounded-full text-sm border ${checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                        >
-                          {market}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <label className="block text-sm font-medium mb-1">Market *</label>
+                  <select
+                    value={createForm.market}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, market: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2"
+                    required
+                  >
+                    <option value="">Select a market…</option>
+                    {MARKET_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -882,7 +879,7 @@ export default function ProductAvailabilityPage() {
                       <div>
                         <div className="font-medium text-gray-900">{titleCaseWords(req.product_name)}</div>
                         <div className="text-xs text-gray-500">
-                          {req.reseller_name} · {req.markets.join(', ')} · {req.priority_level === 'urgent' ? 'Urgent' : 'Normal'}
+                          {req.reseller_name} · {req.market || req.markets?.join(', ')} · {req.priority_level === 'urgent' ? 'Urgent' : 'Normal'}
                           {req.sku && ` · SKU: ${req.sku}`}
                         </div>
                       </div>
@@ -1028,8 +1025,8 @@ export default function ProductAvailabilityPage() {
                   {/* ── Mobile cards (hidden on md+) ── */}
                   <div className="md:hidden space-y-3">
                     {displayedRequests.map((request) => {
-                      const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
-                      const unassignedMarkets = request.assignments.filter((a) => !a.assigned_purchaser_user_id).map((a) => a.market)
+                      const canRespond = isPurchaser && request.assignment_status === 'pending'
+                      const noMapping = !request.assigned_purchaser_user_id
                       const thumb = getRequestThumbnail(request)
                       return (
                         <div
@@ -1064,15 +1061,15 @@ export default function ProductAvailabilityPage() {
                             </div>
                           </div>
 
-                          {/* Middle: reseller + markets (non-purchaser) */}
+                          {/* Middle: reseller + market (non-purchaser) */}
                           {!isPurchaser && (
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/70">
                               <span><span className="text-white/40">Reseller:</span> {titleCaseWords(request.reseller_name)}</span>
-                              <span><span className="text-white/40">Markets:</span> {request.markets.join(', ')}</span>
+                              <span><span className="text-white/40">Market:</span> {request.market || request.markets?.join(', ')}</span>
                             </div>
                           )}
-                          {unassignedMarkets.length > 0 && (
-                            <div className="text-xs text-amber-500">No purchaser mapped: {unassignedMarkets.join(', ')}</div>
+                          {noMapping && (
+                            <div className="text-xs text-amber-500">No purchaser mapped for {request.market || 'this market'}</div>
                           )}
 
                           {/* Bottom: date + action */}
@@ -1080,9 +1077,9 @@ export default function ProductAvailabilityPage() {
                             <span className="text-xs text-white/40">{new Date(request.created_at).toLocaleDateString()}</span>
                             <div>
                               {isPurchaser && (
-                                canRespondAssignments.length > 0
-                                  ? <button onClick={() => openRespondForm(request.id, canRespondAssignments[0].id)} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium">Respond</button>
-                                  : <span className="text-xs text-white/50">No pending assignment</span>
+                                canRespond
+                                  ? <button onClick={() => openRespondForm(request.id)} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium">Respond</button>
+                                  : <span className="text-xs text-white/50">{request.assignment_status === 'completed' ? 'Responded' : 'No pending assignment'}</span>
                               )}
                               {isAgent && request.derived_status === 'completed' && (
                                 <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-4 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium">See Feedback</button>
@@ -1109,7 +1106,7 @@ export default function ProductAvailabilityPage() {
                             <th className="px-3 py-3 text-left text-xs font-semibold text-white/70">Request No.</th>
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Product</th>
                             {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reseller</th>}
-                            {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Markets</th>}
+                            {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Market</th>}
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Created</th>
                             {isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Action</th>}
@@ -1119,8 +1116,8 @@ export default function ProductAvailabilityPage() {
                         <tbody>
                           {displayedRequests.map((request) => {
                             const created = new Date(request.created_at).toLocaleString()
-                            const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
-                            const unassignedMarkets = request.assignments.filter((a) => !a.assigned_purchaser_user_id).map((a) => a.market)
+                            const canRespond = isPurchaser && request.assignment_status === 'pending'
+                            const noMapping = !request.assigned_purchaser_user_id
                             return (
                               <tr key={request.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
                                 <td className="px-3 py-2 text-white/50 text-sm font-mono whitespace-nowrap">
@@ -1144,12 +1141,12 @@ export default function ProductAvailabilityPage() {
                                       {request.remarks && <div className="text-xs text-white/55 italic mt-0.5 max-w-[240px]">{request.remarks}</div>}
                                     </div>
                                   </div>
-                                  {unassignedMarkets.length > 0 && (
-                                    <div className="text-xs text-amber-700 mt-1">No purchaser mapped: {unassignedMarkets.join(', ')}</div>
+                                  {noMapping && (
+                                    <div className="text-xs text-amber-700 mt-1">No purchaser mapped for {request.market || 'this market'}</div>
                                   )}
                                 </td>
                                 {!isPurchaser && <td className="px-3 py-2 text-white">{titleCaseWords(request.reseller_name)}</td>}
-                                {!isPurchaser && <td className="px-3 py-2 text-white">{request.markets.join(', ')}</td>}
+                                {!isPurchaser && <td className="px-3 py-2 text-white">{request.market || request.markets?.join(', ')}</td>}
                                 <td className="px-3 py-2">
                                   <span className={`px-2 py-1 rounded-full text-xs ${statusClass(request.derived_status)}`}>
                                     {formatDerivedStatusLabel(request.derived_status)}
@@ -1158,9 +1155,9 @@ export default function ProductAvailabilityPage() {
                                 <td className="px-3 py-2 text-white/80">{created}</td>
                                 {isPurchaser && (
                                   <td className="px-3 py-2">
-                                    {canRespondAssignments.length > 0
-                                      ? <button onClick={() => openRespondForm(request.id, canRespondAssignments[0].id)} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs">Respond</button>
-                                      : <span className="text-xs text-white/60">No pending assignment</span>}
+                                    {canRespond
+                                      ? <button onClick={() => openRespondForm(request.id)} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs">Respond</button>
+                                      : <span className="text-xs text-white/60">{request.assignment_status === 'completed' ? 'Responded' : 'No pending assignment'}</span>}
                                   </td>
                                 )}
                                 {isAgent && (
@@ -1230,45 +1227,43 @@ export default function ProductAvailabilityPage() {
                   </div>
                   <div className="p-4 space-y-4">
                     <div className="text-white font-medium">{selectedFeedbackRequest.product_name}</div>
-                    {selectedFeedbackRequest.assignments.map((assignment) => {
-                      const response = selectedFeedbackRequest.responsesByAssignmentId[assignment.id]
-                      return (
-                        <div key={assignment.id} className="border border-white/10 rounded-lg p-3 bg-white/5">
-                          <div className="text-sm text-white/80 mb-2">Market: {assignment.market}</div>
-                          {!response ? (
-                            <div className="text-xs text-white/60">No feedback submitted for this market.</div>
-                          ) : (
-                            <div className="space-y-2 text-sm">
-                              {Array.isArray(response.response_images) && response.response_images.length > 0 && (
-                                <div>
-                                  <div className="text-white/90 mb-1">Pictures:</div>
-                                  <div className="flex flex-wrap gap-2 mb-2">
-                                    {response.response_images.map((img, idx) => (
-                                      <button
-                                        type="button"
-                                        key={`${assignment.id}-${idx}`}
-                                        onClick={() => {
-                                          setViewerImageUrl(String(img))
-                                          setIsImageViewerOpen(true)
-                                        }}
-                                        className="hover:opacity-80"
-                                      >
-                                        <img src={String(img)} alt="Feedback" className="w-20 h-20 rounded object-cover" />
-                                      </button>
-                                    ))}
-                                  </div>
+                    <div className="border border-white/10 rounded-lg p-3 bg-white/5">
+                      <div className="text-sm text-white/80 mb-2">
+                        Market: {selectedFeedbackRequest.market || selectedFeedbackRequest.markets?.join(', ')}
+                      </div>
+                      {!selectedFeedbackRequest.response ? (
+                        <div className="text-xs text-white/60">No feedback submitted yet.</div>
+                      ) : (
+                        <div className="space-y-2 text-sm">
+                          {Array.isArray(selectedFeedbackRequest.response.response_images) &&
+                            selectedFeedbackRequest.response.response_images.length > 0 && (
+                              <div>
+                                <div className="text-white/90 mb-1">Pictures:</div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {selectedFeedbackRequest.response.response_images.map((img, idx) => (
+                                    <button
+                                      type="button"
+                                      key={idx}
+                                      onClick={() => {
+                                        setViewerImageUrl(String(img))
+                                        setIsImageViewerOpen(true)
+                                      }}
+                                      className="hover:opacity-80"
+                                    >
+                                      <img src={String(img)} alt="Feedback" className="w-20 h-20 rounded object-cover" />
+                                    </button>
+                                  ))}
                                 </div>
-                              )}
-                              <div className="text-white/90">Availability: <span className="text-white">{formatAvailabilityLabel(response.availability)}</span></div>
-                              <div className="text-white/90">Stock Status: <span className="text-white">{formatStockStatusLabel(response.stock_status)}</span></div>
-                              <div className="text-white/90">Single Unit Price: <span className="text-white">{response.single_unit_price ?? 'N/A'}</span></div>
-                              <div className="text-white/90">Bulk Unit Price: <span className="text-white">{response.bulk_unit_price ?? 'N/A'}</span></div>
-                              <div className="text-white/90">Remarks: <span className="text-white">{response.remarks || 'N/A'}</span></div>
-                            </div>
-                          )}
+                              </div>
+                            )}
+                          <div className="text-white/90">Availability: <span className="text-white">{formatAvailabilityLabel(selectedFeedbackRequest.response.availability)}</span></div>
+                          <div className="text-white/90">Stock Status: <span className="text-white">{formatStockStatusLabel(selectedFeedbackRequest.response.stock_status)}</span></div>
+                          <div className="text-white/90">Single Unit Price: <span className="text-white">{selectedFeedbackRequest.response.single_unit_price ?? 'N/A'}</span></div>
+                          <div className="text-white/90">Bulk Unit Price: <span className="text-white">{selectedFeedbackRequest.response.bulk_unit_price ?? 'N/A'}</span></div>
+                          <div className="text-white/90">Remarks: <span className="text-white">{selectedFeedbackRequest.response.remarks || 'N/A'}</span></div>
                         </div>
-                      )
-                    })}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
