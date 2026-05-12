@@ -126,12 +126,16 @@ export default function ProductAvailabilityPage() {
   const [savingResponse, setSavingResponse] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [modalError, setModalError] = useState('')
+  const [modalSuccess, setModalSuccess] = useState('')
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
   const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null)
   const [expandedWarehouses, setExpandedWarehouses] = useState<Record<string, boolean>>({})
   const [selectedFeedbackRequest, setSelectedFeedbackRequest] = useState<ProductAvailabilityRequestWithDetails | null>(null)
 
   const isAgent = userRole === 'agent'
+  const isAdmin = userRole === 'admin'
+  const canCreate = isAgent || isAdmin
   const isPurchaser = userRole === 'purchaser'
   const canAccess = Boolean(userRole)
 
@@ -172,7 +176,7 @@ export default function ProductAvailabilityPage() {
         fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: dataFilter }),
         getProductAvailabilityCounts(userRole, userFriendlyId),
       ]
-      if (userRole === 'agent') {
+      if (canCreate) {
         fetches.push(fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'draft' }))
       }
       const [requestsData, countData, draftsData] = await Promise.all(fetches)
@@ -467,27 +471,33 @@ export default function ProductAvailabilityPage() {
     setSelectedAssignment({ requestId })
     setResponseForm(initialResponseForm)
     setShowResponseForm(true)
-    setError('')
-    setSuccess('')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setModalError('')
+    setModalSuccess('')
+  }
+
+  const closeResponseModal = () => {
+    setShowResponseForm(false)
+    setSelectedAssignment(null)
+    setModalError('')
+    setModalSuccess('')
   }
 
   const handleSubmitResponse = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedAssignment || !userFriendlyId) return
-    setError('')
-    setSuccess('')
+    setModalError('')
+    setModalSuccess('')
 
     if (
       responseForm.availability !== 'not_available' &&
       responseForm.stockStatus !== 'bulk_limited_both' &&
       (!responseForm.singleUnitPrice || Number(responseForm.singleUnitPrice) < 0)
     ) {
-      setError('Single unit price is required for this stock status.')
+      setModalError('Single unit price is required for this stock status.')
       return
     }
     if (responseForm.availability !== 'not_available' && responseForm.images.length === 0) {
-      setError('Please upload at least one picture for response.')
+      setModalError('Please upload at least one picture for response.')
       return
     }
 
@@ -514,14 +524,11 @@ export default function ProductAvailabilityPage() {
         responseImages: responseForm.availability === 'not_available' ? [] : imageUrls,
         remarks: responseForm.availability === 'not_available' ? null : responseForm.remarks,
       })
-      setSuccess('Response submitted successfully.')
-      setSelectedAssignment(null)
-      setShowResponseForm(false)
-      setResponseForm(initialResponseForm)
+      closeResponseModal()
       await refreshData()
     } catch (err) {
       console.error(err)
-      setError(err instanceof Error ? err.message : 'Failed to submit response')
+      setModalError(err instanceof Error ? err.message : 'Failed to submit response')
     } finally {
       setSavingResponse(false)
     }
@@ -556,14 +563,14 @@ export default function ProductAvailabilityPage() {
             {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
             {success && <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{success}</div>}
 
-            <div className={`grid grid-cols-3 ${isAgent ? 'sm:grid-cols-4 md:grid-cols-7' : 'sm:grid-cols-3 md:grid-cols-5'} gap-2`}>
-              {isAgent && (
+            <div className={`grid grid-cols-3 ${canCreate ? 'sm:grid-cols-4 md:grid-cols-7' : 'sm:grid-cols-3 md:grid-cols-5'} gap-2`}>
+              {canCreate && (
                 <button onClick={() => setFilter('new')} className={`rounded-xl p-2.5 text-left border ${filter === 'new' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'}`}>
                   <div className="text-[11px] text-gray-500 leading-tight">New</div>
                   <div className="text-lg font-bold">+</div>
                 </button>
               )}
-              {isAgent && (
+              {canCreate && (
                 <button onClick={() => setFilter('drafts')} className={`rounded-xl p-2.5 text-left border ${filter === 'drafts' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white'}`}>
                   <div className="text-[11px] text-gray-500 leading-tight">Drafts</div>
                   <div className="text-lg font-bold">{counts.drafts}</div>
@@ -591,7 +598,7 @@ export default function ProductAvailabilityPage() {
               </button>
             </div>
 
-            {isAgent && filter === 'new' && (
+            {canCreate && filter === 'new' && (
               <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h2 className="text-lg font-semibold text-gray-900">Create New Request</h2>
@@ -864,7 +871,7 @@ export default function ProductAvailabilityPage() {
             )}
 
             {/* ── Drafts tab ────────────────────────────────────────────── */}
-            {isAgent && filter === 'drafts' && (
+            {canCreate && filter === 'drafts' && (
               <div className="rounded-xl overflow-hidden border border-amber-200 bg-amber-50 p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-amber-700">Drafts — Add Photos to Submit</span>
@@ -926,72 +933,111 @@ export default function ProductAvailabilityPage() {
             )}
 
             {isPurchaser && showResponseForm && selectedAssignment && (
-              <form onSubmit={handleSubmitResponse} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Submit Purchaser Response</h2>
-                  <button
-                    type="button"
-                    onClick={() => { setShowResponseForm(false); setSelectedAssignment(null); setError('') }}
-                    className="p-1 text-gray-400 hover:text-gray-600"
-                    aria-label="Cancel"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <select value={responseForm.availability} onChange={(e) => setResponseForm((p) => ({ ...p, availability: e.target.value as PurchaserResponseState['availability'] }))} className="border rounded-lg px-3 py-2">
-                    <option value="available">Available</option>
-                    <option value="not_available">Not Available</option>
-                    <option value="on_demand">On-Demand</option>
-                  </select>
-                  {responseForm.availability !== 'not_available' && (
-                    <select value={responseForm.stockStatus} onChange={(e) => setResponseForm((p) => ({ ...p, stockStatus: e.target.value as PurchaserResponseState['stockStatus'] }))} className="border rounded-lg px-3 py-2">
-                      <option value="limited">Limited Quantity</option>
-                      <option value="on_demand">On Demand</option>
-                      <option value="bulk_limited_both">Normal Qty (Single/Bulk)</option>
-                    </select>
-                  )}
-                </div>
-                {responseForm.availability !== 'not_available' && (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <input
-                        className="border rounded-lg px-3 py-2"
-                        placeholder={
-                          responseForm.stockStatus === 'bulk_limited_both'
-                            ? 'Single Unit Price (optional)'
-                            : 'Single Unit Price *'
-                        }
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={responseForm.singleUnitPrice}
-                        onChange={(e) => setResponseForm((p) => ({ ...p, singleUnitPrice: e.target.value }))}
-                      />
-                      {responseForm.stockStatus === 'bulk_limited_both' && (
-                        <input
-                          className="border rounded-lg px-3 py-2"
-                          placeholder="Bulk Unit Price (optional)"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={responseForm.bulkUnitPrice}
-                          onChange={(e) => setResponseForm((p) => ({ ...p, bulkUnitPrice: e.target.value }))}
-                        />
+              <div
+                className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center sm:p-4"
+                onClick={closeResponseModal}
+              >
+                <div
+                  className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl bg-white max-h-[90vh] overflow-y-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <form onSubmit={handleSubmitResponse} className="p-5 sm:p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-lg font-semibold text-gray-900">Submit Response</h2>
+                      <button
+                        type="button"
+                        onClick={closeResponseModal}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                        aria-label="Close"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {modalError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{modalError}</div>}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <select
+                        value={responseForm.availability}
+                        onChange={(e) => setResponseForm((p) => ({ ...p, availability: e.target.value as PurchaserResponseState['availability'] }))}
+                        className="border rounded-lg px-3 py-2 w-full"
+                      >
+                        <option value="available">Available</option>
+                        <option value="not_available">Not Available</option>
+                        <option value="on_demand">On-Demand</option>
+                      </select>
+                      {responseForm.availability !== 'not_available' && (
+                        <select
+                          value={responseForm.stockStatus}
+                          onChange={(e) => setResponseForm((p) => ({ ...p, stockStatus: e.target.value as PurchaserResponseState['stockStatus'] }))}
+                          className="border rounded-lg px-3 py-2 w-full"
+                        >
+                          <option value="limited">Limited Quantity</option>
+                          <option value="on_demand">On Demand</option>
+                          <option value="bulk_limited_both">Normal Qty (Single/Bulk)</option>
+                        </select>
                       )}
                     </div>
-                    <textarea className="border rounded-lg px-3 py-2 w-full" placeholder="Remarks (optional)" value={responseForm.remarks} onChange={(e) => setResponseForm((p) => ({ ...p, remarks: e.target.value }))} />
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Pictures * (max 5)</label>
-                      <input type="file" accept="image/*" multiple onChange={(e) => handleResponseImageChange(e.target.files)} />
-                      <div className="text-xs text-gray-500 mt-1">{responseForm.images.length}/5 selected</div>
+
+                    {responseForm.availability !== 'not_available' && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input
+                            className="border rounded-lg px-3 py-2 w-full"
+                            placeholder={responseForm.stockStatus === 'bulk_limited_both' ? 'Single Unit Price (optional)' : 'Single Unit Price *'}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={responseForm.singleUnitPrice}
+                            onChange={(e) => setResponseForm((p) => ({ ...p, singleUnitPrice: e.target.value }))}
+                          />
+                          {responseForm.stockStatus === 'bulk_limited_both' && (
+                            <input
+                              className="border rounded-lg px-3 py-2 w-full"
+                              placeholder="Bulk Unit Price (optional)"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={responseForm.bulkUnitPrice}
+                              onChange={(e) => setResponseForm((p) => ({ ...p, bulkUnitPrice: e.target.value }))}
+                            />
+                          )}
+                        </div>
+                        <textarea
+                          className="border rounded-lg px-3 py-2 w-full"
+                          rows={2}
+                          placeholder="Remarks (optional)"
+                          value={responseForm.remarks}
+                          onChange={(e) => setResponseForm((p) => ({ ...p, remarks: e.target.value }))}
+                        />
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Pictures * (max 5)</label>
+                          <input type="file" accept="image/*" multiple onChange={(e) => handleResponseImageChange(e.target.files)} className="block text-sm" />
+                          <div className="text-xs text-gray-500 mt-1">{responseForm.images.length}/5 selected</div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        type="submit"
+                        disabled={savingResponse}
+                        className="flex-1 px-4 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                      >
+                        {savingResponse && <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
+                        {savingResponse ? 'Submitting...' : 'Submit Response'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeResponseModal}
+                        className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
                     </div>
-                  </>
-                )}
-                <button type="submit" disabled={savingResponse} className="w-full sm:w-auto px-4 py-3 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50">
-                  {savingResponse ? 'Submitting...' : 'Submit Response'}
-                </button>
-              </form>
+                  </form>
+                </div>
+              </div>
             )}
 
             {filter !== 'new' && filter !== 'drafts' && (
@@ -1081,7 +1127,7 @@ export default function ProductAvailabilityPage() {
                                   ? <button onClick={() => openRespondForm(request.id)} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium">Respond</button>
                                   : <span className="text-xs text-white/50">{request.assignment_status === 'completed' ? 'Responded' : 'No pending assignment'}</span>
                               )}
-                              {isAgent && request.derived_status === 'completed' && (
+                              {canCreate && request.derived_status === 'completed' && (
                                 <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-4 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium">See Feedback</button>
                               )}
                             </div>
@@ -1110,7 +1156,7 @@ export default function ProductAvailabilityPage() {
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Created</th>
                             {isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Action</th>}
-                            {isAgent && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
+                            {canCreate && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1160,7 +1206,7 @@ export default function ProductAvailabilityPage() {
                                       : <span className="text-xs text-white/60">{request.assignment_status === 'completed' ? 'Responded' : 'No pending assignment'}</span>}
                                   </td>
                                 )}
-                                {isAgent && (
+                                {canCreate && (
                                   <td className="px-3 py-2">
                                     {request.derived_status === 'completed'
                                       ? <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs">See Feedback</button>
