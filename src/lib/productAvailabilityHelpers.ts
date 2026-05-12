@@ -220,38 +220,14 @@ export async function createProductAvailabilityRequest(
   }
 
   // Find the purchaser for this market
-  const { data: purchasers, error: purchasersError } = await supabase
+  const { data: purchasers } = await supabase
     .from('users')
-    .select('user_id, country, stock_location_country, role')
+    .select('user_id, country, stock_location_country')
     .eq('role', 'purchaser')
-
-  // #region agent log
-  console.log('[DBG:create-purchaser-lookup] H-1/H-2', {
-    market: normalizedMarket,
-    queryError: purchasersError?.message ?? null,
-    purchaserCount: (purchasers || []).length,
-    allPurchasers: (purchasers || []).map((p: any) => ({
-      user_id: p.user_id,
-      role: p.role,
-      country: p.country,
-      stock_location_country: p.stock_location_country,
-      countryUpper: (p.country || '').toUpperCase(),
-      matchesUAE: countryMatchesMarket('UAE', p.country || p.stock_location_country),
-    })),
-  })
-  // #endregion
 
   const matchingPurchaser = (purchasers || []).find((p: any) =>
     countryMatchesMarket(normalizedMarket, p.country || p.stock_location_country)
   )
-
-  // #region agent log
-  console.log('[DBG:create-matched-purchaser] H-1/H-2', {
-    matchingPurchaser: matchingPurchaser
-      ? { user_id: matchingPurchaser.user_id, country: matchingPurchaser.country }
-      : null,
-  })
-  // #endregion
 
   const { data: createdRequest, error: requestError } = await supabase
     .from('product_availability_requests')
@@ -295,26 +271,6 @@ export async function fetchProductAvailabilityRequests(params: {
 
   const role = (params.userRole || '').toLowerCase()
 
-  // #region agent log
-  console.log('[DBG:fetch-params] H-2', { role, userFriendlyId: params.userFriendlyId })
-  // #endregion
-
-  // #region agent log — compare stored IDs vs what the purchaser session holds
-  if (role === 'purchaser') {
-    const { data: sampleRows } = await supabase
-      .from('product_availability_requests')
-      .select('id, assigned_purchaser_user_id, market, is_draft')
-      .eq('is_draft', false)
-      .order('created_at', { ascending: false })
-      .limit(5)
-    console.log('[DBG:id-compare] H-2/RLS', {
-      userFriendlyId: params.userFriendlyId,
-      userFriendlyIdType: typeof params.userFriendlyId,
-      recentRows: sampleRows,
-    })
-  }
-  // #endregion
-
   let requestQuery = supabase
     .from('product_availability_requests')
     .select('*')
@@ -333,14 +289,6 @@ export async function fetchProductAvailabilityRequests(params: {
   }
 
   const { data: requestRows, error: requestError } = await requestQuery
-
-  // #region agent log
-  console.log('[DBG:fetch-result] H-RLS', {
-    role,
-    rowCount: (requestRows || []).length,
-    error: requestError?.message ?? null,
-  })
-  // #endregion
 
   if (requestError) {
     throw new Error(requestError.message || 'Failed to fetch availability requests')
@@ -374,16 +322,6 @@ export async function fetchProductAvailabilityRequests(params: {
 
   const withDerived = (requestRows || [])
     .map((request: any) => {
-      // #region agent log
-      console.log('[DBG:derive-status] H-1', {
-        requestId: request.id,
-        reqNo: request.request_number,
-        dbStatus: request.status,
-        assignmentStatus: request.assignment_status,
-        assignedTo: request.assigned_purchaser_user_id,
-      })
-      // #endregion
-
       const derived = deriveStatus(
         request.status,
         request.assignment_status ?? 'pending',
@@ -427,15 +365,6 @@ export async function submitProductAvailabilityResponse(
     throw new Error('Single unit price is required for this stock status')
   }
 
-  // #region agent log
-  console.log('[DBG:submit-start] H-1', {
-    requestId: input.requestId,
-    availability: input.availability,
-    stockStatus: input.stockStatus,
-    singleUnitPrice: input.singleUnitPrice,
-  })
-  // #endregion
-
   const { data, error } = await supabase.rpc('submit_availability_response', {
     p_request_id:           input.requestId,
     p_responded_by_user_id: input.respondedByUserId,
@@ -451,11 +380,6 @@ export async function submitProductAvailabilityResponse(
     p_response_images: input.availability === 'not_available' ? [] : input.responseImages,
     p_remarks:         input.availability === 'not_available' ? null : (input.remarks?.trim() || null),
   })
-
-  // #region agent log
-  if (error) console.error('[DBG:rpc-error] H-1', { error: error.message, code: error.code })
-  else console.log('[DBG:rpc-ok] H-1', data)
-  // #endregion
 
   if (error) {
     throw new Error(error.message || 'Failed to save purchaser response')
