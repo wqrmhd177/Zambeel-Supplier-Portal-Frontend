@@ -294,6 +294,22 @@ export async function fetchProductAvailabilityRequests(params: {
   console.log('[DBG:fetch-params] H-2', { role, userFriendlyId: params.userFriendlyId })
   // #endregion
 
+  // #region agent log — compare stored IDs vs what the purchaser session holds
+  if (role === 'purchaser') {
+    const { data: sampleRows } = await supabase
+      .from('product_availability_requests')
+      .select('id, assigned_purchaser_user_id, market, is_draft')
+      .eq('is_draft', false)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    console.log('[DBG:id-compare] H-2/RLS', {
+      userFriendlyId: params.userFriendlyId,
+      userFriendlyIdType: typeof params.userFriendlyId,
+      recentRows: sampleRows,
+    })
+  }
+  // #endregion
+
   let requestQuery = supabase
     .from('product_availability_requests')
     .select('*')
