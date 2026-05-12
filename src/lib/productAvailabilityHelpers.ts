@@ -491,7 +491,21 @@ export async function fetchProductAvailabilityRequests(params: {
   const withDerived = (requestRows || [])
     .map((request: any) => {
       const assignments = assignmentsByRequest.get(request.id) || []
-      const derived = deriveStatus(request.status, request.created_at)
+
+      // Derive completion from assignments directly — never rely solely on the DB
+      // status field, which may lag behind due to RLS preventing updates by
+      // purchaser/agent roles.
+      const responsibleAssignments = assignments.filter(
+        (a: any) => a.assigned_purchaser_user_id !== null && a.assigned_purchaser_user_id !== undefined
+      )
+      const allResponsibleDone =
+        responsibleAssignments.length > 0 &&
+        responsibleAssignments.every((a: any) => a.assignment_status === 'completed')
+
+      const derived: ProductAvailabilityStatus = allResponsibleDone
+        ? 'completed'
+        : deriveStatus(request.status, request.created_at)
+
       const responsesMapForRequest: Record<string, ProductAvailabilityResponse> = {}
       assignments.forEach((assignment) => {
         const response = responsesByAssignmentId[assignment.id]
