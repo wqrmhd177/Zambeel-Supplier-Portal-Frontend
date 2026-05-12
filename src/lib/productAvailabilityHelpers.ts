@@ -225,9 +225,28 @@ export async function createProductAvailabilityRequest(
     .select('user_id, country, stock_location_country')
     .eq('role', 'purchaser')
 
+  // #region agent log
+  console.log('[DBG:create-purchaser-lookup] H-1/H-2', {
+    market: normalizedMarket,
+    allPurchasers: (purchasers || []).map((p: any) => ({
+      user_id: p.user_id,
+      country: p.country,
+      stock_location_country: p.stock_location_country,
+    })),
+  })
+  // #endregion
+
   const matchingPurchaser = (purchasers || []).find((p: any) =>
     countryMatchesMarket(normalizedMarket, p.country || p.stock_location_country)
   )
+
+  // #region agent log
+  console.log('[DBG:create-matched-purchaser] H-1/H-2', {
+    matchingPurchaser: matchingPurchaser
+      ? { user_id: matchingPurchaser.user_id, country: matchingPurchaser.country }
+      : null,
+  })
+  // #endregion
 
   const { data: createdRequest, error: requestError } = await supabase
     .from('product_availability_requests')
@@ -270,6 +289,10 @@ export async function fetchProductAvailabilityRequests(params: {
   await maybeSyncDelayedRequests()
 
   const role = (params.userRole || '').toLowerCase()
+
+  // #region agent log
+  console.log('[DBG:fetch-params] H-2', { role, userFriendlyId: params.userFriendlyId })
+  // #endregion
 
   let requestQuery = supabase
     .from('product_availability_requests')
