@@ -300,23 +300,111 @@ export default function ProductAvailabilityPage() {
     setBulkImportResult(null)
     const file = files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string
-      const parsed = parseBulkUploadCsv(text)
-      setBulkCsvRows(parsed)
+
+    const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+
+    if (isXlsx) {
+      const reader = new FileReader()
+      reader.onload = async (ev) => {
+        const buffer = ev.target?.result as ArrayBuffer
+        const ExcelJS = (await import('exceljs')).default
+        const workbook = new ExcelJS.Workbook()
+        await workbook.xlsx.load(buffer)
+        const sheet = workbook.worksheets.find((ws) => ws.name !== '_Options' && ws.name !== 'Valid Options')
+        if (!sheet) return
+        const rows: string[][] = []
+        sheet.eachRow((row) => {
+          const vals = (row.values as unknown[]).slice(1).map((v) => {
+            if (v === null || v === undefined) return ''
+            if (typeof v === 'object' && 'text' in (v as object)) return String((v as { text: string }).text)
+            return String(v)
+          })
+          rows.push(vals)
+        })
+        const csvText = rows
+          .map((row) =>
+            row
+              .map((cell) => (cell.includes(',') || cell.includes('"') || cell.includes('\n') ? `"${cell.replace(/"/g, '""')}"` : cell))
+              .join(',')
+          )
+          .join('\n')
+        setBulkCsvRows(parseBulkUploadCsv(csvText))
+      }
+      reader.readAsArrayBuffer(file)
+    } else {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string
+        setBulkCsvRows(parseBulkUploadCsv(text))
+      }
+      reader.readAsText(file)
     }
-    reader.readAsText(file)
   }
 
-  const handleDownloadTemplate = () => {
-    const header = 'product_name,reseller_name,markets,sku,reference_link,product_status,priority_level,remarks'
-    const example = 'Example Product,Reseller Co,"UAE;KSA",,https://example.com,not_sure,normal,Optional notes here'
-    const blob = new Blob([header + '\n' + example], { type: 'text/csv' })
+  const handleDownloadTemplate = async () => {
+    const ExcelJS = (await import('exceljs')).default
+    const workbook = new ExcelJS.Workbook()
+
+    const sheet = workbook.addWorksheet('Bulk Upload')
+    sheet.columns = [
+      { header: 'product_name', key: 'product_name', width: 28 },
+      { header: 'reseller_name', key: 'reseller_name', width: 22 },
+      { header: 'markets', key: 'markets', width: 22 },
+      { header: 'sku', key: 'sku', width: 16 },
+      { header: 'reference_link', key: 'reference_link', width: 32 },
+      { header: 'product_status', key: 'product_status', width: 20 },
+      { header: 'priority_level', key: 'priority_level', width: 16 },
+      { header: 'remarks', key: 'remarks', width: 30 },
+    ]
+
+    const headerRow = sheet.getRow(1)
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }
+    headerRow.alignment = { horizontal: 'center' }
+    headerRow.commit()
+
+    sheet.addRow(['Example Product', 'Reseller Co', 'UAE;KSA', '', 'https://example.com', 'not_sure', 'normal', 'Optional notes here'])
+
+    for (let row = 2; row <= 100; row++) {
+      sheet.getCell(`F${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"already_listed,not_listed,not_sure"'],
+        showDropDown: false,
+        error: 'Choose: already_listed, not_listed, or not_sure',
+        errorTitle: 'Invalid value',
+        showErrorMessage: true,
+      }
+      sheet.getCell(`G${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"urgent,normal"'],
+        showDropDown: false,
+        error: 'Choose: urgent or normal',
+        errorTitle: 'Invalid value',
+        showErrorMessage: true,
+      }
+    }
+
+    sheet.getCell('C1').note = 'Valid markets: UAE, KSA, PAK, QTR, KWT, OMN, BHR, IRQ, USA\nSeparate multiple with semicolons (e.g. UAE;KSA;PAK)'
+
+    const optSheet = workbook.addWorksheet('Valid Options')
+    optSheet.columns = [
+      { header: 'Column', key: 'col', width: 20 },
+      { header: 'Valid Values', key: 'vals', width: 55 },
+    ]
+    optSheet.getRow(1).font = { bold: true }
+    optSheet.addRow(['markets', 'UAE, KSA, PAK, QTR, KWT, OMN, BHR, IRQ, USA  (separate with semicolons)'])
+    optSheet.addRow(['product_status', 'already_listed  |  not_listed  |  not_sure'])
+    optSheet.addRow(['priority_level', 'urgent  |  normal'])
+    optSheet.addRow(['remarks', 'Free-text notes (optional)'])
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'bulk_upload_template.csv'
+    a.download = 'bulk_upload_template.xlsx'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -529,9 +617,9 @@ export default function ProductAvailabilityPage() {
                         onClick={handleDownloadTemplate}
                         className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        Download CSV Template
+                        Download Excel Template
                       </button>
-                      <span className="text-xs text-gray-500">Fill in the CSV and upload it below. Use the valid values reference below for constrained columns.</span>
+                      <span className="text-xs text-gray-500">Fill in the template — dropdowns available for product_status and priority_level. Upload the filled file (.xlsx or .csv) below.</span>
                     </div>
 
                     {/* Valid options reference panel */}
@@ -568,7 +656,7 @@ export default function ProductAvailabilityPage() {
 
                     <input
                       type="file"
-                      accept=".csv"
+                      accept=".csv,.xlsx,.xls"
                       onChange={(e) => handleBulkCsvChange(e.target.files)}
                       className="block text-sm"
                     />
@@ -936,7 +1024,7 @@ export default function ProductAvailabilityPage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-white/5">
                     <tr>
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Req. No.</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-white/70">Request No.</th>
                       <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Product</th>
                       {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reseller</th>}
                       {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Markets</th>}

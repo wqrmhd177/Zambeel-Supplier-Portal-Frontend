@@ -228,12 +228,19 @@ async function maybeSyncDelayedRequests(): Promise<void> {
 async function refreshRequestStatus(requestId: string): Promise<void> {
   const { data: assignments } = await supabase
     .from('product_availability_request_markets')
-    .select('assignment_status')
+    .select('assignment_status, assigned_purchaser_user_id')
     .eq('request_id', requestId)
 
+  // Only count assignments that have an actual purchaser assigned.
+  // Markets with no purchaser (null) will never complete on their own, so
+  // they should not block the request from being marked as completed.
+  const responsibleAssignments = (assignments || []).filter(
+    (a) => a.assigned_purchaser_user_id !== null && a.assigned_purchaser_user_id !== undefined
+  )
+
   const allCompleted =
-    (assignments || []).length > 0 &&
-    (assignments || []).every((a) => a.assignment_status === 'completed')
+    responsibleAssignments.length > 0 &&
+    responsibleAssignments.every((a) => a.assignment_status === 'completed')
 
   if (allCompleted) {
     await supabase
@@ -255,6 +262,56 @@ async function refreshRequestStatus(requestId: string): Promise<void> {
     .from('product_availability_requests')
     .update({ status: next })
     .eq('id', requestId)
+}
+
+/**
+ * Proactively mark requests as completed if all assigned-purchaser assignments
+ * are done. Catches cases where refreshRequestStatus was skipped (e.g. old data).
+ */
+async function maybeSyncCompletedRequests(): Promise<void> {
+  // Find all non-draft requests still in pending/delayed state
+  const { data: openRequests } = await supabase
+    .from('product_availability_requests')
+    .select('id')
+    .in('status', ['pending', 'delayed'])
+    .eq('is_draft', false)
+
+  if (!openRequests || openRequests.length === 0) return
+
+  const openIds = openRequests.map((r: any) => r.id)
+
+  // Fetch all their assignments in one query
+  const { data: allAssignments } = await supabase
+    .from('product_availability_request_markets')
+    .select('request_id, assignment_status, assigned_purchaser_user_id')
+    .in('request_id', openIds)
+
+  if (!allAssignments || allAssignments.length === 0) return
+
+  // Group by request
+  const byRequest = new Map<string, typeof allAssignments>()
+  for (const a of allAssignments) {
+    const existing = byRequest.get(a.request_id) || []
+    existing.push(a)
+    byRequest.set(a.request_id, existing)
+  }
+
+  const nowCompleted: string[] = []
+  byRequest.forEach((assigns, requestId) => {
+    const responsible = assigns.filter(
+      (a) => a.assigned_purchaser_user_id !== null && a.assigned_purchaser_user_id !== undefined
+    )
+    if (responsible.length > 0 && responsible.every((a) => a.assignment_status === 'completed')) {
+      nowCompleted.push(requestId)
+    }
+  })
+
+  if (nowCompleted.length > 0) {
+    await supabase
+      .from('product_availability_requests')
+      .update({ status: 'completed' })
+      .in('id', nowCompleted)
+  }
 }
 
 export async function createProductAvailabilityRequest(
@@ -355,7 +412,7 @@ export async function fetchProductAvailabilityRequests(params: {
   userFriendlyId: string
   statusFilter: ProductAvailabilityListFilter
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
-  await maybeSyncDelayedRequests()
+  await Promise.all([maybeSyncDelayedRequests(), maybeSyncCompletedRequests()])
 
   const role = (params.userRole || '').toLowerCase()
   let requestIdsForPurchaser: string[] = []
