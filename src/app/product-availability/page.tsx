@@ -550,38 +550,38 @@ export default function ProductAvailabilityPage() {
             {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
             {success && <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{success}</div>}
 
-            <div className={`grid grid-cols-2 ${isAgent ? 'md:grid-cols-7' : 'md:grid-cols-5'} gap-3`}>
+            <div className={`grid grid-cols-3 ${isAgent ? 'sm:grid-cols-4 md:grid-cols-7' : 'sm:grid-cols-3 md:grid-cols-5'} gap-2`}>
               {isAgent && (
-                <button onClick={() => setFilter('new')} className={`rounded-xl p-3 text-left border ${filter === 'new' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'}`}>
-                  <div className="text-xs text-gray-500">New</div>
-                  <div className="text-xl font-bold">+</div>
+                <button onClick={() => setFilter('new')} className={`rounded-xl p-2.5 text-left border ${filter === 'new' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-[11px] text-gray-500 leading-tight">New</div>
+                  <div className="text-lg font-bold">+</div>
                 </button>
               )}
               {isAgent && (
-                <button onClick={() => setFilter('drafts')} className={`rounded-xl p-3 text-left border ${filter === 'drafts' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white'}`}>
-                  <div className="text-xs text-gray-500">Drafts</div>
-                  <div className="text-xl font-bold">{counts.drafts}</div>
+                <button onClick={() => setFilter('drafts')} className={`rounded-xl p-2.5 text-left border ${filter === 'drafts' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-[11px] text-gray-500 leading-tight">Drafts</div>
+                  <div className="text-lg font-bold">{counts.drafts}</div>
                 </button>
               )}
-              <button onClick={() => setFilter('urgent')} className={`rounded-xl p-3 text-left border ${filter === 'urgent' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white'}`}>
-                <div className="text-xs text-gray-500">Urgent Requests</div>
-                <div className="text-xl font-bold">{counts.urgent}</div>
+              <button onClick={() => setFilter('urgent')} className={`rounded-xl p-2.5 text-left border ${filter === 'urgent' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-[11px] text-gray-500 leading-tight">Urgent</div>
+                <div className="text-lg font-bold">{counts.urgent}</div>
               </button>
-              <button onClick={() => setFilter('normal_requests')} className={`rounded-xl p-3 text-left border ${filter === 'normal_requests' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
-                <div className="text-xs text-gray-500">Normal Requests</div>
-                <div className="text-xl font-bold">{counts.normalRequests}</div>
+              <button onClick={() => setFilter('normal_requests')} className={`rounded-xl p-2.5 text-left border ${filter === 'normal_requests' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-[11px] text-gray-500 leading-tight">Normal</div>
+                <div className="text-lg font-bold">{counts.normalRequests}</div>
               </button>
-              <button onClick={() => setFilter('delayed')} className={`rounded-xl p-3 text-left border ${filter === 'delayed' ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white'}`}>
-                <div className="text-xs text-red-600">Delayed</div>
-                <div className="text-xl font-bold text-red-700">{counts.delayed}</div>
+              <button onClick={() => setFilter('delayed')} className={`rounded-xl p-2.5 text-left border ${filter === 'delayed' ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-[11px] text-red-600 leading-tight">Delayed</div>
+                <div className="text-lg font-bold text-red-700">{counts.delayed}</div>
               </button>
-              <button onClick={() => setFilter('completed')} className={`rounded-xl p-3 text-left border ${filter === 'completed' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
-                <div className="text-xs text-gray-500">Completed</div>
-                <div className="text-xl font-bold">{counts.completed}</div>
+              <button onClick={() => setFilter('completed')} className={`rounded-xl p-2.5 text-left border ${filter === 'completed' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-[11px] text-gray-500 leading-tight">Completed</div>
+                <div className="text-lg font-bold">{counts.completed}</div>
               </button>
-              <button onClick={() => setFilter('all')} className={`rounded-xl p-3 text-left border ${filter === 'all' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'}`}>
-                <div className="text-xs text-gray-500">All</div>
-                <div className="text-xl font-bold">{counts.all}</div>
+              <button onClick={() => setFilter('all')} className={`rounded-xl p-2.5 text-left border ${filter === 'all' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+                <div className="text-[11px] text-gray-500 leading-tight">All</div>
+                <div className="text-lg font-bold">{counts.all}</div>
               </button>
             </div>
 
@@ -991,7 +991,7 @@ export default function ProductAvailabilityPage() {
                     </div>
                   </>
                 )}
-                <button type="submit" disabled={savingResponse} className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm disabled:opacity-50">
+                <button type="submit" disabled={savingResponse} className="w-full sm:w-auto px-4 py-3 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50">
                   {savingResponse ? 'Submitting...' : 'Submit Response'}
                 </button>
               </form>
@@ -1010,142 +1010,176 @@ export default function ProductAvailabilityPage() {
             </div>
             )}
 
-            {filter !== 'new' && filter !== 'drafts' && (
-            <div
-              className="rounded-xl overflow-hidden border border-white/10"
-              style={{
-                background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px rgba(0,0,0,0.25)',
-              }}
-            >
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="px-3 py-3 text-left text-xs font-semibold text-white/70">Request No.</th>
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Product</th>
-                      {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reseller</th>}
-                      {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Markets</th>}
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Created</th>
-                      {isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Action</th>}
-                      {isAgent && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedRequests.length === 0 ? (
-                      <tr>
-                        <td className="px-3 py-8 text-center text-white/60" colSpan={isPurchaser ? 5 : 7}>
-                          {searchQuery.trim() ? 'No requests match your search.' : 'No requests found for this tab.'}
-                        </td>
-                      </tr>
-                    ) : (
-                      displayedRequests.map((request) => {
-                        const created = new Date(request.created_at).toLocaleString()
-                        const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
-                        const totalAssignments = request.assignments.length
-                        const completedAssignments = request.assignments.filter((a) => a.assignment_status === 'completed').length
-                        const unassignedMarkets = request.assignments
-                          .filter((a) => !a.assigned_purchaser_user_id)
-                          .map((a) => a.market)
-                        return (
-                          <tr key={request.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
-                            <td className="px-3 py-2 text-white/50 text-sm font-mono whitespace-nowrap">
-                              {request.request_number ? `#${request.request_number}` : '—'}
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex items-center gap-3">
-                                {getRequestThumbnail(request) ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setViewerImageUrl(getRequestThumbnail(request))
-                                      setIsImageViewerOpen(true)
-                                    }}
-                                    className="hover:opacity-80 transition-opacity"
-                                  >
-                                    <img
-                                      src={getRequestThumbnail(request) || ''}
-                                      alt={request.product_name}
-                                      className="w-10 h-10 rounded-lg object-cover"
-                                    />
-                                  </button>
-                                ) : null}
-                                <div>
-                                  <div className="font-medium text-white">{titleCaseWords(request.product_name)}</div>
-                                  {request.sku && (
-                                    <div className="text-xs text-white/60">
-                                      SKU: {request.sku.toUpperCase()}
-                                    </div>
-                                  )}
-                                  {request.reference_link && (
-                                    <div className="text-xs text-blue-400 max-w-[240px] truncate">
-                                      <a href={request.reference_link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                                        {request.reference_link}
-                                      </a>
-                                    </div>
-                                  )}
-                                  {request.remarks && (
-                                    <div className="text-xs text-white/55 italic mt-0.5 max-w-[240px]">{request.remarks}</div>
-                                  )}
-                                </div>
+            {filter !== 'new' && filter !== 'drafts' && (() => {
+              if (displayedRequests.length === 0) {
+                return (
+                  <div className="rounded-xl border border-white/10 px-4 py-10 text-center text-white/60 text-sm"
+                    style={{ background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)' }}>
+                    {searchQuery.trim() ? 'No requests match your search.' : 'No requests found for this tab.'}
+                  </div>
+                )
+              }
+
+              const statusClass = (s: string) =>
+                s === 'delayed' ? 'bg-red-100 text-red-700' : s === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+
+              return (
+                <>
+                  {/* ── Mobile cards (hidden on md+) ── */}
+                  <div className="md:hidden space-y-3">
+                    {displayedRequests.map((request) => {
+                      const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
+                      const unassignedMarkets = request.assignments.filter((a) => !a.assigned_purchaser_user_id).map((a) => a.market)
+                      const thumb = getRequestThumbnail(request)
+                      return (
+                        <div
+                          key={request.id}
+                          className="rounded-xl border border-white/10 p-3 space-y-2"
+                          style={{ background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)' }}
+                        >
+                          {/* Top row: thumbnail + name + req no + status */}
+                          <div className="flex items-start gap-3">
+                            {thumb && (
+                              <button type="button" onClick={() => { setViewerImageUrl(thumb); setIsImageViewerOpen(true) }} className="shrink-0">
+                                <img src={thumb} alt={request.product_name} className="w-12 h-12 rounded-lg object-cover" />
+                              </button>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="font-semibold text-white text-sm leading-tight">{titleCaseWords(request.product_name)}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs shrink-0 ${statusClass(request.derived_status)}`}>
+                                  {formatDerivedStatusLabel(request.derived_status)}
+                                </span>
                               </div>
-                              {unassignedMarkets.length > 0 && (
-                                <div className="text-xs text-amber-700 mt-1">
-                                  No purchaser mapped: {unassignedMarkets.join(', ')}
+                              {request.request_number && (
+                                <div className="text-xs text-white/40 font-mono">#{request.request_number}</div>
+                              )}
+                              {request.sku && <div className="text-xs text-white/60">SKU: {request.sku.toUpperCase()}</div>}
+                              {request.reference_link && (
+                                <div className="text-xs text-blue-400 truncate">
+                                  <a href={request.reference_link} target="_blank" rel="noreferrer">{request.reference_link}</a>
                                 </div>
                               )}
-                            </td>
-                            {!isPurchaser && (
-                              <td className="px-3 py-2 text-white">{titleCaseWords(request.reseller_name)}</td>
-                            )}
-                            {!isPurchaser && (
-                              <td className="px-3 py-2 text-white">{request.markets.join(', ')}</td>
-                            )}
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded-full text-xs ${request.derived_status === 'delayed' ? 'bg-red-100 text-red-700' : request.derived_status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {formatDerivedStatusLabel(request.derived_status)}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-white/80">{created}</td>
-                            {isPurchaser && (
-                              <td className="px-3 py-2">
-                                {canRespondAssignments.length > 0 ? (
-                                  <button
-                                    onClick={() => openRespondForm(request.id, canRespondAssignments[0].id)}
-                                    className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs"
-                                  >
-                                    Respond
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-white/60">No pending assignment</span>
-                                )}
-                              </td>
-                            )}
-                            {isAgent && (
-                              <td className="px-3 py-2">
-                                {request.derived_status === 'completed' ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedFeedbackRequest(request)}
-                                    className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs"
-                                  >
-                                    See Feedback
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-white/60">-</span>
-                                )}
-                              </td>
-                            )}
+                              {request.remarks && <div className="text-xs text-white/50 italic">{request.remarks}</div>}
+                            </div>
+                          </div>
+
+                          {/* Middle: reseller + markets (non-purchaser) */}
+                          {!isPurchaser && (
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/70">
+                              <span><span className="text-white/40">Reseller:</span> {titleCaseWords(request.reseller_name)}</span>
+                              <span><span className="text-white/40">Markets:</span> {request.markets.join(', ')}</span>
+                            </div>
+                          )}
+                          {unassignedMarkets.length > 0 && (
+                            <div className="text-xs text-amber-500">No purchaser mapped: {unassignedMarkets.join(', ')}</div>
+                          )}
+
+                          {/* Bottom: date + action */}
+                          <div className="flex items-center justify-between pt-1 border-t border-white/10">
+                            <span className="text-xs text-white/40">{new Date(request.created_at).toLocaleDateString()}</span>
+                            <div>
+                              {isPurchaser && (
+                                canRespondAssignments.length > 0
+                                  ? <button onClick={() => openRespondForm(request.id, canRespondAssignments[0].id)} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium">Respond</button>
+                                  : <span className="text-xs text-white/50">No pending assignment</span>
+                              )}
+                              {isAgent && request.derived_status === 'completed' && (
+                                <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-4 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium">See Feedback</button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* ── Desktop table (hidden below md) ── */}
+                  <div
+                    className="hidden md:block rounded-xl overflow-hidden border border-white/10"
+                    style={{
+                      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px rgba(0,0,0,0.25)',
+                    }}
+                  >
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-white/5">
+                          <tr>
+                            <th className="px-3 py-3 text-left text-xs font-semibold text-white/70">Request No.</th>
+                            <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Product</th>
+                            {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reseller</th>}
+                            {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Markets</th>}
+                            <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
+                            <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Created</th>
+                            {isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Action</th>}
+                            {isAgent && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
                           </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            )}
+                        </thead>
+                        <tbody>
+                          {displayedRequests.map((request) => {
+                            const created = new Date(request.created_at).toLocaleString()
+                            const canRespondAssignments = request.assignments.filter((a) => a.assignment_status === 'pending')
+                            const unassignedMarkets = request.assignments.filter((a) => !a.assigned_purchaser_user_id).map((a) => a.market)
+                            return (
+                              <tr key={request.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
+                                <td className="px-3 py-2 text-white/50 text-sm font-mono whitespace-nowrap">
+                                  {request.request_number ? `#${request.request_number}` : '—'}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-3">
+                                    {getRequestThumbnail(request) ? (
+                                      <button type="button" onClick={() => { setViewerImageUrl(getRequestThumbnail(request)); setIsImageViewerOpen(true) }} className="hover:opacity-80 transition-opacity">
+                                        <img src={getRequestThumbnail(request) || ''} alt={request.product_name} className="w-10 h-10 rounded-lg object-cover" />
+                                      </button>
+                                    ) : null}
+                                    <div>
+                                      <div className="font-medium text-white">{titleCaseWords(request.product_name)}</div>
+                                      {request.sku && <div className="text-xs text-white/60">SKU: {request.sku.toUpperCase()}</div>}
+                                      {request.reference_link && (
+                                        <div className="text-xs text-blue-400 max-w-[240px] truncate">
+                                          <a href={request.reference_link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{request.reference_link}</a>
+                                        </div>
+                                      )}
+                                      {request.remarks && <div className="text-xs text-white/55 italic mt-0.5 max-w-[240px]">{request.remarks}</div>}
+                                    </div>
+                                  </div>
+                                  {unassignedMarkets.length > 0 && (
+                                    <div className="text-xs text-amber-700 mt-1">No purchaser mapped: {unassignedMarkets.join(', ')}</div>
+                                  )}
+                                </td>
+                                {!isPurchaser && <td className="px-3 py-2 text-white">{titleCaseWords(request.reseller_name)}</td>}
+                                {!isPurchaser && <td className="px-3 py-2 text-white">{request.markets.join(', ')}</td>}
+                                <td className="px-3 py-2">
+                                  <span className={`px-2 py-1 rounded-full text-xs ${statusClass(request.derived_status)}`}>
+                                    {formatDerivedStatusLabel(request.derived_status)}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-white/80">{created}</td>
+                                {isPurchaser && (
+                                  <td className="px-3 py-2">
+                                    {canRespondAssignments.length > 0
+                                      ? <button onClick={() => openRespondForm(request.id, canRespondAssignments[0].id)} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs">Respond</button>
+                                      : <span className="text-xs text-white/60">No pending assignment</span>}
+                                  </td>
+                                )}
+                                {isAgent && (
+                                  <td className="px-3 py-2">
+                                    {request.derived_status === 'completed'
+                                      ? <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs">See Feedback</button>
+                                      : <span className="text-xs text-white/60">-</span>}
+                                  </td>
+                                )}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
 
             {isImageViewerOpen && viewerImageUrl && (
               <div
@@ -1173,11 +1207,11 @@ export default function ProductAvailabilityPage() {
 
             {selectedFeedbackRequest && (
               <div
-                className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+                className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center sm:p-4"
                 onClick={() => setSelectedFeedbackRequest(null)}
               >
                 <div
-                  className="w-full max-w-4xl rounded-xl border border-white/10 max-h-[85vh] overflow-y-auto"
+                  className="w-full sm:max-w-4xl rounded-t-2xl sm:rounded-xl border border-white/10 max-h-[90vh] overflow-y-auto"
                   style={{
                     background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)',
                     boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
