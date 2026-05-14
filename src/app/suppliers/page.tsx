@@ -39,7 +39,7 @@ export default function SuppliersPage() {
     }
 
     if (!authLoading && isAuthenticated) {
-      if (userRole !== 'purchaser' && userRole !== 'admin') {
+      if (userRole !== 'purchaser' && userRole !== 'admin' && userRole !== 'manager') {
         router.push('/dashboard')
         return
       }
@@ -54,8 +54,8 @@ export default function SuppliersPage() {
     try {
       let supplierList: SupplierInfo[] = []
       
-      if (userRole === 'admin') {
-        // Admin can see all suppliers
+      if (userRole === 'admin' || userRole === 'manager') {
+        // Admin and manager can see all suppliers
         const { data, error } = await supabase
           .from('users')
           .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')

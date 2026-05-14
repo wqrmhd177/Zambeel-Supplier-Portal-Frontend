@@ -1,9 +1,9 @@
 import { supabase } from './supabase'
 
-export type ProductAvailabilityStatus = 'pending' | 'delayed' | 'completed'
+export type ProductAvailabilityStatus = 'pending' | 'delayed' | 'completed' | 'cancelled'
 export type ProductStatusInput = 'already_listed' | 'not_listed' | 'not_sure'
 export type PriorityLevel = 'urgent' | 'normal'
-export type AvailabilityOption = 'available' | 'not_available' | 'on_demand'
+export type AvailabilityOption = 'available' | 'not_available' | 'on_demand' | 'alternative'
 export type StockStatusOption = 'limited' | 'on_demand' | 'bulk_limited_both'
 
 export interface ProductAvailabilityRequest {
@@ -46,6 +46,7 @@ export interface ProductAvailabilityResponse {
   bulk_unit_price: number | null
   response_images: string[]
   remarks: string | null
+  round_number: number
   created_at: string
   updated_at: string
 }
@@ -53,6 +54,7 @@ export interface ProductAvailabilityResponse {
 export interface ProductAvailabilityRequestWithDetails extends ProductAvailabilityRequest {
   derived_status: ProductAvailabilityStatus
   response: ProductAvailabilityResponse | null
+  responseHistory: ProductAvailabilityResponse[]
 }
 
 export interface CreateProductAvailabilityInput {
@@ -121,6 +123,7 @@ function deriveStatus(
   assignmentStatus: 'pending' | 'completed',
   createdAt: string
 ): ProductAvailabilityStatus {
+  if (dbStatus === 'cancelled') return 'cancelled'
   if (dbStatus === 'completed' || assignmentStatus === 'completed') return 'completed'
   const elapsedHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60)
   return elapsedHours >= 48 ? 'delayed' : 'pending'
@@ -135,6 +138,7 @@ export type ProductAvailabilityListFilter =
   | 'delayed'
   | 'urgent_open'
   | 'normal_pending'
+  | 'cancelled'
   | 'draft'
 
 function matchesProductAvailabilityListFilter(
@@ -143,6 +147,9 @@ function matchesProductAvailabilityListFilter(
 ): boolean {
   if (filter === 'draft') return row.is_draft === true
   if (row.is_draft) return false
+  // Cancelled requests only appear in the 'cancelled' tab and 'all'
+  if (row.derived_status === 'cancelled') return filter === 'cancelled' || filter === 'all'
+  if (filter === 'cancelled') return false
   if (filter === 'all') return true
   const priority = row.priority_level as PriorityLevel
   if (filter === 'completed') return row.derived_status === 'completed'
@@ -154,19 +161,37 @@ function matchesProductAvailabilityListFilter(
 
 export function formatDerivedStatusLabel(status: ProductAvailabilityStatus): string {
   switch (status) {
-    case 'pending': return 'Pending'
-    case 'delayed': return 'Delayed'
+    case 'pending':   return 'Pending'
+    case 'delayed':   return 'Delayed'
     case 'completed': return 'Completed'
-    default: return status
+    case 'cancelled': return 'Cancelled'
+    default:          return status
   }
+}
+
+export async function cancelProductAvailabilityRequest(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from('product_availability_requests')
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', requestId)
+  if (error) throw new Error(error.message || 'Failed to cancel request')
+}
+
+export async function requestAlternativeSearch(requestId: string, newRemarks: string): Promise<void> {
+  const { error } = await supabase.rpc('request_alternative_search', {
+    p_request_id: requestId,
+    p_new_remarks: newRemarks,
+  })
+  if (error) throw new Error(error.message || 'Failed to re-open request for alternative search')
 }
 
 export function formatAvailabilityLabel(av: AvailabilityOption): string {
   switch (av) {
-    case 'available': return 'Available'
+    case 'available':     return 'Available'
     case 'not_available': return 'Not Available'
-    case 'on_demand': return 'On Demand'
-    default: return av
+    case 'on_demand':     return 'On Demand'
+    case 'alternative':   return 'Alternative Option'
+    default:              return av
   }
 }
 
@@ -282,6 +307,19 @@ export async function fetchProductAvailabilityRequests(params: {
     requestQuery = requestQuery
       .eq('assigned_purchaser_user_id', params.userFriendlyId)
       .eq('is_draft', false)
+  } else if (role === 'manager') {
+    // Managers see only requests for their country's market
+    const { data: mgrUser } = await supabase
+      .from('users')
+      .select('country')
+      .eq('user_id', params.userFriendlyId)
+      .single()
+    const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
+    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
+      keywords.some((k) => mgrCountry.includes(k))
+    )?.[0]
+    requestQuery = requestQuery.eq('is_draft', false)
+    if (mgrMarket) requestQuery = requestQuery.eq('market', mgrMarket)
   } else {
     if (params.statusFilter !== 'draft') {
       requestQuery = requestQuery.eq('is_draft', false)
@@ -297,27 +335,19 @@ export async function fetchProductAvailabilityRequests(params: {
   const requestIds = (requestRows || []).map((row: any) => row.id)
   if (requestIds.length === 0) return []
 
-  // Fetch responses linked directly by request_id (new style, assignment_id IS NULL)
-  const { data: newStyleResponses } = await supabase
+  // Fetch all responses for these requests, ordered by round_number DESC
+  // (latest round first so we can take [0] as the current response)
+  const { data: allResponseRows } = await supabase
     .from('product_availability_responses')
     .select('*')
     .in('request_id', requestIds)
-    .is('assignment_id', null)
+    .order('round_number', { ascending: false })
 
-  // Also fetch old-style responses (assignment_id IS NOT NULL) for legacy requests
-  const { data: oldStyleResponses } = await supabase
-    .from('product_availability_responses')
-    .select('*')
-    .in('request_id', requestIds)
-    .not('assignment_id', 'is', null)
-
-  const responseByRequestId: Record<string, ProductAvailabilityResponse> = {}
-  // Old-style first (lower priority), new-style overwrites
-  ;(oldStyleResponses || []).forEach((r: any) => {
-    responseByRequestId[r.request_id] = r
-  })
-  ;(newStyleResponses || []).forEach((r: any) => {
-    responseByRequestId[r.request_id] = r
+  // Build per-request history maps
+  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {}
+  ;(allResponseRows || []).forEach((r: any) => {
+    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = []
+    historyByRequestId[r.request_id].push(r)
   })
 
   const withDerived = (requestRows || [])
@@ -327,10 +357,12 @@ export async function fetchProductAvailabilityRequests(params: {
         request.assignment_status ?? 'pending',
         request.created_at
       )
+      const history = historyByRequestId[request.id] || []
       return {
         ...request,
         derived_status: derived,
-        response: responseByRequestId[request.id] ?? null,
+        response: history[0] ?? null,
+        responseHistory: history,
       } as ProductAvailabilityRequestWithDetails
     })
     .filter((row) => matchesProductAvailabilityListFilter(row, params.statusFilter))
@@ -341,8 +373,9 @@ export async function fetchProductAvailabilityRequests(params: {
 export async function submitProductAvailabilityResponse(
   input: SubmitProductAvailabilityResponseInput
 ): Promise<boolean> {
+  const requiresImages = input.availability !== 'not_available'
   if (
-    input.availability !== 'not_available' &&
+    requiresImages &&
     (input.responseImages.length === 0 || input.responseImages.length > 5)
   ) {
     throw new Error('Response images must contain between 1 and 5 files')
@@ -504,12 +537,14 @@ export async function getProductAvailabilityCounts(
   normalRequests: number
   delayed: number
   completed: number
+  cancelled: number
   drafts: number
   all: number
 }> {
+  const canCreateRole = userRole === 'agent' || userRole === 'admin'
   const [liveRows, draftRows] = await Promise.all([
     fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'all' }),
-    userRole === 'agent'
+    canCreateRole
       ? fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'draft' })
       : Promise.resolve([]),
   ])
@@ -519,11 +554,13 @@ export async function getProductAvailabilityCounts(
     normalRequests: 0,
     delayed: 0,
     completed: 0,
+    cancelled: 0,
     drafts: draftRows.length,
     all: liveRows.length,
   }
   liveRows.forEach((row) => {
     const priority = row.priority_level as PriorityLevel
+    if (row.derived_status === 'cancelled') { counts.cancelled += 1; return }
     if (priority === 'urgent' && row.derived_status === 'pending') counts.urgent += 1
     if (priority === 'normal' && row.derived_status === 'pending') counts.normalRequests += 1
     if (row.derived_status === 'delayed') counts.delayed += 1

@@ -161,7 +161,7 @@ export default function ProductsPage() {
       return
     }
 
-    // Redirect agents to listings page (admin can access everything)
+    // Redirect agents to listings page; listing_agent stays on products
     if (!authLoading && isAuthenticated && userRole === 'agent') {
       router.push('/listings')
       return
@@ -336,7 +336,7 @@ export default function ProductsPage() {
         })
 
         groupedProducts = Array.from(mergedMap.values())
-      } else if (userRole === 'admin') {
+      } else if (userRole === 'admin' || userRole === 'listing_agent' || userRole === 'manager') {
         const { data: supplierData, error: supplierError } = await supabase
           .from('users')
           .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
@@ -990,7 +990,7 @@ export default function ProductsPage() {
                                 <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                   Pending Approval
                                 </span>
-                              ) : (userRole === 'admin' || userRole === 'agent') ? (
+                              ) : (userRole === 'admin' || userRole === 'agent' || userRole === 'listing_agent') ? (
                                 <select
                                   value={status}
                                   onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
@@ -1036,7 +1036,7 @@ export default function ProductsPage() {
                                 <span className="hidden sm:inline">View Variants</span>
                                 <span className="sm:hidden">View</span>
                               </button>
-                              {(userRole === 'admin' || userRole === 'agent') && (
+                              {(userRole === 'admin' || userRole === 'agent' || userRole === 'listing_agent') && (
                                 <>
                                   <button
                                     onClick={() => handleOpenModalForEditPrices(product)}
@@ -1106,7 +1106,7 @@ export default function ProductsPage() {
                               <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                 Pending Approval
                               </span>
-                            ) : (userRole === 'admin' || userRole === 'agent') ? (
+                            ) : (userRole === 'admin' || userRole === 'agent' || userRole === 'listing_agent') ? (
                               <select
                                 value={status}
                                 onChange={(e) => handleStatusChange(product.product_id, e.target.value)}
@@ -1284,7 +1284,7 @@ export default function ProductsPage() {
                     <Activity className="w-4 h-4 text-violet-400" />
                     <label className="text-xs sm:text-sm font-semibold text-white/70">Status</label>
                   </div>
-                  {(userRole === 'supplier' || userRole === 'admin' || userRole === 'purchaser') && isEditingPrices ? (
+                  {(userRole === 'supplier' || userRole === 'admin' || userRole === 'purchaser' || userRole === 'listing_agent') && isEditingPrices ? (
                     <select
                       value={editedProductActiveStatus}
                       onChange={(e) => {
@@ -1398,7 +1398,7 @@ export default function ProductsPage() {
                             )}
                             <div className="flex flex-col items-center text-center">
                               <label className="text-xs font-semibold text-white/70 block mb-1">Price</label>
-                              {(userRole === 'admin' || userRole === 'supplier' || userRole === 'purchaser') && isEditingPrices ? (
+                              {(userRole === 'admin' || userRole === 'supplier' || userRole === 'purchaser' || userRole === 'listing_agent') && isEditingPrices ? (
                                 <input
                                   type="number"
                                   min="0"
@@ -1438,7 +1438,7 @@ export default function ProductsPage() {
                             </div>
                             <div className="flex flex-col items-center text-center">
                               <label className="text-xs font-semibold text-white/70 block mb-1">Status</label>
-                              {(userRole === 'admin' || userRole === 'supplier' || userRole === 'purchaser') && isEditingPrices ? (
+                              {(userRole === 'admin' || userRole === 'supplier' || userRole === 'purchaser' || userRole === 'listing_agent') && isEditingPrices ? (
                                 <select
                                   value={(editedVariantActive.get(variant.variant_id) ?? (variant.active !== false)) ? 'active' : 'inactive'}
                                   onChange={(e) => {

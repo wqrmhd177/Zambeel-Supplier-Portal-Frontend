@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase'
 const ACCOUNT_APPROVAL_OPTIONS = ['Wait', 'Approved', 'Refused'] as const
 type AccountApproval = typeof ACCOUNT_APPROVAL_OPTIONS[number]
 
-const ROLE_OPTIONS = ['supplier', 'agent', 'purchaser', 'admin'] as const
+const ROLE_OPTIONS = ['supplier', 'agent', 'purchaser', 'admin', 'manager', 'listing_agent'] as const
 type UserRole = typeof ROLE_OPTIONS[number]
 
 interface UserRow {
@@ -154,13 +154,21 @@ export default function UserSettingsPage() {
     return null
   }
 
-  const roleColorClass = (role: string | null) => {
+  const roleBadgeClass = (role: string | null) => {
     switch (role) {
-      case 'admin':     return 'bg-violet-500/20 border-violet-500/40 text-violet-300 focus:border-violet-400'
-      case 'agent':     return 'bg-blue-500/20 border-blue-500/40 text-blue-300 focus:border-blue-400'
-      case 'purchaser': return 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
-      default:          return 'bg-amber-500/20 border-amber-500/40 text-amber-300 focus:border-amber-400'
+      case 'admin':          return 'bg-violet-600 text-white'
+      case 'agent':          return 'bg-blue-600 text-white'
+      case 'purchaser':      return 'bg-emerald-600 text-white'
+      case 'manager':        return 'bg-indigo-600 text-white'
+      case 'listing_agent':  return 'bg-cyan-600 text-white'
+      default:               return 'bg-amber-500 text-white'
     }
+  }
+
+  const approvalBadgeClass = (approval: string | null) => {
+    if (approval === 'Approved') return 'bg-emerald-600 text-white'
+    if (approval === 'Refused')  return 'bg-red-600 text-white'
+    return 'bg-amber-500 text-white'
   }
 
   return (
@@ -222,40 +230,42 @@ export default function UserSettingsPage() {
                       <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm theme-muted">{user.email || '—'}</td>
                       <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm theme-muted">{user.country || '—'}</td>
                       <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
-                        <select
-                          value={user.role || 'supplier'}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                          disabled={updatingRoleForId === user.id}
-                          className={`min-w-[120px] px-3 py-1.5 rounded-lg border-2 text-sm font-semibold focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-all [&>option]:bg-[#1e1b4b] [&>option]:text-white ${roleColorClass(user.role)}`}
-                        >
-                          {ROLE_OPTIONS.map(opt => (
-                            <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
-                          ))}
-                        </select>
-                        {updatingRoleForId === user.id && (
-                          <span className="ml-2 text-xs theme-muted">Saving...</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${roleBadgeClass(user.role)}`} />
+                          <select
+                            value={user.role || 'supplier'}
+                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                            disabled={updatingRoleForId === user.id}
+                            className="min-w-[130px] px-2 py-1.5 rounded-lg border border-white/20 bg-white/10 text-white text-sm font-medium focus:outline-none focus:border-violet-400 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          >
+                            {ROLE_OPTIONS.map(opt => (
+                              <option key={opt} value={opt} style={{ background: '#1e1b4b', color: 'white' }}>
+                                {opt === 'listing_agent' ? 'Listing Agent' : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                          {updatingRoleForId === user.id && (
+                            <span className="text-xs theme-muted">Saving…</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm">
-                        <select
-                          value={user.account_approval || 'Wait'}
-                          onChange={(e) => handleAccountApprovalChange(user.id, e.target.value)}
-                          disabled={updatingApprovalForId === user.id}
-                          className={`min-w-[120px] px-3 py-1.5 rounded-lg border-2 text-sm font-semibold focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-all ${
-                            user.account_approval === 'Approved'
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 focus:border-emerald-400 [&>option]:bg-[#1e1b4b] [&>option]:text-white'
-                              : user.account_approval === 'Refused'
-                              ? 'bg-red-500/20 border-red-500/40 text-red-300 focus:border-red-400 [&>option]:bg-[#1e1b4b] [&>option]:text-white'
-                              : 'bg-amber-500/20 border-amber-500/40 text-amber-300 focus:border-amber-400 [&>option]:bg-[#1e1b4b] [&>option]:text-white'
-                          }`}
-                        >
-                          {ACCOUNT_APPROVAL_OPTIONS.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                        {updatingApprovalForId === user.id && (
-                          <span className="ml-2 text-xs theme-muted">Saving...</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${approvalBadgeClass(user.account_approval)}`} />
+                          <select
+                            value={user.account_approval || 'Wait'}
+                            onChange={(e) => handleAccountApprovalChange(user.id, e.target.value)}
+                            disabled={updatingApprovalForId === user.id}
+                            className="min-w-[110px] px-2 py-1.5 rounded-lg border border-white/20 bg-white/10 text-white text-sm font-medium focus:outline-none focus:border-violet-400 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          >
+                            {ACCOUNT_APPROVAL_OPTIONS.map(opt => (
+                              <option key={opt} value={opt} style={{ background: '#1e1b4b', color: 'white' }}>{opt}</option>
+                            ))}
+                          </select>
+                          {updatingApprovalForId === user.id && (
+                            <span className="text-xs theme-muted">Saving…</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

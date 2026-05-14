@@ -52,7 +52,7 @@ export default function ReturnsPage() {
         router.push('/login')
         return
       }
-      if (userRole && userRole !== 'admin' && userRole !== 'supplier') {
+      if (userRole && userRole !== 'admin' && userRole !== 'supplier' && userRole !== 'manager') {
         router.push('/dashboard')
       }
     }
@@ -122,7 +122,7 @@ export default function ReturnsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    if (userRole && userRole !== 'admin' && userRole !== 'supplier') return
+    if (userRole && userRole !== 'admin' && userRole !== 'supplier' && userRole !== 'manager') return
 
     let effectivePage = page
     if (prevDebouncedSearch.current !== debouncedSearch) {
@@ -220,7 +220,7 @@ export default function ReturnsPage() {
   }
 
   if (!isAuthenticated) return null
-  if (userRole && userRole !== 'admin' && userRole !== 'supplier') return null
+  if (userRole && userRole !== 'admin' && userRole !== 'supplier' && userRole !== 'manager') return null
 
   void isAdmin
 

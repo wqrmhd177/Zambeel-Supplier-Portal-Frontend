@@ -8,6 +8,7 @@ import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import {
   BulkUploadRowValidated,
+  cancelProductAvailabilityRequest,
   createBulkDraftRequests,
   createProductAvailabilityRequest,
   fetchProductAvailabilityRequests,
@@ -18,6 +19,7 @@ import {
   parseBulkUploadCsv,
   ProductAvailabilityListFilter,
   ProductAvailabilityRequestWithDetails,
+  requestAlternativeSearch,
   submitDraftRequest,
   submitProductAvailabilityResponse,
   titleCaseWords,
@@ -27,7 +29,7 @@ import { supabase } from '@/lib/supabase'
 
 const MARKET_OPTIONS = ['UAE', 'KSA', 'PAK', 'QTR', 'KWT', 'OMN', 'BHR', 'IRQ', 'USA']
 
-type FilterTab = 'new' | 'drafts' | 'urgent' | 'normal_requests' | 'delayed' | 'completed' | 'all'
+type FilterTab = 'new' | 'drafts' | 'urgent' | 'normal_requests' | 'delayed' | 'completed' | 'cancelled' | 'all'
 
 /** Sub-mode within the New tab */
 type NewTabMode = 'single' | 'bulk'
@@ -45,7 +47,7 @@ type CreateFormState = {
 }
 
 type PurchaserResponseState = {
-  availability: 'available' | 'not_available' | 'on_demand'
+  availability: 'available' | 'not_available' | 'on_demand' | 'alternative'
   stockStatus: 'limited' | 'on_demand' | 'bulk_limited_both'
   singleUnitPrice: string
   bulkUnitPrice: string
@@ -101,9 +103,16 @@ export default function ProductAvailabilityPage() {
     normalRequests: 0,
     delayed: 0,
     completed: 0,
+    cancelled: 0,
     drafts: 0,
     all: 0,
   })
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [showAltSearch, setShowAltSearch] = useState(false)
+  const [altSearchRemarks, setAltSearchRemarks] = useState('')
+  const [altSearchSaving, setAltSearchSaving] = useState(false)
+  const [altSearchError, setAltSearchError] = useState('')
   // Bulk upload state
   const [bulkCsvRows, setBulkCsvRows] = useState<BulkUploadRowValidated[]>([])
   const [bulkImporting, setBulkImporting] = useState(false)
@@ -135,6 +144,7 @@ export default function ProductAvailabilityPage() {
 
   const isAgent = userRole === 'agent'
   const isAdmin = userRole === 'admin'
+  const isManager = userRole === 'manager'
   const canCreate = isAgent || isAdmin
   const isPurchaser = userRole === 'purchaser'
   const canAccess = Boolean(userRole)
@@ -165,6 +175,7 @@ export default function ProductAvailabilityPage() {
     if (filter === 'normal_requests') return 'normal_pending'
     if (filter === 'delayed') return 'delayed'
     if (filter === 'completed') return 'completed'
+    if (filter === 'cancelled') return 'cancelled'
     return 'all'
   }, [filter])
 
@@ -482,21 +493,35 @@ export default function ProductAvailabilityPage() {
     setModalSuccess('')
   }
 
+  const handleCancelRequest = async (requestId: string) => {
+    setCancelling(true)
+    try {
+      await cancelProductAvailabilityRequest(requestId)
+      setCancelConfirmId(null)
+      await refreshData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel request')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   const handleSubmitResponse = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedAssignment || !userFriendlyId) return
     setModalError('')
     setModalSuccess('')
 
+    const needsDetails = responseForm.availability !== 'not_available'
     if (
-      responseForm.availability !== 'not_available' &&
+      needsDetails &&
       responseForm.stockStatus !== 'bulk_limited_both' &&
       (!responseForm.singleUnitPrice || Number(responseForm.singleUnitPrice) < 0)
     ) {
       setModalError('Single unit price is required for this stock status.')
       return
     }
-    if (responseForm.availability !== 'not_available' && responseForm.images.length === 0) {
+    if (needsDetails && responseForm.images.length === 0) {
       setModalError('Please upload at least one picture for response.')
       return
     }
@@ -504,25 +529,19 @@ export default function ProductAvailabilityPage() {
     setSavingResponse(true)
     try {
       const imageUrls = await uploadFilesToStorage(userFriendlyId, responseForm.images)
+      const isNotAvailable = responseForm.availability === 'not_available'
       await submitProductAvailabilityResponse({
         requestId: selectedAssignment.requestId,
         respondedByUserId: userFriendlyId,
         availability: responseForm.availability,
-        stockStatus: responseForm.availability === 'not_available' ? 'on_demand' : responseForm.stockStatus,
-        singleUnitPrice:
-          responseForm.availability === 'not_available'
-            ? null
-            : responseForm.singleUnitPrice
-              ? Number(responseForm.singleUnitPrice)
-              : null,
+        stockStatus: isNotAvailable ? 'on_demand' : responseForm.stockStatus,
+        singleUnitPrice: isNotAvailable ? null : responseForm.singleUnitPrice ? Number(responseForm.singleUnitPrice) : null,
         bulkUnitPrice:
-          responseForm.availability !== 'not_available' &&
-          responseForm.stockStatus === 'bulk_limited_both' &&
-          responseForm.bulkUnitPrice
+          !isNotAvailable && responseForm.stockStatus === 'bulk_limited_both' && responseForm.bulkUnitPrice
             ? Number(responseForm.bulkUnitPrice)
             : null,
-        responseImages: responseForm.availability === 'not_available' ? [] : imageUrls,
-        remarks: responseForm.availability === 'not_available' ? null : responseForm.remarks,
+        responseImages: isNotAvailable ? [] : imageUrls,
+        remarks: isNotAvailable ? null : responseForm.remarks,
       })
       closeResponseModal()
       await refreshData()
@@ -563,7 +582,7 @@ export default function ProductAvailabilityPage() {
             {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
             {success && <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{success}</div>}
 
-            <div className={`grid grid-cols-3 ${canCreate ? 'sm:grid-cols-4 md:grid-cols-7' : 'sm:grid-cols-3 md:grid-cols-5'} gap-2`}>
+            <div className={`grid grid-cols-3 ${canCreate ? 'sm:grid-cols-4 md:grid-cols-8' : 'sm:grid-cols-3 md:grid-cols-6'} gap-2`}>
               {canCreate && (
                 <button onClick={() => setFilter('new')} className={`rounded-xl p-2.5 text-left border ${filter === 'new' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'}`}>
                   <div className="text-[11px] text-gray-500 leading-tight">New</div>
@@ -591,6 +610,10 @@ export default function ProductAvailabilityPage() {
               <button onClick={() => setFilter('completed')} className={`rounded-xl p-2.5 text-left border ${filter === 'completed' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
                 <div className="text-[11px] text-gray-500 leading-tight">Completed</div>
                 <div className="text-lg font-bold">{counts.completed}</div>
+              </button>
+              <button onClick={() => setFilter('cancelled')} className={`rounded-xl p-2.5 text-left border ${filter === 'cancelled' ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white'}`}>
+                <div className="text-[11px] text-gray-500 leading-tight">Cancelled</div>
+                <div className="text-lg font-bold text-gray-500">{counts.cancelled}</div>
               </button>
               <button onClick={() => setFilter('all')} className={`rounded-xl p-2.5 text-left border ${filter === 'all' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'}`}>
                 <div className="text-[11px] text-gray-500 leading-tight">All</div>
@@ -965,6 +988,7 @@ export default function ProductAvailabilityPage() {
                         <option value="available">Available</option>
                         <option value="not_available">Not Available</option>
                         <option value="on_demand">On-Demand</option>
+                        <option value="alternative">Alternative Option</option>
                       </select>
                       {responseForm.availability !== 'not_available' && (
                         <select
@@ -979,6 +1003,7 @@ export default function ProductAvailabilityPage() {
                       )}
                     </div>
 
+                    {/* Fields for all options except Not Available */}
                     {responseForm.availability !== 'not_available' && (
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1064,7 +1089,10 @@ export default function ProductAvailabilityPage() {
               }
 
               const statusClass = (s: string) =>
-                s === 'delayed' ? 'bg-red-100 text-red-700' : s === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                s === 'delayed' ? 'bg-red-100 text-red-700'
+                : s === 'completed' ? 'bg-green-100 text-green-700'
+                : s === 'cancelled' ? 'bg-gray-200 text-gray-600'
+                : 'bg-yellow-100 text-yellow-700'
 
               return (
                 <>
@@ -1121,14 +1149,23 @@ export default function ProductAvailabilityPage() {
                           {/* Bottom: date + action */}
                           <div className="flex items-center justify-between pt-1 border-t border-white/10">
                             <span className="text-xs text-white/40">{new Date(request.created_at).toLocaleDateString()}</span>
-                            <div>
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
                               {isPurchaser && (
                                 canRespond
                                   ? <button onClick={() => openRespondForm(request.id)} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium">Respond</button>
                                   : <span className="text-xs text-white/50">{request.assignment_status === 'completed' ? 'Responded' : 'No pending assignment'}</span>
                               )}
-                              {canCreate && request.derived_status === 'completed' && (
+                              {(canCreate || isManager) && request.derived_status === 'completed' && (
                                 <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-4 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium">See Feedback</button>
+                              )}
+                              {!isPurchaser && request.derived_status !== 'completed' && request.derived_status !== 'cancelled' && (
+                                cancelConfirmId === request.id
+                                  ? <span className="flex items-center gap-1">
+                                      <span className="text-xs text-white/70">Cancel?</span>
+                                      <button disabled={cancelling} onClick={() => handleCancelRequest(request.id)} className="px-2 py-1 rounded bg-red-600 text-white text-xs disabled:opacity-50">Yes</button>
+                                      <button onClick={() => setCancelConfirmId(null)} className="px-2 py-1 rounded bg-white/10 text-white text-xs">No</button>
+                                    </span>
+                                  : <button onClick={() => setCancelConfirmId(request.id)} className="px-3 py-1.5 rounded-lg bg-gray-600 text-white text-xs">Cancel Request</button>
                               )}
                             </div>
                           </div>
@@ -1156,7 +1193,8 @@ export default function ProductAvailabilityPage() {
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
                             <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Created</th>
                             {isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Action</th>}
-                            {canCreate && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
+                            {(canCreate || isManager) && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Feedback</th>}
+                            {!isPurchaser && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Cancel</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1206,11 +1244,23 @@ export default function ProductAvailabilityPage() {
                                       : <span className="text-xs text-white/60">{request.assignment_status === 'completed' ? 'Responded' : 'No pending assignment'}</span>}
                                   </td>
                                 )}
-                                {canCreate && (
+                                {(canCreate || isManager) && (
                                   <td className="px-3 py-2">
                                     {request.derived_status === 'completed'
                                       ? <button type="button" onClick={() => setSelectedFeedbackRequest(request)} className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs">See Feedback</button>
                                       : <span className="text-xs text-white/60">-</span>}
+                                  </td>
+                                )}
+                                {!isPurchaser && (
+                                  <td className="px-3 py-2">
+                                    {request.derived_status !== 'completed' && request.derived_status !== 'cancelled'
+                                      ? cancelConfirmId === request.id
+                                        ? <span className="flex items-center gap-1">
+                                            <button disabled={cancelling} onClick={() => handleCancelRequest(request.id)} className="px-2 py-1 rounded bg-red-600 text-white text-xs disabled:opacity-50">Confirm</button>
+                                            <button onClick={() => setCancelConfirmId(null)} className="px-2 py-1 rounded bg-white/10 text-white text-xs">No</button>
+                                          </span>
+                                        : <button onClick={() => setCancelConfirmId(request.id)} className="px-3 py-1.5 rounded-md bg-gray-600 text-white text-xs">Cancel</button>
+                                      : <span className="text-xs text-white/40">—</span>}
                                   </td>
                                 )}
                               </tr>
@@ -1251,7 +1301,7 @@ export default function ProductAvailabilityPage() {
             {selectedFeedbackRequest && (
               <div
                 className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center sm:p-4"
-                onClick={() => setSelectedFeedbackRequest(null)}
+                onClick={() => { setSelectedFeedbackRequest(null); setShowAltSearch(false); setAltSearchError('') }}
               >
                 <div
                   className="w-full sm:max-w-4xl rounded-t-2xl sm:rounded-xl border border-white/10 max-h-[90vh] overflow-y-auto"
@@ -1265,7 +1315,7 @@ export default function ProductAvailabilityPage() {
                     <h3 className="text-lg font-semibold text-white">Purchaser Feedback</h3>
                     <button
                       type="button"
-                      onClick={() => setSelectedFeedbackRequest(null)}
+                      onClick={() => { setSelectedFeedbackRequest(null); setShowAltSearch(false); setAltSearchError('') }}
                       className="p-1 text-white/70 hover:text-white"
                     >
                       <X className="w-5 h-5" />
@@ -1273,9 +1323,16 @@ export default function ProductAvailabilityPage() {
                   </div>
                   <div className="p-4 space-y-4">
                     <div className="text-white font-medium">{selectedFeedbackRequest.product_name}</div>
+                    <div className="text-xs text-white/50">
+                      Market: {selectedFeedbackRequest.market || selectedFeedbackRequest.markets?.join(', ')}
+                      {selectedFeedbackRequest.remarks && <span className="ml-3 italic">Remarks: {selectedFeedbackRequest.remarks}</span>}
+                    </div>
+
+                    {/* Latest response */}
                     <div className="border border-white/10 rounded-lg p-3 bg-white/5">
-                      <div className="text-sm text-white/80 mb-2">
-                        Market: {selectedFeedbackRequest.market || selectedFeedbackRequest.markets?.join(', ')}
+                      <div className="text-xs font-semibold text-white/50 uppercase mb-2">
+                        Latest Response
+                        {selectedFeedbackRequest.response && ` — Round ${selectedFeedbackRequest.response.round_number}`}
                       </div>
                       {!selectedFeedbackRequest.response ? (
                         <div className="text-xs text-white/60">No feedback submitted yet.</div>
@@ -1290,10 +1347,7 @@ export default function ProductAvailabilityPage() {
                                     <button
                                       type="button"
                                       key={idx}
-                                      onClick={() => {
-                                        setViewerImageUrl(String(img))
-                                        setIsImageViewerOpen(true)
-                                      }}
+                                      onClick={() => { setViewerImageUrl(String(img)); setIsImageViewerOpen(true) }}
                                       className="hover:opacity-80"
                                     >
                                       <img src={String(img)} alt="Feedback" className="w-20 h-20 rounded object-cover" />
@@ -1307,9 +1361,90 @@ export default function ProductAvailabilityPage() {
                           <div className="text-white/90">Single Unit Price: <span className="text-white">{selectedFeedbackRequest.response.single_unit_price ?? 'N/A'}</span></div>
                           <div className="text-white/90">Bulk Unit Price: <span className="text-white">{selectedFeedbackRequest.response.bulk_unit_price ?? 'N/A'}</span></div>
                           <div className="text-white/90">Remarks: <span className="text-white">{selectedFeedbackRequest.response.remarks || 'N/A'}</span></div>
+                          <div className="text-white/40 text-xs">{new Date(selectedFeedbackRequest.response.created_at).toLocaleString()}</div>
                         </div>
                       )}
                     </div>
+
+                    {/* Response history (older rounds) */}
+                    {selectedFeedbackRequest.responseHistory.length > 1 && (
+                      <details className="border border-white/10 rounded-lg bg-white/5">
+                        <summary className="px-3 py-2 text-xs font-semibold text-white/50 cursor-pointer select-none">
+                          Previous Rounds ({selectedFeedbackRequest.responseHistory.length - 1})
+                        </summary>
+                        <div className="divide-y divide-white/10">
+                          {selectedFeedbackRequest.responseHistory.slice(1).map((r) => (
+                            <div key={r.id} className="px-3 py-2 text-xs space-y-1">
+                              <div className="text-white/50 font-semibold">Round {r.round_number} — {new Date(r.created_at).toLocaleString()}</div>
+                              <div className="text-white/70">Availability: {formatAvailabilityLabel(r.availability)}</div>
+                              {r.remarks && <div className="text-white/60 italic">Remarks: {r.remarks}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+
+                    {/* Search Alternative section (agents only, when latest response is not_available) */}
+                    {isAgent && selectedFeedbackRequest.response?.availability === 'not_available' &&
+                      selectedFeedbackRequest.assignment_status !== 'pending' && (
+                      <div className="border border-amber-500/30 rounded-lg p-3 bg-amber-500/10 space-y-3">
+                        <div className="text-sm font-semibold text-amber-300">Search Alternative Product</div>
+                        <p className="text-xs text-amber-200/70">
+                          Re-send this request to the purchaser with updated remarks. The purchaser will see the previous response history and your new notes.
+                        </p>
+                        {!showAltSearch ? (
+                          <button
+                            type="button"
+                            onClick={() => { setShowAltSearch(true); setAltSearchRemarks(selectedFeedbackRequest.remarks || '') }}
+                            className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600"
+                          >
+                            Search Alternative Product
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            {altSearchError && <div className="text-xs text-red-400">{altSearchError}</div>}
+                            <textarea
+                              rows={3}
+                              className="w-full rounded-lg px-3 py-2 text-sm bg-white/10 border border-white/20 text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400"
+                              placeholder="Updated remarks for the purchaser…"
+                              value={altSearchRemarks}
+                              onChange={(e) => setAltSearchRemarks(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={altSearchSaving}
+                                onClick={async () => {
+                                  if (!altSearchRemarks.trim()) { setAltSearchError('Please add updated remarks.'); return }
+                                  setAltSearchSaving(true)
+                                  setAltSearchError('')
+                                  try {
+                                    await requestAlternativeSearch(selectedFeedbackRequest.id, altSearchRemarks)
+                                    setSelectedFeedbackRequest(null)
+                                    setShowAltSearch(false)
+                                    await refreshData()
+                                  } catch (err) {
+                                    setAltSearchError(err instanceof Error ? err.message : 'Failed to re-send request')
+                                  } finally {
+                                    setAltSearchSaving(false)
+                                  }
+                                }}
+                                className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm disabled:opacity-50"
+                              >
+                                {altSearchSaving ? 'Sending…' : 'Confirm & Re-send'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setShowAltSearch(false); setAltSearchError('') }}
+                                className="px-4 py-2 rounded-lg border border-white/20 text-white/70 text-sm hover:bg-white/10"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

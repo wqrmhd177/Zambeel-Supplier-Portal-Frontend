@@ -12,6 +12,7 @@ interface AuthState {
   userFriendlyId: string | null
   userEmail: string | null
   userRole: string | null
+  userCountry: string | null
 }
 
 export function useAuth() {
@@ -23,6 +24,7 @@ export function useAuth() {
     userFriendlyId: null,
     userEmail: null,
     userRole: null,
+    userCountry: null,
   })
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export function useAuth() {
           userFriendlyId: null,
           userEmail: null,
           userRole: null,
+          userCountry: null,
         })
         return
       }
@@ -87,13 +90,14 @@ export function useAuth() {
         userFriendlyId: authData.userFriendlyId,
         userEmail: authData.userEmail,
         userRole: authData.userRole || 'supplier',
+        userCountry: localStorage.getItem('userCountry'),
       })
 
       // Verify user exists and is not deleted in Supabase (background validation)
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('id, user_id, email, archived, role, account_approval, onboarded')
+          .select('id, user_id, email, archived, role, account_approval, onboarded, country')
           .eq('id', authData.userId)
           .single()
 
@@ -114,22 +118,19 @@ export function useAuth() {
         }
 
         // Security check: normalize flags for robust handling across DB value formats.
-        const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
-        const profileSubmitted = hasSubmittedOnboarding(data)
         const userRole = String(data.role || 'supplier').trim().toLowerCase()
+        const userCountry = String(data.country || '').trim()
         const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
 
-        // For suppliers who have completed onboarding, enforce account approval status.
-        if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
+        // Enforce account approval for all roles except admin (admin can never lock themselves out).
+        if (userRole !== 'admin') {
           if (isRefused) {
             console.log('Account has been refused, logging out...')
             clearAuth()
             router.push('/login?reason=refused')
             return
           }
-          
           if (!isApproved) {
-            // Status is 'Wait' or null - pending approval
             console.log('Account approval is pending, logging out...')
             clearAuth()
             router.push('/login?reason=pending')
@@ -139,9 +140,10 @@ export function useAuth() {
 
         // User exists and is not deleted, update with fresh data from database
         localStorage.setItem('userRole', userRole)
-        
-        // Only update if role changed
-        if (userRole !== authData.userRole) {
+        localStorage.setItem('userCountry', userCountry)
+
+        // Update state if role or country changed
+        if (userRole !== authData.userRole || userCountry !== (localStorage.getItem('userCountry') || '')) {
           setAuthState({
             isAuthenticated: true,
             isLoading: false,
@@ -149,6 +151,7 @@ export function useAuth() {
             userFriendlyId: data.user_id || authData.userFriendlyId,
             userEmail: data.email || authData.userEmail,
             userRole: userRole,
+            userCountry: userCountry || null,
           })
         }
       } catch (err) {
@@ -170,6 +173,7 @@ export function useAuth() {
     localStorage.removeItem('supplierInfo')
     localStorage.removeItem('isOnboarded')
     localStorage.removeItem('userRole')
+    localStorage.removeItem('userCountry')
     setAuthState({
       isAuthenticated: false,
       isLoading: false,
@@ -177,6 +181,7 @@ export function useAuth() {
       userFriendlyId: null,
       userEmail: null,
       userRole: null,
+      userCountry: null,
     })
   }
 

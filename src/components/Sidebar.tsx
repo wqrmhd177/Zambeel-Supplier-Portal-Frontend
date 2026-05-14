@@ -42,6 +42,20 @@ const purchaserMenuItems = [
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
+const managerMenuItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+  { icon: Users, label: 'Suppliers', path: '/suppliers' },
+  { icon: Package, label: 'Products', path: '/products' },
+  { icon: ShoppingCart, label: 'Orders', path: '/orders' },
+  { icon: RotateCcw, label: 'Return Management', path: '/returns' },
+  { icon: List, label: 'Listings', path: '/listings' },
+  { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
+]
+
+const listingAgentMenuItems = [
+  { icon: Package, label: 'Products', path: '/products' },
+]
+
 export default function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
@@ -56,16 +70,11 @@ export default function Sidebar() {
     let isMounted = true
     const loadCounts = async () => {
       if (!userRole) return
-      if (userRole === 'admin') {
+      if (userRole === 'admin' || userRole === 'manager') {
         const listings = await getPendingListingsCount()
         if (isMounted) setListingPendingCount(listings)
       }
-      if (userRole === 'agent') {
-        if (isMounted) {
-          setListingPendingCount(null)
-          setApprovalsPendingCount(null)
-        }
-      } else if (userRole === 'admin') {
+      if (userRole === 'admin') {
         const approvals = await getPendingApprovalsCount()
         if (isMounted) setApprovalsPendingCount(approvals)
       }
@@ -88,6 +97,8 @@ export default function Sidebar() {
     if (userRole === 'admin') return adminMenuItems
     if (userRole === 'agent') return agentMenuItems
     if (userRole === 'purchaser') return purchaserMenuItems
+    if (userRole === 'manager') return managerMenuItems
+    if (userRole === 'listing_agent') return listingAgentMenuItems
     return supplierMenuItems
   }
   const menuItems = getMenuItems()
@@ -127,6 +138,7 @@ export default function Sidebar() {
     localStorage.removeItem('supplierInfo')
     localStorage.removeItem('isOnboarded')
     localStorage.removeItem('userRole')
+    localStorage.removeItem('userCountry')
     setIsMobileMenuOpen(false)
     router.push('/login')
   }
