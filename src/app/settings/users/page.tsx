@@ -114,10 +114,8 @@ export default function UserSettingsPage() {
   }
 
   const handleRoleChange = async (id: string, newRole: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'settings/users/page.tsx:handleRoleChange-entry',message:'role change called',data:{id,newRole},timestamp:Date.now(),hypothesisId:'A-B-C'})}).catch(()=>{});
-    // #endregion
     setUpdatingRoleForId(id)
+    setError('')
     try {
       const { data: updateData, error } = await supabase
         .from('users')
@@ -125,23 +123,21 @@ export default function UserSettingsPage() {
         .eq('id', id)
         .select('id, role')
 
-      // #region agent log
-      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'settings/users/page.tsx:handleRoleChange-result',message:'supabase update result',data:{updateData,errorCode:error?.code,errorMessage:error?.message,errorDetails:error?.details,errorHint:error?.hint},timestamp:Date.now(),hypothesisId:'A-B-C-D'})}).catch(()=>{});
+      // #region agent log — visible debug banner
+      const debugMsg = `[DEBUG] id=${id} newRole=${newRole} | error=${error ? JSON.stringify({code:error.code,msg:error.message,hint:error.hint,detail:error.details}) : 'null'} | rows=${JSON.stringify(updateData)}`
+      setError(debugMsg)
       // #endregion
 
       if (error) {
-        console.error('Error updating role:', error)
-        setError(error.message || 'Failed to update role')
+        return
+      }
+      if (!updateData || updateData.length === 0) {
         return
       }
       setUsers(prev => prev.map(u => (u.id === id ? { ...u, role: newRole } : u)))
       setError('')
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'settings/users/page.tsx:handleRoleChange-catch',message:'unexpected exception',data:{err:String(err)},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
-      console.error('Unexpected error:', err)
-      setError('Failed to update role')
+      setError(`[DEBUG-CATCH] ${String(err)}`)
     } finally {
       setUpdatingRoleForId(null)
     }
