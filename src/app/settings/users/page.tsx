@@ -117,27 +117,20 @@ export default function UserSettingsPage() {
     setUpdatingRoleForId(id)
     setError('')
     try {
-      const { data: updateData, error } = await supabase
+      const { error } = await supabase
         .from('users')
         .update({ role: newRole })
         .eq('id', id)
-        .select('id, role')
-
-      // #region agent log — visible debug banner
-      const debugMsg = `[DEBUG] id=${id} newRole=${newRole} | error=${error ? JSON.stringify({code:error.code,msg:error.message,hint:error.hint,detail:error.details}) : 'null'} | rows=${JSON.stringify(updateData)}`
-      setError(debugMsg)
-      // #endregion
 
       if (error) {
-        return
-      }
-      if (!updateData || updateData.length === 0) {
+        console.error('Error updating role:', error)
+        setError(error.message || 'Failed to update role')
         return
       }
       setUsers(prev => prev.map(u => (u.id === id ? { ...u, role: newRole } : u)))
-      setError('')
     } catch (err) {
-      setError(`[DEBUG-CATCH] ${String(err)}`)
+      console.error('Unexpected error:', err)
+      setError('Failed to update role')
     } finally {
       setUpdatingRoleForId(null)
     }
