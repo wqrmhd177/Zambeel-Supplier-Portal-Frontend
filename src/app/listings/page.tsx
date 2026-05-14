@@ -56,13 +56,13 @@ export default function ListingsPage() {
       return
     }
 
-    // Redirect suppliers to dashboard (admin, agent, and manager can access)
+    // Listings page: Admin, Manager, Listing Agent only
     if (!authLoading && isAuthenticated) {
-      if (userRole === 'supplier') {
+      if (userRole === 'supplier' || userRole === 'agent' || userRole === 'purchaser') {
         router.push('/dashboard')
         return
       }
-      if (userRole === 'agent' || userRole === 'admin' || userRole === 'manager') {
+      if (userRole === 'admin' || userRole === 'manager' || userRole === 'listing_agent') {
         fetchProducts()
       }
     }

@@ -161,12 +161,6 @@ export default function ProductsPage() {
       return
     }
 
-    // Redirect agents to listings page; listing_agent stays on products
-    if (!authLoading && isAuthenticated && userRole === 'agent') {
-      router.push('/listings')
-      return
-    }
-
     if (isAuthenticated) {
       fetchProducts()
     }
@@ -502,7 +496,7 @@ export default function ProductsPage() {
         }
         return
       }
-      if ((userRole === 'purchaser' || userRole === 'admin') && allProducts.length > 0) {
+      if ((userRole === 'purchaser' || userRole === 'admin' || userRole === 'listing_agent' || userRole === 'manager') && allProducts.length > 0) {
         const ownerIds = Array.from(new Set(allProducts.map((p) => p.fk_owned_by).filter(Boolean)))
         const map = await getCurrenciesForUserIds(ownerIds)
         setCurrencyByOwnerId(map)
