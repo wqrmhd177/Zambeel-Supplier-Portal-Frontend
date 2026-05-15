@@ -122,8 +122,13 @@ export function useAuth() {
         const userCountry = String(data.country || '').trim()
         const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
 
-        // Enforce account approval for all roles except admin (admin can never lock themselves out).
-        if (userRole !== 'admin') {
+        // New suppliers go through onboarding before approval can be checked.
+        // Only enforce the gate once they have submitted their profile.
+        const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
+        const isNewSupplierInOnboarding = userRole === 'supplier' && !onboarded && !hasSubmittedOnboarding(data)
+
+        // Enforce account approval for all roles except admin and suppliers still in onboarding.
+        if (userRole !== 'admin' && !isNewSupplierInOnboarding) {
           if (isRefused) {
             console.log('Account has been refused, logging out...')
             clearAuth()
