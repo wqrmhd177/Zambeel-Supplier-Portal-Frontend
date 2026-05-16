@@ -133,7 +133,7 @@ export default function ProductsPage() {
   const [isEditingPrices, setIsEditingPrices] = useState(false)
   const [editedVariantPrices, setEditedVariantPrices] = useState<Map<number, number>>(new Map())
   const [editedVariantActive, setEditedVariantActive] = useState<Map<number, boolean>>(new Map())
-  const [editedProductActiveStatus, setEditedProductActiveStatus] = useState<'active' | 'inactive'>('active')
+  const [editedProductActiveStatus, setEditedProductActiveStatus] = useState<'active' | 'inactive' | 'pending' | 'rejected'>('active')
   const [isProductStatusEdited, setIsProductStatusEdited] = useState(false)
   const [isSavingPrices, setIsSavingPrices] = useState(false)
   const [priceSaveError, setPriceSaveError] = useState('')
@@ -545,7 +545,7 @@ export default function ProductsPage() {
     if (product.variants && product.variants.length > 0) {
       setEditedVariantPrices(new Map(product.variants.map(v => [v.variant_id, v.variant_selling_price])))
       setEditedVariantActive(new Map(product.variants.map(v => [v.variant_id, v.active !== false])))
-      setEditedProductActiveStatus((product.status === 'inactive' ? 'inactive' : 'active'))
+      setEditedProductActiveStatus((product.status ?? 'active') as 'active' | 'inactive' | 'pending' | 'rejected')
       setIsEditingPrices(true)
     } else {
       setEditedVariantPrices(new Map())
@@ -558,7 +558,7 @@ export default function ProductsPage() {
     if (!selectedProduct) return
     setEditedVariantPrices(new Map(selectedProduct.variants.map(v => [v.variant_id, v.variant_selling_price])))
     setEditedVariantActive(new Map(selectedProduct.variants.map(v => [v.variant_id, v.active !== false])))
-    setEditedProductActiveStatus((selectedProduct.status === 'inactive' ? 'inactive' : 'active'))
+    setEditedProductActiveStatus((selectedProduct.status ?? 'active') as 'active' | 'inactive' | 'pending' | 'rejected')
     setIsProductStatusEdited(false)
     setIsEditingPrices(true)
     setPriceSaveError('')
@@ -576,7 +576,7 @@ export default function ProductsPage() {
 
   const handleSavePrices = async () => {
     if (!selectedProduct || selectedProduct.variants.length === 0) return
-    if (selectedProduct.status !== 'active') {
+    if (selectedProduct.status !== 'active' && userRole !== 'admin' && userRole !== 'listing_agent') {
       setPriceSaveError('Only active products can submit price/status update requests.')
       return
     }
@@ -1282,7 +1282,7 @@ export default function ProductsPage() {
                     <select
                       value={editedProductActiveStatus}
                       onChange={(e) => {
-                        const next = e.target.value === 'inactive' ? 'inactive' : 'active'
+                        const next = e.target.value as 'active' | 'inactive' | 'pending' | 'rejected'
                         setIsProductStatusEdited(true)
                         setEditedProductActiveStatus(next)
                         // Product-level toggle applies across all variants by default.
@@ -1292,6 +1292,8 @@ export default function ProductsPage() {
                     >
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
+                      <option value="pending">Pending Approval</option>
+                      <option value="rejected">Rejected</option>
                     </select>
                   ) : (
                     <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${

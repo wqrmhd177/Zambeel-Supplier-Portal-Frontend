@@ -117,13 +117,13 @@ export default function ApprovalsPage() {
       return
     }
 
-    // Only agents can access this page
-    if (!authLoading && isAuthenticated && userRole !== 'agent') {
+    // Only admin and listing_agent can access this page
+    if (!authLoading && isAuthenticated && userRole !== 'admin' && userRole !== 'listing_agent') {
       router.push('/products')
       return
     }
 
-    if (isAuthenticated && userRole === 'agent') {
+    if (isAuthenticated && (userRole === 'admin' || userRole === 'listing_agent')) {
       fetchRequests()
     }
   }, [isAuthenticated, authLoading, userRole, router, filter])

@@ -14,7 +14,7 @@ import { getPendingProductAvailabilityCount } from '@/lib/productAvailabilityHel
 
 const supplierMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: Package, label: 'Products', path: '/products' },
+  { icon: Package, label: 'Products Status', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
 ]
@@ -26,34 +26,36 @@ const agentMenuItems = [
 const adminMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
-  { icon: Package, label: 'Products', path: '/products' },
+  { icon: Package, label: 'Products Status', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
-  { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
+  { icon: List, label: 'Product Listings', path: '/listings', showPendingCount: true as const },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
+  { icon: ClipboardList, label: 'Product Updates', path: '/approvals', showPendingCount: true as const },
   { icon: Settings, label: 'User Settings', path: '/settings/users' },
 ]
 
 const purchaserMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
-  { icon: Package, label: 'Products', path: '/products' },
+  { icon: Package, label: 'Products Status', path: '/products' },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 const managerMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
-  { icon: Package, label: 'Products', path: '/products' },
+  { icon: Package, label: 'Products Status', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
-  { icon: List, label: 'Listings', path: '/listings' },
+  { icon: List, label: 'Product Listings', path: '/listings' },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 const listingAgentMenuItems = [
-  { icon: Package, label: 'Products', path: '/products' },
-  { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
+  { icon: Package, label: 'Products Status', path: '/products' },
+  { icon: List, label: 'Product Listings', path: '/listings', showPendingCount: true as const },
+  { icon: ClipboardList, label: 'Product Updates', path: '/approvals', showPendingCount: true as const },
 ]
 
 export default function Sidebar() {
@@ -74,7 +76,7 @@ export default function Sidebar() {
         const listings = await getPendingListingsCount()
         if (isMounted) setListingPendingCount(listings)
       }
-      if (userRole === 'admin') {
+      if (userRole === 'admin' || userRole === 'listing_agent') {
         const approvals = await getPendingApprovalsCount()
         if (isMounted) setApprovalsPendingCount(approvals)
       }
