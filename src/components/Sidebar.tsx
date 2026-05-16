@@ -17,7 +17,6 @@ const supplierMenuItems = [
   { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
-  { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 const agentMenuItems = [
@@ -54,6 +53,7 @@ const managerMenuItems = [
 
 const listingAgentMenuItems = [
   { icon: Package, label: 'Products', path: '/products' },
+  { icon: List, label: 'Listings', path: '/listings', showPendingCount: true as const },
 ]
 
 export default function Sidebar() {
@@ -70,7 +70,7 @@ export default function Sidebar() {
     let isMounted = true
     const loadCounts = async () => {
       if (!userRole) return
-      if (userRole === 'admin' || userRole === 'manager') {
+      if (userRole === 'admin' || userRole === 'manager' || userRole === 'listing_agent') {
         const listings = await getPendingListingsCount()
         if (isMounted) setListingPendingCount(listings)
       }
