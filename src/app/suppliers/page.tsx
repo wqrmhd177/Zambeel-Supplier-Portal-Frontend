@@ -181,68 +181,70 @@ export default function SuppliersPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paginatedSuppliers.map((supplier) => (
-                  <div
-                    key={supplier.id}
-                    className="bg-white border border-gray-300 rounded-xl p-6 hover:shadow-lg transition-all"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          {supplier.shop_name_on_zambeel || 'Unnamed Store'}
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          supplier.account_approval === 'Approved'
-                            ? 'bg-green-100 text-green-800'
-                            : supplier.account_approval === 'Rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {supplier.account_approval || 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mb-4">
-                      {supplier.email && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Mail className="w-4 h-4" />
-                          <span className="truncate">{supplier.email}</span>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedSuppliers.map((supplier) => (
+                    <div
+                      key={supplier.id}
+                      className="bg-white border border-gray-300 rounded-xl p-6 hover:shadow-lg transition-all"
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                            {supplier.shop_name_on_zambeel || 'Unnamed Store'}
+                          </h3>
                         </div>
-                      )}
-                      {supplier.phone_number && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="w-4 h-4" />
-                          <span>{supplier.phone_number}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            supplier.account_approval === 'Approved'
+                              ? 'bg-green-100 text-green-800'
+                              : supplier.account_approval === 'Rejected'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {supplier.account_approval || 'Pending'}
+                          </span>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Package className="w-4 h-4" />
-                        <span className="font-medium">{supplier.productCount} products</span>
                       </div>
-                      <button
-                        onClick={() => router.push(`/suppliers/${supplier.user_id}/products`)}
-                        className="px-4 py-2 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-colors text-sm font-medium inline-flex items-center gap-2"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View Products
-                      </button>
+
+                      <div className="space-y-2 mb-4">
+                        {supplier.email && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail className="w-4 h-4" />
+                            <span className="truncate">{supplier.email}</span>
+                          </div>
+                        )}
+                        {supplier.phone_number && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="w-4 h-4" />
+                            <span>{supplier.phone_number}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Package className="w-4 h-4" />
+                          <span className="font-medium">{supplier.productCount} products</span>
+                        </div>
+                        <button
+                          onClick={() => router.push(`/suppliers/${supplier.user_id}/products`)}
+                          className="px-4 py-2 bg-primary-blue text-white rounded-lg hover:bg-primary-blue-dark transition-colors text-sm font-medium inline-flex items-center gap-2"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Products
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-              <PaginationLight
-                currentPage={currentPage}
-                totalPages={totalSupplierPages}
-                totalItems={filteredSuppliers.length}
-                onPageChange={setCurrentPage}
-              />
+                  ))}
+                </div>
+                <PaginationLight
+                  currentPage={currentPage}
+                  totalPages={totalSupplierPages}
+                  totalItems={filteredSuppliers.length}
+                  onPageChange={setCurrentPage}
+                />
+              </>
             )}
           </div>
         </main>
