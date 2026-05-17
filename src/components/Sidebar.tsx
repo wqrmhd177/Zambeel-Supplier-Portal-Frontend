@@ -14,7 +14,7 @@ import { getPendingProductAvailabilityCount } from '@/lib/productAvailabilityHel
 
 const supplierMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: Package, label: 'Products Status', path: '/products' },
+  { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
 ]
@@ -26,7 +26,7 @@ const agentMenuItems = [
 const adminMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
-  { icon: Package, label: 'Products Status', path: '/products' },
+  { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
   { icon: List, label: 'Product Listings', path: '/listings', showPendingCount: true as const },
@@ -38,14 +38,14 @@ const adminMenuItems = [
 const purchaserMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
-  { icon: Package, label: 'Products Status', path: '/products' },
+  { icon: Package, label: 'Products', path: '/products' },
   { icon: ClipboardList, label: 'Product Availability', path: '/product-availability', showPendingCount: true as const },
 ]
 
 const managerMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
-  { icon: Package, label: 'Products Status', path: '/products' },
+  { icon: Package, label: 'Products', path: '/products' },
   { icon: ShoppingCart, label: 'Orders', path: '/orders' },
   { icon: RotateCcw, label: 'Return Management', path: '/returns' },
   { icon: List, label: 'Product Listings', path: '/listings' },
@@ -53,7 +53,7 @@ const managerMenuItems = [
 ]
 
 const listingAgentMenuItems = [
-  { icon: Package, label: 'Products Status', path: '/products' },
+  { icon: Package, label: 'Products', path: '/products' },
   { icon: List, label: 'Product Listings', path: '/listings', showPendingCount: true as const },
   { icon: ClipboardList, label: 'Product Updates', path: '/approvals', showPendingCount: true as const },
 ]
