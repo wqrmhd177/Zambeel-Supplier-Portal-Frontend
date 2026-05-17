@@ -20,6 +20,7 @@ import {
   VariantStatusChangeRequest
 } from '@/lib/variantStatusChangeHelpers'
 import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
+import { PaginationLight } from '@/components/Pagination'
 
 type PriceRequestWithProduct = PriceHistoryEntry & {
   product_title?: string
@@ -104,6 +105,11 @@ export default function ApprovalsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 25
+
+  // Reset to page 1 when filter changes
+  useEffect(() => { setCurrentPage(1) }, [filter])
 
   const toMinuteBucket = (iso: string) => {
     const d = new Date(iso)
@@ -414,6 +420,9 @@ export default function ApprovalsPage() {
     )
   }
 
+  const totalApprovalPages = Math.max(1, Math.ceil(requests.length / ITEMS_PER_PAGE))
+  const paginatedRequests = requests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -503,7 +512,7 @@ export default function ApprovalsPage() {
               ) : (
                 <>
                 <div className="md:hidden divide-y divide-gray-200">
-                  {requests.map((request) => (
+                  {paginatedRequests.map((request) => (
                     <div key={`mobile-${request.id}`} className="p-4 space-y-2">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -575,7 +584,7 @@ export default function ApprovalsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {requests.map((request) => (
+                      {paginatedRequests.map((request) => (
                         <tr key={request.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="text-sm font-medium text-gray-900">
@@ -710,6 +719,12 @@ export default function ApprovalsPage() {
                     </tbody>
                   </table>
                 </div>
+                  <PaginationLight
+                    currentPage={currentPage}
+                    totalPages={totalApprovalPages}
+                    totalItems={requests.length}
+                    onPageChange={setCurrentPage}
+                  />
                 </>
               )}
             </div>

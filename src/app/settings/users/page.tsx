@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 
@@ -36,6 +37,8 @@ export default function UserSettingsPage() {
   const [search, setSearch] = useState('')
   const [updatingApprovalForId, setUpdatingApprovalForId] = useState<string | null>(null)
   const [updatingRoleForId, setUpdatingRoleForId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 25
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -78,6 +81,9 @@ export default function UserSettingsPage() {
     }
   }
 
+  // Reset to page 1 on search change
+  useEffect(() => { setCurrentPage(1) }, [search])
+
   const filteredUsers = useMemo(() => {
     const q = search.toLowerCase().trim()
     if (!q) return users
@@ -89,6 +95,9 @@ export default function UserSettingsPage() {
       (u.role || '').toLowerCase().includes(q)
     )
   }, [search, users])
+
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE))
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   const handleAccountApprovalChange = async (id: string, newValue: string) => {
     setUpdatingApprovalForId(id)
@@ -222,7 +231,7 @@ export default function UserSettingsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {filteredUsers.map(user => (
+                  {paginatedUsers.map(user => (
                     <tr key={user.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium theme-heading">{user.user_id || '-'}</td>
                       <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm theme-muted">{user.full_name || '—'}</td>
@@ -284,6 +293,12 @@ export default function UserSettingsPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalUserPages}
+              totalItems={filteredUsers.length}
+              onPageChange={setCurrentPage}
+            />
           </div>
         </main>
       </div>

@@ -18,10 +18,11 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import { PaginationLight } from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import type { MetabaseOrder, OrdersResponse } from '@/app/api/orders/route'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 25
 const SEARCH_DEBOUNCE_MS = 400
 
 export default function OrdersPage() {
@@ -246,8 +247,8 @@ export default function OrdersPage() {
 
   const statCards = [
     { label: 'All Orders', value: stats.total, icon: ShoppingCart, gradient: 'from-cyan-500 to-blue-500' },
-    { label: 'In-Transit', value: stats.inTransit, icon: ArrowRightLeft, gradient: 'from-blue-500 to-indigo-500' },
-    { label: 'To be Dispatch', value: stats.toBeDispatch, icon: Package, gradient: 'from-yellow-500 to-orange-500' },
+    { label: 'Pending Dispatch', value: stats.toBeDispatch, icon: Package, gradient: 'from-yellow-500 to-orange-500' },
+    { label: 'In-Delivery', value: stats.inTransit, icon: ArrowRightLeft, gradient: 'from-blue-500 to-indigo-500' },
     { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
     { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
   ]
@@ -445,29 +446,12 @@ export default function OrdersPage() {
                 </table>
 
                 {/* Pagination */}
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                  <span>Page {page} of {totalPages}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1 || isFetching}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages || isFetching}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <PaginationLight
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalFiltered}
+                  onPageChange={(p) => setPage(p)}
+                />
               </div>
             )}
           </div>

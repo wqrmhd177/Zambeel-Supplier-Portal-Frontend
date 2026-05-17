@@ -26,6 +26,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
@@ -453,6 +454,9 @@ export default function ProductsPage() {
     }
   }, [filterStatus, filterSupplier, searchQuery, allProducts])
 
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1) }, [filterStatus, filterSupplier, searchQuery])
+
   const calculateStats = (productsData: Product[]) => {
     // Stats should match what the UI shows in the Status column.
     const total = productsData.length
@@ -680,12 +684,18 @@ export default function ProductsPage() {
     handleCancelEditPrices()
   }
 
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 25
+
   const filteredProducts = products.filter(product => {
     const status = (product.status || 'active') as string
     const matchesSearch = product.product_title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesFilter = filterStatus === 'all' || status === filterStatus
     return matchesSearch && matchesFilter
   })
+
+  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / ITEMS_PER_PAGE))
+  const paginatedProducts = filteredProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   if (authLoading || isLoading) {
     return (
@@ -881,7 +891,7 @@ export default function ProductsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
-                    {products.map((product) => {
+                    {paginatedProducts.map((product) => {
                       const hasVariants = product.variants && product.variants.length > 0
                       const totalStock = hasVariants
                         ? product.variants!.reduce((sum, v) => sum + (v.variant_stock || 0), 0)
@@ -1058,7 +1068,7 @@ export default function ProductsPage() {
 
               {/* Mobile Card View */}
               <div className="lg:hidden space-y-3">
-                {products.map((product) => {
+                {paginatedProducts.map((product) => {
                   const hasVariants = product.variants && product.variants.length > 0
                   const status = product.status || 'active'
                   const displayStatus = getDisplayStatus(product)
@@ -1151,6 +1161,12 @@ export default function ProductsPage() {
                   )
                 })}
               </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalProductPages}
+                totalItems={filteredProducts.length}
+                onPageChange={setCurrentPage}
+              />
               </>
             )}
           </div>

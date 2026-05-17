@@ -1,22 +1,28 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   RotateCcw,
   Search,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Save,
+  PackageCheck,
+  PackageX,
+  Clock,
+  ListOrdered,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import { PaginationLight } from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import type { ReturnOrder } from '@/app/api/returns/route'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 25
 const SEARCH_DEBOUNCE_MS = 400
+const AUTO_RECEIVE_HOURS = 48
+
+type ReturnTab = 'all' | 'pending' | 'not_received' | 'received'
 
 interface ReturnRowState {
   receiving_status: string
@@ -34,6 +40,8 @@ export default function ReturnsPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalFiltered, setTotalFiltered] = useState(0)
+  const [activeTab, setActiveTab] = useState<ReturnTab>('all')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const [isFetching, setIsFetching] = useState(true)
   const [fetchError, setFetchError] = useState('')
@@ -41,11 +49,10 @@ export default function ReturnsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   const prevDebouncedSearch = useRef(debouncedSearch)
+  const autoReceiveRan = useRef(false)
 
   const isSupplier = userRole === 'supplier'
-  const isAdmin = userRole === 'admin'
 
-  // Only admin and supplier can access this page
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) {
@@ -65,6 +72,8 @@ export default function ReturnsPage() {
 
   const vendorId = isSupplier ? (userFriendlyId ?? '') : ''
 
+  const rowKey = (o: ReturnOrder) => `${o.order_number}__${o.sku}`
+
   const loadReturns = useCallback(
     async (opts: {
       page: number
@@ -74,6 +83,7 @@ export default function ReturnsPage() {
     }) => {
       setFetchError('')
       setIsFetching(true)
+      autoReceiveRan.current = false
       try {
         const params = new URLSearchParams({
           page: String(opts.page),
@@ -98,7 +108,6 @@ export default function ReturnsPage() {
         setTotalPages(json.totalPages)
         setTotalFiltered(json.total)
 
-        // Initialise local row state from fetched Supabase values
         const newState: Record<string, ReturnRowState> = {}
         for (const o of rows) {
           const key = `${o.order_number}__${o.sku}`
@@ -119,6 +128,48 @@ export default function ReturnsPage() {
     },
     []
   )
+
+  // 48-hour auto-receive: mark un-actioned rows older than 48h as Received
+  useEffect(() => {
+    if (isFetching || autoReceiveRan.current || orders.length === 0) return
+    autoReceiveRan.current = true
+
+    const now = Date.now()
+    const staleRows = orders.filter((o) => {
+      const key = rowKey(o)
+      const rs = rowState[key]
+      if (!rs || rs.receiving_status) return false
+      if (!o.Returned_date) return false
+      const ageMs = now - new Date(o.Returned_date).getTime()
+      return ageMs > AUTO_RECEIVE_HOURS * 60 * 60 * 1000
+    })
+
+    if (staleRows.length === 0) return
+
+    staleRows.forEach(async (order) => {
+      const key = rowKey(order)
+      const current = rowState[key] ?? { receiving_status: '', return_condition: '' }
+      try {
+        await fetch('/api/returns', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_id: String(order.order_number),
+            sku: order.sku,
+            vendor_id: order.vendor_id ?? null,
+            receiving_status: 'Yes',
+            return_condition: current.return_condition || null,
+          }),
+        })
+        setRowState((prev) => ({
+          ...prev,
+          [key]: { ...prev[key], receiving_status: 'Yes' },
+        }))
+      } catch {
+        // silent — will be retried on next load
+      }
+    })
+  }, [isFetching, orders, rowState])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -141,15 +192,12 @@ export default function ReturnsPage() {
     void loadReturns({ page, search: debouncedSearch, vendorId, refresh: true })
   }
 
-  const rowKey = (o: ReturnOrder) => `${o.order_number}__${o.sku}`
-
   const handleDropdownChange = async (
     order: ReturnOrder,
     field: 'receiving_status' | 'return_condition',
     value: string
   ) => {
     const key = rowKey(order)
-
     setRowState((prev) => ({
       ...prev,
       [key]: { ...prev[key], [field]: value, saving: true, saved: false },
@@ -178,7 +226,6 @@ export default function ReturnsPage() {
         [key]: { ...prev[key], [field]: value, saving: false, saved: true },
       }))
 
-      // Clear "saved" indicator after 2 s
       setTimeout(() => {
         setRowState((prev) => ({
           ...prev,
@@ -205,6 +252,39 @@ export default function ReturnsPage() {
     }
   }
 
+  // Tab counts (based on rowState for live accuracy)
+  const tabCounts = useMemo(() => {
+    let pending = 0, notReceived = 0, received = 0
+    for (const o of orders) {
+      const key = rowKey(o)
+      const status = rowState[key]?.receiving_status ?? ''
+      if (!status) pending++
+      else if (status === 'No') notReceived++
+      else if (status === 'Yes') received++
+    }
+    return { all: orders.length, pending, notReceived, received }
+  }, [orders, rowState])
+
+  // Filter orders by active tab
+  const tabFiltered = useMemo(() => {
+    if (activeTab === 'pending') return orders.filter((o) => !rowState[rowKey(o)]?.receiving_status)
+    if (activeTab === 'not_received') return orders.filter((o) => rowState[rowKey(o)]?.receiving_status === 'No')
+    if (activeTab === 'received') return orders.filter((o) => rowState[rowKey(o)]?.receiving_status === 'Yes')
+    return orders
+  }, [activeTab, orders, rowState])
+
+  // Client-side pagination over tabFiltered
+  const ITEMS = 25
+  const totalTabPages = Math.max(1, Math.ceil(tabFiltered.length / ITEMS))
+  const paginatedRows = tabFiltered.slice((currentPage - 1) * ITEMS, currentPage * ITEMS)
+
+  const switchTab = (tab: ReturnTab) => {
+    setActiveTab(tab)
+    setCurrentPage(1)
+  }
+
+  const isReceived = activeTab === 'received'
+
   if (authLoading || (isFetching && orders.length === 0)) {
     return (
       <div className="flex h-screen bg-gray-100">
@@ -222,7 +302,12 @@ export default function ReturnsPage() {
   if (!isAuthenticated) return null
   if (userRole && userRole !== 'admin' && userRole !== 'supplier' && userRole !== 'manager') return null
 
-  void isAdmin
+  const statCards = [
+    { tab: 'all' as ReturnTab, label: 'All Returns', count: tabCounts.all, icon: ListOrdered, color: 'from-cyan-500 to-blue-500' },
+    { tab: 'pending' as ReturnTab, label: 'Receiving Pending', count: tabCounts.pending, icon: Clock, color: 'from-yellow-500 to-orange-500' },
+    { tab: 'not_received' as ReturnTab, label: 'Not Received', count: tabCounts.notReceived, icon: PackageX, color: 'from-red-500 to-pink-500' },
+    { tab: 'received' as ReturnTab, label: 'Received', count: tabCounts.received, icon: PackageCheck, color: 'from-emerald-500 to-green-500' },
+  ]
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -236,7 +321,7 @@ export default function ReturnsPage() {
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Return Management</h2>
               <p className="text-gray-600 text-sm">
-                {totalFiltered} returned order{totalFiltered !== 1 ? 's' : ''} · 50 per page
+                {totalFiltered} returned order{totalFiltered !== 1 ? 's' : ''} · {ITEMS} per page
               </p>
             </div>
             <button
@@ -253,6 +338,28 @@ export default function ReturnsPage() {
           {fetchError && (
             <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm mb-4">{fetchError}</div>
           )}
+
+          {/* Status cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {statCards.map(({ tab, label, count, icon: Icon, color }) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => switchTab(tab)}
+                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all shadow-sm border-2 ${
+                  activeTab === tab
+                    ? 'border-blue-500 ring-2 ring-blue-200'
+                    : 'border-transparent hover:border-gray-200'
+                } bg-white`}
+              >
+                <div className={`inline-flex p-2 rounded-xl bg-gradient-to-br ${color} mb-3`}>
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{count}</div>
+                <div className="text-xs text-gray-500 mt-0.5 font-medium">{label}</div>
+              </button>
+            ))}
+          </div>
 
           {/* Search */}
           <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5">
@@ -278,12 +385,12 @@ export default function ReturnsPage() {
               </div>
             )}
 
-            {orders.length === 0 && !isFetching ? (
+            {tabFiltered.length === 0 && !isFetching ? (
               <div className="p-12 text-center">
                 <RotateCcw className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">No returned orders</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No returns found</h3>
                 <p className="text-gray-500 text-sm">
-                  Orders with a Return status will appear here.
+                  {activeTab === 'all' ? 'Orders with a Return status will appear here.' : 'No returns match this filter.'}
                 </p>
               </div>
             ) : (
@@ -310,7 +417,7 @@ export default function ReturnsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {orders.map((order) => {
+                    {paginatedRows.map((order) => {
                       const key = rowKey(order)
                       const rs = rowState[key] ?? { receiving_status: '', return_condition: '', saving: false, saved: false }
 
@@ -322,7 +429,7 @@ export default function ReturnsPage() {
                             #{order.order_number}
                           </td>
 
-                          {/* Product: title + SKU */}
+                          {/* Product */}
                           <td className="px-4 py-3 max-w-[220px]">
                             <div className="font-medium text-gray-900 line-clamp-2">{order.title || '—'}</div>
                             <div className="text-xs text-gray-400 font-mono mt-0.5">{order.sku}</div>
@@ -343,40 +450,48 @@ export default function ReturnsPage() {
 
                           {/* Receiving Status */}
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={rs.receiving_status}
-                                onChange={(e) => void handleDropdownChange(order, 'receiving_status', e.target.value)}
-                                disabled={rs.saving}
-                                className="pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
-                              >
-                                <option value="">— Select —</option>
-                                <option value="Yes">Yes</option>
-                                <option value="No">No</option>
-                              </select>
-                              {rs.saving && (
-                                <RefreshCw className="w-3 h-3 text-gray-400 animate-spin" />
-                              )}
-                              {rs.saved && (
-                                <Save className="w-3 h-3 text-green-500" />
-                              )}
-                            </div>
+                            {isReceived ? (
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                Yes — Received
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={rs.receiving_status}
+                                  onChange={(e) => void handleDropdownChange(order, 'receiving_status', e.target.value)}
+                                  disabled={rs.saving}
+                                  className="pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+                                >
+                                  <option value="">— Pending —</option>
+                                  <option value="Yes">Yes</option>
+                                  <option value="No">No</option>
+                                </select>
+                                {rs.saving && <RefreshCw className="w-3 h-3 text-gray-400 animate-spin" />}
+                                {rs.saved && <Save className="w-3 h-3 text-green-500" />}
+                              </div>
+                            )}
                           </td>
 
                           {/* Return Condition */}
                           <td className="px-4 py-3">
-                            <select
-                              value={rs.return_condition}
-                              onChange={(e) => void handleDropdownChange(order, 'return_condition', e.target.value)}
-                              disabled={rs.saving}
-                              className="pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
-                            >
-                              <option value="">— Select —</option>
-                              <option value="Good">Good</option>
-                              <option value="Broken">Broken</option>
-                              <option value="Product Changed">Product Changed</option>
-                              <option value="No product">No product</option>
-                            </select>
+                            {isReceived ? (
+                              <span className="text-sm text-gray-700">
+                                {rs.return_condition || '—'}
+                              </span>
+                            ) : (
+                              <select
+                                value={rs.return_condition}
+                                onChange={(e) => void handleDropdownChange(order, 'return_condition', e.target.value)}
+                                disabled={rs.saving}
+                                className="pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+                              >
+                                <option value="">— Select —</option>
+                                <option value="Good">Good</option>
+                                <option value="Broken">Broken</option>
+                                <option value="Product Changed">Product Changed</option>
+                                <option value="No product">No product</option>
+                              </select>
+                            )}
                           </td>
 
                         </tr>
@@ -385,30 +500,12 @@ export default function ReturnsPage() {
                   </tbody>
                 </table>
 
-                {/* Pagination */}
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                  <span>Page {page} of {totalPages}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1 || isFetching}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages || isFetching}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <PaginationLight
+                  currentPage={currentPage}
+                  totalPages={totalTabPages}
+                  totalItems={tabFiltered.length}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             )}
           </div>

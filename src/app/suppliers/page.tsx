@@ -17,6 +17,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import { PaginationLight } from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import { fetchSuppliersForPurchaser, getProductCountForSupplier, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 
@@ -31,6 +32,8 @@ export default function SuppliersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [error, setError] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 25
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -103,6 +106,12 @@ export default function SuppliersPage() {
     )
   })
 
+  const totalSupplierPages = Math.max(1, Math.ceil(filteredSuppliers.length / ITEMS_PER_PAGE))
+  const paginatedSuppliers = filteredSuppliers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+
+  // Reset to page 1 when search changes
+  useEffect(() => { setCurrentPage(1) }, [searchQuery])
+
   if (authLoading || isLoading) {
     return (
       <div className="flex h-screen bg-gray-100">
@@ -173,7 +182,7 @@ export default function SuppliersPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredSuppliers.map((supplier) => (
+                {paginatedSuppliers.map((supplier) => (
                   <div
                     key={supplier.id}
                     className="bg-white border border-gray-300 rounded-xl p-6 hover:shadow-lg transition-all"
@@ -228,6 +237,12 @@ export default function SuppliersPage() {
                   </div>
                 ))}
               </div>
+              <PaginationLight
+                currentPage={currentPage}
+                totalPages={totalSupplierPages}
+                totalItems={filteredSuppliers.length}
+                onPageChange={setCurrentPage}
+              />
             )}
           </div>
         </main>

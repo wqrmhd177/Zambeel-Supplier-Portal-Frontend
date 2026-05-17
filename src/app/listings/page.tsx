@@ -6,6 +6,7 @@ import { Package, List, Loader2, ChevronDown, ChevronUp, Eye, X, Download, Chevr
 import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { extractImages } from '@/lib/imageHelpers'
@@ -35,6 +36,8 @@ export default function ListingsPage() {
   const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 25
 
   const products = useMemo(() => {
     const st = (p: Product) => (p.status || 'active') as 'pending' | 'active' | 'inactive' | 'rejected'
@@ -49,6 +52,12 @@ export default function ListingsPage() {
     }
     return allProducts.filter((p) => st(p) === 'rejected')
   }, [allProducts, activeTab])
+
+  // Reset to page 1 when active tab changes
+  useEffect(() => { setCurrentPage(1) }, [activeTab])
+
+  const totalListingPages = Math.max(1, Math.ceil(products.length / ITEMS_PER_PAGE))
+  const paginatedProducts = products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -411,7 +420,7 @@ export default function ListingsPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {products.map((product) => (
+                {paginatedProducts.map((product) => (
                   <ProductListingCard
                     key={product.product_id}
                     product={product}
@@ -430,6 +439,12 @@ export default function ListingsPage() {
                     }}
                   />
                 ))}
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalListingPages}
+                  totalItems={products.length}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             )}
           </div>

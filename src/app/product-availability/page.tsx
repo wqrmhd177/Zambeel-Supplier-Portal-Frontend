@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Search, X } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import {
   BulkUploadRowValidated,
@@ -161,6 +162,15 @@ export default function ProductAvailabilityPage() {
       (r.markets?.join(' ').toLowerCase().includes(q) ?? false)
     )
   }, [requests, searchQuery])
+
+  const [paCurrentPage, setPaCurrentPage] = useState(1)
+  const PA_ITEMS = 25
+
+  // Reset pagination when filter or search changes
+  useEffect(() => { setPaCurrentPage(1) }, [filter, searchQuery])
+
+  const paTotalPages = Math.max(1, Math.ceil(displayedRequests.length / PA_ITEMS))
+  const paginatedDisplayed = displayedRequests.slice((paCurrentPage - 1) * PA_ITEMS, paCurrentPage * PA_ITEMS)
 
   const getRequestThumbnail = (request: ProductAvailabilityRequestWithDetails): string | null => {
     const images = Array.isArray(request.request_images) ? request.request_images : []
@@ -1098,7 +1108,7 @@ export default function ProductAvailabilityPage() {
                 <>
                   {/* ── Mobile cards (hidden on md+) ── */}
                   <div className="md:hidden space-y-3">
-                    {displayedRequests.map((request) => {
+                    {paginatedDisplayed.map((request) => {
                       const canRespond = isPurchaser && request.assignment_status === 'pending'
                       const noMapping = !request.assigned_purchaser_user_id
                       const thumb = getRequestThumbnail(request)
@@ -1198,7 +1208,7 @@ export default function ProductAvailabilityPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {displayedRequests.map((request) => {
+                          {paginatedDisplayed.map((request) => {
                             const created = new Date(request.created_at).toLocaleString()
                             const canRespond = isPurchaser && request.assignment_status === 'pending'
                             const noMapping = !request.assigned_purchaser_user_id
@@ -1270,6 +1280,12 @@ export default function ProductAvailabilityPage() {
                       </table>
                     </div>
                   </div>
+                  <Pagination
+                    currentPage={paCurrentPage}
+                    totalPages={paTotalPages}
+                    totalItems={displayedRequests.length}
+                    onPageChange={setPaCurrentPage}
+                  />
                 </>
               )
             })()}
