@@ -426,7 +426,7 @@ export default function ReturnsPage() {
 
                           {/* Order ID */}
                           <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                            #{order.order_number}
+                            {order.id}
                           </td>
 
                           {/* Product */}

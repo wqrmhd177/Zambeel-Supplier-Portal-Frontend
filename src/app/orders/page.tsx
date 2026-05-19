@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Package,
   ArrowRightLeft,
+  RotateCcw,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -49,6 +50,7 @@ export default function OrdersPage() {
     toBeDispatch: 0,
     delivered: 0,
     returned: 0,
+    returning: 0,
   })
   const [countries, setCountries] = useState<string[]>([])
 
@@ -186,8 +188,14 @@ export default function OrdersPage() {
       if (rowsData.length === 0) return
 
       const headers = [
-        'Order ID', 'Shipment Date', 'Product Title', 'SKU',
-        'Quantity', 'Courier Tracking ID', 'Status',
+        'Order ID',
+        'Shipment Date',
+        'Product Title',
+        'SKU',
+        'Quantity',
+        'Courier Tracking ID',
+        'Status',
+        ...(isAdmin ? ['Vendor ID'] : []),
       ]
       const esc = (v: unknown) => {
         if (v === null || v === undefined) return ''
@@ -197,13 +205,14 @@ export default function OrdersPage() {
       }
       const rows = rowsData.map((o) =>
         [
-          esc(o.order_number),
-          esc(o.shipment_date),
+          esc(o.id),
+          esc(fmt(o.shipment_date)),
           esc(o.title),
           esc(o.sku),
           esc(o.quantity),
           esc(o.Courier_tracking_id),
           esc(o.status),
+          ...(isAdmin ? [esc(o.vendor_id)] : []),
         ].join(',')
       )
       const csv = [headers.join(','), ...rows].join('\n')
@@ -251,6 +260,7 @@ export default function OrdersPage() {
     { label: 'In-Delivery', value: stats.inTransit, icon: ArrowRightLeft, gradient: 'from-blue-500 to-indigo-500' },
     { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
     { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
+    { label: 'Returning', value: stats.returning, icon: RotateCcw, gradient: 'from-orange-500 to-red-500' },
   ]
 
   return (
@@ -264,7 +274,7 @@ export default function OrdersPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Orders</h2>
-              <p className="text-gray-600 text-sm">50 per page · data from Metabase</p>
+              <p className="text-gray-600 text-sm">{PAGE_SIZE} per page · data from Metabase</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -293,7 +303,7 @@ export default function OrdersPage() {
           )}
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
             {statCards.map(({ label, value, icon: Icon, gradient }) => (
               <div key={label} className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-start justify-between">
@@ -401,7 +411,7 @@ export default function OrdersPage() {
                       return (
                         <tr key={`${order.id}-${order.sku}`} className="hover:bg-gray-50 transition-colors">
 
-                          {/* Order ID — uses the id field from Metabase */}
+                          {/* Order ID — Metabase row id (same as Returns tab) */}
                           <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                             {order.id}
                           </td>

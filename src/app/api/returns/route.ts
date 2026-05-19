@@ -82,18 +82,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search by order number or tracking ID
+    // Search by order number, Metabase row id (matches Orders tab), or tracking IDs
     if (search.trim()) {
       const q = search.toLowerCase()
       all = all.filter(
         (o) =>
           o.order_number?.toLowerCase().includes(q) ||
+          String(o.id).includes(q) ||
           o.Courier_tracking_id?.toLowerCase().includes(q) ||
           o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
           o.sku?.toLowerCase().includes(q) ||
           o.title?.toLowerCase().includes(q)
       )
     }
+
+    all.sort((a, b) => {
+      const da = a.Returned_date ? new Date(a.Returned_date).getTime() : 0
+      const db = b.Returned_date ? new Date(b.Returned_date).getTime() : 0
+      return db - da
+    })
 
     const total = all.length
     const totalPages = Math.max(1, Math.ceil(total / limit))

@@ -46,6 +46,7 @@ export interface OrderStats {
   toBeDispatch: number
   delivered: number
   returned: number
+  returning: number
 }
 
 export interface OrdersResponse {
@@ -71,40 +72,50 @@ async function getAll(forceRefresh = false): Promise<MetabaseOrder[]> {
   if (!response.ok) throw new Error(`Metabase returned ${response.status}`)
   const raw = await response.json()
   const data: MetabaseOrder[] = Array.isArray(raw) ? raw : []
+  data.sort((a, b) => {
+    const da = a.shipment_date ? new Date(a.shipment_date).getTime() : 0
+    const db = b.shipment_date ? new Date(b.shipment_date).getTime() : 0
+    return db - da
+  })
   _cache = { data, expires: Date.now() + CACHE_TTL_MS }
   return data
 }
 
-// Statuses excluded from "In-Transit"
-const EXCLUDED_FROM_IN_TRANSIT = [
-  'delivered',
-  'return',
-  'approved',
-  'dispatching in process',
-  'cancelled',
-  'confirmation pending',
-]
-
 function computeStats(rows: MetabaseOrder[]): OrderStats {
-  let inTransit = 0, toBeDispatch = 0, delivered = 0, returned = 0
+  let total = 0
+  let inTransit = 0
+  let toBeDispatch = 0
+  let delivered = 0
+  let returned = 0
+  let returning = 0
 
   for (const o of rows) {
-    const s = o.status?.toLowerCase() || ''
+    const s = o.status?.toLowerCase().trim() || ''
+    // Excluded entirely from totals and buckets
+    if (s === 'approved' || s === 'cancelled' || s === 'confirmation pending') continue
 
-    if (s.includes('delivered')) {
+    total++
+
+    // Order matters: substring checks (Undelivered before Delivered; Return in Transit before Return)
+    if (s.includes('undelivered')) {
+      inTransit++
+    } else if (s.includes('delivered')) {
       delivered++
+    } else if (s.includes('return in transit')) {
+      returning++
     } else if (s.includes('return')) {
       returned++
     } else if (s.includes('dispatching in process')) {
       toBeDispatch++
+    } else if (s.includes('shipped')) {
+      inTransit++
     } else {
-      // In-Transit = not any of the excluded statuses
-      const isExcluded = EXCLUDED_FROM_IN_TRANSIT.some((ex) => s.includes(ex))
-      if (!isExcluded) inTransit++
+      // Other operational statuses → treat like in-transit (same as legacy fallback)
+      inTransit++
     }
   }
 
-  return { total: rows.length, inTransit, toBeDispatch, delivered, returned }
+  return { total, inTransit, toBeDispatch, delivered, returned, returning }
 }
 
 function filterRows(
@@ -135,7 +146,8 @@ function filterRows(
         o.sku?.toLowerCase().includes(q) ||
         o.title?.toLowerCase().includes(q) ||
         o.full_name?.toLowerCase().includes(q) ||
-        o.phone?.toLowerCase().includes(q)
+        o.phone?.toLowerCase().includes(q) ||
+        String(o.id).includes(q)
     )
   }
 
