@@ -11,8 +11,6 @@ import {
   Clock,
   Truck,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Package,
   ArrowRightLeft,
   RotateCcw,
