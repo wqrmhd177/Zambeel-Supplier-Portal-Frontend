@@ -425,21 +425,116 @@ const VALID_MARKETS = new Set(['UAE', 'KSA', 'PAK', 'QTR', 'KWT', 'OMN', 'BHR', 
 const VALID_PRODUCT_STATUSES = new Set<ProductStatusInput>(['already_listed', 'not_listed', 'not_sure'])
 const VALID_PRIORITIES = new Set<PriorityLevel>(['urgent', 'normal'])
 
-/** Parse a raw CSV string into validated rows ready for bulk import */
-export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
-  const lines = csvText.split(/\r?\n/).filter((l) => l.trim())
-  if (lines.length < 2) return []
+function normalizeBulkHeaderCell(h: string): string {
+  return String(h ?? '')
+    .replace(/^\ufeff/, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+}
 
-  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
+/**
+ * RFC 4180-style CSV: commas and newlines inside double-quoted fields belong to that field.
+ * Excel-exported strings often wrap cells that contain `\r`/`\n`, which naive line-split breaks.
+ */
+function parseCsvStrict(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let i = 0
+  let inQuotes = false
 
-  return lines.slice(1).map((line, i) => {
-    const rowIndex = i + 2
-    const cells = line.split(',').map((c) => c.trim())
-    const get = (col: string) => cells[headers.indexOf(col)] || ''
+  while (i < text.length) {
+    const c = text[i]
+
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i += 1
+        continue
+      }
+      field += c
+      i += 1
+      continue
+    }
+
+    if (c === '"') {
+      inQuotes = true
+      i += 1
+      continue
+    }
+
+    if (c === ',') {
+      row.push(field.trim())
+      field = ''
+      i += 1
+      continue
+    }
+
+    if (c === '\r') {
+      i += 1
+      continue
+    }
+
+    if (c === '\n') {
+      row.push(field.trim())
+      field = ''
+      if (row.some((cell) => cell.length > 0)) rows.push(row)
+      row = []
+      i += 1
+      continue
+    }
+
+    field += c
+    i += 1
+  }
+
+  row.push(field.trim())
+  if (row.some((cell) => cell.length > 0)) rows.push(row)
+
+  return rows
+}
+
+function padRowToLength(cells: string[], len: number): string[] {
+  const out = cells.map((c) => String(c ?? '').trim())
+  while (out.length < len) out.push('')
+  return out.slice(0, len)
+}
+
+/** Normalize spreadsheet enums (e.g. ALREADY_LISTED → already_listed). */
+function normalizeEnumToken(raw: string): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+}
+
+/** Validate bulk-upload rows already split into columns (from .xlsx or strict CSV parse). */
+export function parseBulkUploadFromRows(matrix: string[][]): BulkUploadRowValidated[] {
+  if (!matrix.length || matrix.length < 2) return []
+
+  const headers = matrix[0].map(normalizeBulkHeaderCell)
+  const headerCount = headers.length
+
+  const parsed: BulkUploadRowValidated[] = []
+
+  matrix.slice(1).forEach((cellsRaw, idx) => {
+    const rawTrimmed = cellsRaw.map((c) => String(c ?? '').trim())
+    if (!rawTrimmed.some((c) => c.length > 0)) return
+
+    const rowIndex = idx + 2
+    const cells = padRowToLength(rawTrimmed, headerCount)
+
+    const get = (col: string) => cells[headers.indexOf(col)] ?? ''
 
     const rawMarket = get('market').trim().toUpperCase()
-    const product_status = get('product_status') as ProductStatusInput
-    const priority_level = get('priority_level') as PriorityLevel
+    const product_status = normalizeEnumToken(get('product_status')) as ProductStatusInput
+    const priority_level = normalizeEnumToken(get('priority_level')) as PriorityLevel
 
     const errors: string[] = []
 
@@ -457,7 +552,7 @@ export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
       errors.push('sku is required when product_status is already_listed')
     }
 
-    return {
+    parsed.push({
       rowIndex,
       product_name: get('product_name'),
       reseller_name: get('reseller_name'),
@@ -468,8 +563,17 @@ export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
       priority_level,
       remarks: get('remarks'),
       errors,
-    } satisfies BulkUploadRowValidated
+    })
   })
+
+  return parsed
+}
+
+/** Parse a raw CSV string into validated rows ready for bulk import */
+export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
+  const stripped = csvText.startsWith('\ufeff') ? csvText.slice(1) : csvText
+  const matrix = parseCsvStrict(stripped)
+  return parseBulkUploadFromRows(matrix)
 }
 
 /** Create multiple draft requests from a validated CSV batch */

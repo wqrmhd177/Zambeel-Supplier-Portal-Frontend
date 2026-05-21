@@ -18,6 +18,7 @@ import {
   formatStockStatusLabel,
   getProductAvailabilityCounts,
   parseBulkUploadCsv,
+  parseBulkUploadFromRows,
   ProductAvailabilityListFilter,
   ProductAvailabilityRequestWithDetails,
   requestAlternativeSearch,
@@ -347,14 +348,7 @@ export default function ProductAvailabilityPage() {
           })
           rows.push(vals)
         })
-        const csvText = rows
-          .map((row) =>
-            row
-              .map((cell) => (cell.includes(',') || cell.includes('"') || cell.includes('\n') ? `"${cell.replace(/"/g, '""')}"` : cell))
-              .join(',')
-          )
-          .join('\n')
-        setBulkCsvRows(parseBulkUploadCsv(csvText))
+        setBulkCsvRows(parseBulkUploadFromRows(rows))
       }
       reader.readAsArrayBuffer(file)
     } else {
