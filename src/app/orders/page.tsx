@@ -20,6 +20,13 @@ import Header from '@/components/Header'
 import { PaginationLight } from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import type { MetabaseOrder, OrdersResponse } from '@/app/api/orders/route'
+import {
+  DATE_FILTER_PRESETS,
+  type DateFilterPreset,
+  getDateRange,
+  parseSearchTerms,
+  serializeSearchTerms,
+} from '@/lib/filterUtils'
 
 const PAGE_SIZE = 25
 const SEARCH_DEBOUNCE_MS = 400
@@ -40,7 +47,9 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatusBucket, setFilterStatusBucket] = useState('all')
   const [filterCountry, setFilterCountry] = useState('all')
+  const [dateFilter, setDateFilter] = useState<DateFilterPreset>('all')
 
   const [stats, setStats] = useState({
     total: 0,
@@ -71,8 +80,10 @@ export default function OrdersPage() {
       page: number
       search: string
       status: string
+      statusBucket: string
       country: string
       vendorId: string
+      dateFilter: DateFilterPreset
       refresh?: boolean
     }) => {
       setFetchError('')
@@ -83,10 +94,16 @@ export default function OrdersPage() {
           limit: String(PAGE_SIZE),
           search: opts.search,
           status: opts.status,
+          statusBucket: opts.statusBucket,
           country: opts.country,
         })
         if (opts.vendorId) params.set('vendorId', opts.vendorId)
         if (opts.refresh) params.set('refresh', '1')
+        const range = getDateRange(opts.dateFilter)
+        if (range) {
+          params.set('dateFrom', range.dateFrom)
+          params.set('dateTo', range.dateTo)
+        }
 
         const res = await fetch(`/api/orders?${params.toString()}`)
         if (!res.ok) throw new Error('Failed to fetch orders')
@@ -127,20 +144,24 @@ export default function OrdersPage() {
 
     void loadOrders({
       page: effectivePage,
-      search: debouncedSearch,
+      search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
       status: filterStatus,
+      statusBucket: filterStatusBucket,
       country: filterCountry,
       vendorId,
+      dateFilter,
     })
-  }, [isAuthenticated, page, debouncedSearch, filterStatus, filterCountry, vendorId, loadOrders])
+  }, [isAuthenticated, page, debouncedSearch, filterStatus, filterStatusBucket, filterCountry, vendorId, dateFilter, loadOrders])
 
   const handleRefresh = () => {
     void loadOrders({
       page,
-      search: debouncedSearch,
+      search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
       status: filterStatus,
+      statusBucket: filterStatusBucket,
       country: filterCountry,
       vendorId,
+      dateFilter,
       refresh: true,
     })
   }
@@ -152,8 +173,24 @@ export default function OrdersPage() {
 
   const setFilterStatusAndReset = (value: string) => {
     setFilterStatus(value)
+    setFilterStatusBucket('all')
     setPage(1)
   }
+
+  const setStatCardFilter = (bucket: string) => {
+    setFilterStatusBucket(bucket)
+    setFilterStatus('all')
+    setPage(1)
+  }
+
+  const setDateFilterAndReset = (value: DateFilterPreset) => {
+    setDateFilter(value)
+    setPage(1)
+  }
+
+  const searchTermCount = parseSearchTerms(debouncedSearch).length
+  const showExport =
+    filterStatus === 'all' && filterStatusBucket === 'all'
 
   const fmt = (d: string | null | undefined) => {
     if (!d) return '—'
@@ -173,11 +210,13 @@ export default function OrdersPage() {
     try {
       const params = new URLSearchParams({
         export: '1',
-        search: debouncedSearch,
-        status: filterStatus,
+        search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
+        status: 'all',
+        statusBucket: 'all',
         country: filterCountry,
       })
       if (vendorId) params.set('vendorId', vendorId)
+      // Export is all-time: no dateFrom/dateTo
 
       const res = await fetch(`/api/orders?${params.toString()}`)
       if (!res.ok) throw new Error('Export failed')
@@ -253,12 +292,12 @@ export default function OrdersPage() {
   if (!isAuthenticated) return null
 
   const statCards = [
-    { label: 'All Orders', value: stats.total, icon: ShoppingCart, gradient: 'from-cyan-500 to-blue-500' },
-    { label: 'Pending Dispatch', value: stats.toBeDispatch, icon: Package, gradient: 'from-yellow-500 to-orange-500' },
-    { label: 'In-Delivery', value: stats.inTransit, icon: ArrowRightLeft, gradient: 'from-blue-500 to-indigo-500' },
-    { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500' },
-    { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500' },
-    { label: 'Returning', value: stats.returning, icon: RotateCcw, gradient: 'from-orange-500 to-red-500' },
+    { label: 'All Orders', value: stats.total, icon: ShoppingCart, gradient: 'from-cyan-500 to-blue-500', bucket: 'all' },
+    { label: 'Pending Dispatch', value: stats.toBeDispatch, icon: Package, gradient: 'from-yellow-500 to-orange-500', bucket: 'toBeDispatch' },
+    { label: 'In-Delivery', value: stats.inTransit, icon: ArrowRightLeft, gradient: 'from-blue-500 to-indigo-500', bucket: 'inTransit' },
+    { label: 'Delivered', value: stats.delivered, icon: CheckCircle, gradient: 'from-emerald-500 to-green-500', bucket: 'delivered' },
+    { label: 'Returned', value: stats.returned, icon: XCircle, gradient: 'from-red-500 to-pink-500', bucket: 'returned' },
+    { label: 'Returning', value: stats.returning, icon: RotateCcw, gradient: 'from-orange-500 to-red-500', bucket: 'returning' },
   ]
 
   return (
@@ -275,15 +314,17 @@ export default function OrdersPage() {
               <p className="text-gray-600 text-sm">{PAGE_SIZE} per page · data from Metabase</p>
             </div>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void exportToCSV()}
-                disabled={totalFiltered === 0 || isFetching}
-                className="px-4 py-2.5 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                Export CSV
-              </button>
+              {showExport && (
+                <button
+                  type="button"
+                  onClick={() => void exportToCSV()}
+                  disabled={totalFiltered === 0 || isFetching}
+                  className="px-4 py-2.5 bg-white border-2 border-gray-300 rounded-lg font-medium hover:border-blue-500 hover:text-blue-600 transition-all text-gray-700 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleRefresh}
@@ -300,10 +341,37 @@ export default function OrdersPage() {
             <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm mb-4">{fetchError}</div>
           )}
 
+          {/* Date filter */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {DATE_FILTER_PRESETS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setDateFilterAndReset(value)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  dateFilter === value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-            {statCards.map(({ label, value, icon: Icon, gradient }) => (
-              <div key={label} className="bg-white border border-gray-200 rounded-2xl p-5">
+            {statCards.map(({ label, value, icon: Icon, gradient, bucket }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setStatCardFilter(bucket)}
+                className={`bg-white border rounded-2xl p-5 text-left transition-all cursor-pointer hover:shadow-md ${
+                  filterStatusBucket === bucket
+                    ? 'border-blue-500 ring-2 ring-blue-200'
+                    : 'border-gray-200'
+                }`}
+              >
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-gray-500 text-xs mb-1">{label}</p>
@@ -313,7 +381,7 @@ export default function OrdersPage() {
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -323,11 +391,16 @@ export default function OrdersPage() {
               <Search className="absolute left-3 top-3 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Search by Order ID or Tracking ID…"
+                placeholder="Search by Order ID or Tracking ID (paste multiple, comma or newline separated)…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
+              {searchTermCount > 1 && (
+                <span className="absolute right-3 top-2.5 text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                  {searchTermCount} IDs
+                </span>
+              )}
             </div>
 
             {/* Country and Status filters — admin only */}

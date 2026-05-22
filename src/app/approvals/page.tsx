@@ -21,6 +21,12 @@ import {
 } from '@/lib/variantStatusChangeHelpers'
 import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 import { PaginationLight } from '@/components/Pagination'
+import {
+  formatVariantLabel,
+  getVariantImageUrls,
+  sortVariantOptionNames,
+} from '@/lib/variantDisplayHelpers'
+import { extractImages } from '@/lib/imageHelpers'
 
 type PriceRequestWithProduct = PriceHistoryEntry & {
   product_title?: string
@@ -29,6 +35,8 @@ type PriceRequestWithProduct = PriceHistoryEntry & {
   company_sku?: string
   sku?: string
   option_values?: Record<string, string>
+  variant_image?: string | string[] | null
+  product_image?: string | string[] | null
 }
 
 type StatusRequestWithProduct = VariantStatusChangeRequest & {
@@ -38,6 +46,8 @@ type StatusRequestWithProduct = VariantStatusChangeRequest & {
   company_sku?: string
   sku?: string
   option_values?: Record<string, string>
+  variant_image?: string | string[] | null
+  product_image?: string | string[] | null
   request_scope?: 'variant' | 'product'
 }
 
@@ -61,6 +71,8 @@ type RequestWithProduct = (
       company_sku?: string
       sku?: string
       option_values?: Record<string, string>
+      variant_image?: string | string[] | null
+      product_image?: string | string[] | null
       previous_price: number
       updated_price: number
       previous_active: boolean
@@ -69,30 +81,6 @@ type RequestWithProduct = (
       status_request_id: string
     })
 )
-
-const VARIANT_DIMENSION_ORDER = [
-  'Battery Capacity',
-  'Charger Type',
-  'Material',
-  'Sizes',
-  'Bundle',
-  'Weight',
-  'Power Output',
-  'Pack SIZE',
-  'Color',
-  'Flavours',
-]
-
-function sortVariantOptionNames(optionNames: string[]): string[] {
-  return [...optionNames].sort((a, b) => {
-    const aIdx = VARIANT_DIMENSION_ORDER.indexOf(a)
-    const bIdx = VARIANT_DIMENSION_ORDER.indexOf(b)
-    const aOrder = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx
-    const bOrder = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx
-    if (aOrder !== bOrder) return aOrder - bOrder
-    return a.localeCompare(b)
-  })
-}
 
 export default function ApprovalsPage() {
   const router = useRouter()
@@ -148,13 +136,34 @@ export default function ApprovalsPage() {
         ...priceData.map((r) => r.variant_id),
         ...statusData.map((r) => r.variant_id),
       ]))
-      let variantMetaMap = new Map<number, { sku?: string; option_values?: Record<string, string> }>()
+      let variantMetaMap = new Map<
+        number,
+        { sku?: string; option_values?: Record<string, string>; image?: string | string[] | null }
+      >()
       if (allVariantIds.length > 0) {
         const { data: variantMetaData } = await supabase
           .from('product_variants')
-          .select('variant_id, sku, option_values')
+          .select('variant_id, sku, option_values, image')
           .in('variant_id', allVariantIds)
-        variantMetaMap = new Map((variantMetaData || []).map((v: any) => [v.variant_id, v]))
+        variantMetaMap = new Map((variantMetaData || []).map((v: { variant_id: number; sku?: string; option_values?: Record<string, string>; image?: string | string[] | null }) => [v.variant_id, v]))
+      }
+
+      const allProductIds = Array.from(new Set([
+        ...priceData.map((r) => r.product_id),
+        ...statusData.map((r) => r.product_id),
+      ]))
+      let productImageMap = new Map<number, string | string[] | null>()
+      if (allProductIds.length > 0) {
+        const { data: productsImgData } = await supabase
+          .from('products')
+          .select('product_id, image')
+          .in('product_id', allProductIds)
+        productImageMap = new Map(
+          (productsImgData || []).map((p: { product_id: number; image?: string | string[] | null }) => [
+            p.product_id,
+            p.image ?? null,
+          ])
+        )
       }
 
       // Enrich status requests with product details for display consistency.
@@ -211,6 +220,8 @@ export default function ApprovalsPage() {
             company_sku: statusProductsMap.get(g.price.product_id)?.company_sku || g.price.company_sku,
             sku: variantMetaMap.get(g.price.variant_id)?.sku,
             option_values: variantMetaMap.get(g.price.variant_id)?.option_values,
+            variant_image: variantMetaMap.get(g.price.variant_id)?.image,
+            product_image: productImageMap.get(g.price.product_id) ?? null,
             previous_price: g.price.previous_price,
             updated_price: g.price.updated_price,
             previous_active: g.status.previous_active,
@@ -228,6 +239,8 @@ export default function ApprovalsPage() {
             company_sku: statusProductsMap.get(g.price.product_id)?.company_sku || g.price.company_sku,
             sku: variantMetaMap.get(g.price.variant_id)?.sku,
             option_values: variantMetaMap.get(g.price.variant_id)?.option_values,
+            variant_image: variantMetaMap.get(g.price.variant_id)?.image,
+            product_image: productImageMap.get(g.price.product_id) ?? null,
             request_type: 'price' as const,
           }
         }
@@ -237,6 +250,8 @@ export default function ApprovalsPage() {
           ...statusProductsMap.get(s.product_id),
           sku: variantMetaMap.get(s.variant_id)?.sku,
           option_values: variantMetaMap.get(s.variant_id)?.option_values,
+          variant_image: variantMetaMap.get(s.variant_id)?.image,
+          product_image: productImageMap.get(s.product_id) ?? null,
           request_type: 'status' as const,
         }
       }).sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
@@ -341,15 +356,46 @@ export default function ApprovalsPage() {
     }
   }
 
+  const getRequestThumbnail = (request: RequestWithProduct): string | undefined => {
+    const variantUrls = getVariantImageUrls(request.variant_image)
+    if (variantUrls.length > 0) return variantUrls[0]
+    const productUrls = extractImages(request.product_image ?? null)
+    return productUrls[0]
+  }
+
+  const renderVariantDetails = (request: RequestWithProduct) => {
+    const label = formatVariant(request)
+    const thumb = getRequestThumbnail(request)
+    return (
+      <div className="flex flex-col items-center gap-2">
+        {thumb ? (
+          <img src={thumb} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-200" />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200" />
+        )}
+        <div className="text-sm font-medium text-gray-900">{label}</div>
+        {request.option_values && Object.keys(request.option_values).length > 0 && (
+          <div className="flex flex-wrap gap-1 justify-center max-w-[200px]">
+            {sortVariantOptionNames(Object.keys(request.option_values)).map((key) => (
+              <span
+                key={key}
+                className="inline-flex px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700"
+              >
+                {key}: {request.option_values![key]}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const formatVariant = (request: RequestWithProduct) => {
     if ('request_scope' in request && request.request_scope === 'product') {
       return 'All Variants'
     }
     if (request.option_values) {
-      const optionParts = sortVariantOptionNames(Object.keys(request.option_values))
-        .map((key) => request.option_values?.[key])
-        .filter(Boolean)
-      if (optionParts.length > 0) return optionParts.join(' / ')
+      return formatVariantLabel(request.option_values, request.size, request.color)
     }
     const parts = []
     if (request.size) parts.push(`Size: ${request.size}`)
@@ -586,20 +632,31 @@ export default function ApprovalsPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {paginatedRequests.map((request) => (
                         <tr key={request.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="text-sm font-medium text-gray-900">
-                              {request.product_title || 'Unknown Product'}
-                            </div>
-                            {(request.sku || request.company_sku) && (
-                              <div className="text-xs text-gray-500">
-                                SKU: {request.sku || request.company_sku}
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex items-center justify-center gap-3">
+                              {getRequestThumbnail(request) ? (
+                                <img
+                                  src={getRequestThumbnail(request)}
+                                  alt=""
+                                  className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 shrink-0" />
+                              )}
+                              <div className="text-left min-w-0">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {request.product_title || 'Unknown Product'}
+                                </div>
+                                {(request.sku || request.company_sku) && (
+                                  <div className="text-xs text-gray-500">
+                                    SKU: {request.sku || request.company_sku}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="text-sm text-gray-700">
-                              {formatVariant(request)}
                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {renderVariantDetails(request)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${

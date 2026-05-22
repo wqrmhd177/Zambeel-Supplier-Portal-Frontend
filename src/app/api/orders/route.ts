@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  isDateInRange,
+  matchesOrderStatusBucket,
+  parseSearchTerms,
+  rowMatchesSearch,
+} from '@/lib/filterUtils'
 
 const METABASE_ORDERS_URL =
   'https://zambeel.metabaseapp.com/public/question/deab3d2c-9fbc-4d1e-8400-e93d1513582e.json'
@@ -122,11 +128,20 @@ function filterRows(
   rows: MetabaseOrder[],
   search: string,
   status: string,
-  country: string
+  statusBucket: string,
+  country: string,
+  dateFrom?: string,
+  dateTo?: string
 ): MetabaseOrder[] {
   let out = rows
 
-  if (status !== 'all') {
+  if (dateFrom || dateTo) {
+    out = out.filter((o) => isDateInRange(o.shipment_date, dateFrom, dateTo))
+  }
+
+  if (statusBucket && statusBucket !== 'all') {
+    out = out.filter((o) => matchesOrderStatusBucket(o.status ?? '', statusBucket))
+  } else if (status !== 'all') {
     const sl = status.toLowerCase()
     out = out.filter((o) => o.status?.toLowerCase().includes(sl))
   }
@@ -136,19 +151,9 @@ function filterRows(
     out = out.filter((o) => o.country?.toLowerCase() === cl)
   }
 
-  if (search.trim()) {
-    const q = search.toLowerCase()
-    out = out.filter(
-      (o) =>
-        o.order_number?.toLowerCase().includes(q) ||
-        o.Courier_tracking_id?.toLowerCase().includes(q) ||
-        o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
-        o.sku?.toLowerCase().includes(q) ||
-        o.title?.toLowerCase().includes(q) ||
-        o.full_name?.toLowerCase().includes(q) ||
-        o.phone?.toLowerCase().includes(q) ||
-        String(o.id).includes(q)
-    )
+  const terms = parseSearchTerms(search)
+  if (terms.length > 0) {
+    out = out.filter((o) => rowMatchesSearch(o, terms))
   }
 
   return out
@@ -161,7 +166,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(200, Math.max(10, parseInt(sp.get('limit') || String(PAGE_LIMIT), 10)))
     const search = sp.get('search') || ''
     const status = sp.get('status') || 'all'
+    const statusBucket = sp.get('statusBucket') || 'all'
     const country = sp.get('country') || 'all'
+    const dateFrom = sp.get('dateFrom') || undefined
+    const dateTo = sp.get('dateTo') || undefined
     const vendorId = sp.get('vendorId') || ''
     const forceRefresh = sp.get('refresh') === '1'
     const isExport = sp.get('export') === '1'
@@ -176,11 +184,24 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Stats always over the vendor-scoped (but unfiltered by search/status/country) dataset
-    const stats = computeStats(all)
     const countries = Array.from(new Set(all.map((o) => o.country).filter(Boolean))).sort() as string[]
 
-    const filtered = filterRows(all, search, status, country)
+    // Stats reflect date filter (not search/status/country)
+    const statsBase =
+      dateFrom || dateTo
+        ? all.filter((o) => isDateInRange(o.shipment_date, dateFrom, dateTo))
+        : all
+    const stats = computeStats(statsBase)
+
+    const filtered = filterRows(
+      all,
+      search,
+      status,
+      statusBucket,
+      country,
+      isExport ? undefined : dateFrom,
+      isExport ? undefined : dateTo
+    )
 
     if (isExport) {
       return NextResponse.json({ orders: filtered, total: filtered.length, stats, countries })

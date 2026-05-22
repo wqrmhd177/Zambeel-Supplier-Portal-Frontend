@@ -10,6 +10,11 @@ import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { extractImages } from '@/lib/imageHelpers'
+import {
+  formatVariantLabel,
+  getVariantImageUrls,
+  sortVariantOptionNames,
+} from '@/lib/variantDisplayHelpers'
 import { getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
 // Use GroupedProduct as the Product interface
@@ -475,6 +480,7 @@ function ProductListingCard({
   const [skuInputs, setSkuInputs] = useState<{ [key: number]: string }>({})
   const [isSaving, setIsSaving] = useState<{ [key: number]: boolean }>({})
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
+  const [displayViewerImages, setDisplayViewerImages] = useState<string[]>([])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [imageLoading, setImageLoading] = useState(false)
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
@@ -483,6 +489,14 @@ function ProductListingCard({
   const viewerImages = useMemo(() => {
     return extractImages(product.image)
   }, [product.image])
+
+  const imagesForViewer = displayViewerImages.length > 0 ? displayViewerImages : viewerImages
+
+  const openImageViewer = (images: string[], index: number) => {
+    setDisplayViewerImages(images)
+    setCurrentImageIndex(index)
+    setIsImageViewerOpen(true)
+  }
 
   useEffect(() => {
     // Initialize SKU inputs with current company_sku values
@@ -496,6 +510,7 @@ function ProductListingCard({
   // Reset state when viewer closes
   useEffect(() => {
     if (!isImageViewerOpen) {
+      setDisplayViewerImages([])
       setPreloadedImages(new Set())
       setImageLoading(false)
       setCurrentImageIndex(0)
@@ -504,10 +519,10 @@ function ProductListingCard({
 
   // Preload ALL images when viewer opens
   useEffect(() => {
-    if (!isImageViewerOpen || viewerImages.length === 0) return
+    if (!isImageViewerOpen || imagesForViewer.length === 0) return
 
     // Preload all images immediately when viewer opens
-    const preloadPromises = viewerImages.map((src) => {
+    const preloadPromises = imagesForViewer.map((src) => {
       return new Promise<void>((resolve) => {
         if (preloadedImages.has(src)) {
           resolve()
@@ -539,11 +554,11 @@ function ProductListingCard({
     Promise.all(preloadPromises).catch(() => {
       // Ignore errors, images will load on demand
     })
-  }, [isImageViewerOpen, viewerImages])
+  }, [isImageViewerOpen, imagesForViewer])
 
   // Keyboard navigation for image viewer
   useEffect(() => {
-    if (!isImageViewerOpen || viewerImages.length === 0) return
+    if (!isImageViewerOpen || imagesForViewer.length === 0) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -552,9 +567,9 @@ function ProductListingCard({
         setIsImageViewerOpen(false)
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        if (viewerImages.length > 1) {
-          const newIndex = currentImageIndex === 0 ? viewerImages.length - 1 : currentImageIndex - 1
-          const nextImage = viewerImages[newIndex]
+        if (imagesForViewer.length > 1) {
+          const newIndex = currentImageIndex === 0 ? imagesForViewer.length - 1 : currentImageIndex - 1
+          const nextImage = imagesForViewer[newIndex]
           if (preloadedImages.has(nextImage)) {
             setCurrentImageIndex(newIndex)
           } else {
@@ -570,9 +585,9 @@ function ProductListingCard({
         }
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
-        if (viewerImages.length > 1) {
-          const newIndex = currentImageIndex === viewerImages.length - 1 ? 0 : currentImageIndex + 1
-          const nextImage = viewerImages[newIndex]
+        if (imagesForViewer.length > 1) {
+          const newIndex = currentImageIndex === imagesForViewer.length - 1 ? 0 : currentImageIndex + 1
+          const nextImage = imagesForViewer[newIndex]
           if (preloadedImages.has(nextImage)) {
             setCurrentImageIndex(newIndex)
           } else {
@@ -591,7 +606,7 @@ function ProductListingCard({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isImageViewerOpen, viewerImages, currentImageIndex, preloadedImages])
+  }, [isImageViewerOpen, imagesForViewer, currentImageIndex, preloadedImages])
 
   const handleSKUChange = (variantId: number, value: string) => {
     setSkuInputs(prev => ({
@@ -773,40 +788,64 @@ function ProductListingCard({
           </div>
 
           <div className="space-y-4">
-            {product.variants && product.variants.map((variant) => (
+            {product.variants && product.variants.map((variant) => {
+              const variantLabel = formatVariantLabel(
+                variant.option_values,
+                variant.size,
+                variant.color
+              )
+              const variantImages = getVariantImageUrls(variant.image)
+              return (
               <div
                 key={variant.variant_id}
                 className="bg-white rounded-lg p-4 border border-gray-200"
               >
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    {variant.size && (
-                      <div>
-                        <label className="text-xs font-semibold text-gray-500">Size</label>
-                        <p className="text-sm text-gray-900">
-                          {variant.size}{variant.size_category ? ` ${variant.size_category}` : ''}
-                        </p>
+                  <div className="flex flex-col sm:flex-row gap-4 mb-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 mb-2">{variantLabel}</p>
+                      {variant.option_values && Object.keys(variant.option_values).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {sortVariantOptionNames(Object.keys(variant.option_values)).map((key) => (
+                            <span
+                              key={key}
+                              className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-800 border border-blue-100"
+                            >
+                              {key}: {variant.option_values![key]}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500">Price</label>
+                          <p className="text-sm text-gray-900">{currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} {variant.variant_selling_price.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500">Stock</label>
+                          <p className={`text-sm font-medium ${
+                            variant.variant_stock === 0
+                              ? 'text-red-600'
+                              : 'text-gray-900'
+                          }`}>
+                            {variant.variant_stock}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {variantImages.length > 0 && (
+                      <div className="flex gap-2 flex-wrap shrink-0">
+                        {variantImages.slice(0, 5).map((url, imgIdx) => (
+                          <button
+                            key={imgIdx}
+                            type="button"
+                            onClick={() => openImageViewer(variantImages, imgIdx)}
+                            className="w-12 h-12 rounded-lg border border-gray-200 overflow-hidden hover:ring-2 hover:ring-blue-300"
+                          >
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
                       </div>
                     )}
-                    {variant.color && (
-                      <div>
-                        <label className="text-xs font-semibold text-gray-500">Color</label>
-                        <p className="text-sm text-gray-900">{variant.color}</p>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Price</label>
-                      <p className="text-sm text-gray-900">{currencyByOwnerId.get(product.fk_owned_by) ?? 'USD'} {variant.variant_selling_price.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Stock</label>
-                      <p className={`text-sm font-medium ${
-                        variant.variant_stock === 0 
-                          ? 'text-red-600' 
-                          : 'text-gray-900'
-                      }`}>
-                        {variant.variant_stock}
-                      </p>
-                    </div>
                   </div>
 
                   {/* Zambeel SKU Input */}
@@ -836,7 +875,7 @@ function ProductListingCard({
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
 
             {/* Bulk Save Button */}
             {hasChanges && (
@@ -862,9 +901,9 @@ function ProductListingCard({
       )}
 
       {/* Image Viewer Modal */}
-      {isImageViewerOpen && viewerImages.length > 0 && (() => {
-        const currentImage = viewerImages[currentImageIndex]
-        const hasMultipleImages = viewerImages.length > 1
+      {isImageViewerOpen && imagesForViewer.length > 0 && (() => {
+        const currentImage = imagesForViewer[currentImageIndex]
+        const hasMultipleImages = imagesForViewer.length > 1
 
         const handleDownload = async (e: React.MouseEvent) => {
           e.stopPropagation()
@@ -888,8 +927,8 @@ function ProductListingCard({
         }
 
         const handlePrevious = () => {
-          const newIndex = currentImageIndex === 0 ? viewerImages.length - 1 : currentImageIndex - 1
-          const nextImage = viewerImages[newIndex]
+          const newIndex = currentImageIndex === 0 ? imagesForViewer.length - 1 : currentImageIndex - 1
+          const nextImage = imagesForViewer[newIndex]
           
           // Check if image is already preloaded
           if (preloadedImages.has(nextImage)) {
@@ -910,8 +949,8 @@ function ProductListingCard({
         }
 
         const handleNext = () => {
-          const newIndex = currentImageIndex === viewerImages.length - 1 ? 0 : currentImageIndex + 1
-          const nextImage = viewerImages[newIndex]
+          const newIndex = currentImageIndex === imagesForViewer.length - 1 ? 0 : currentImageIndex + 1
+          const nextImage = imagesForViewer[newIndex]
           
           // Check if image is already preloaded
           if (preloadedImages.has(nextImage)) {
@@ -1003,7 +1042,7 @@ function ProductListingCard({
               {/* Image Counter */}
               {hasMultipleImages && (
                 <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 bg-black/50 backdrop-blur-sm rounded-full text-white text-sm font-medium shadow-lg">
-                  {currentImageIndex + 1} / {viewerImages.length}
+                  {currentImageIndex + 1} / {imagesForViewer.length}
                 </div>
               )}
 

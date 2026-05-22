@@ -1039,6 +1039,37 @@ export default function AddProductPage() {
   // (Option-level media removed; media is now required only at variant level.)
 
 
+  const preventWheelOnNumber = (e: React.WheelEvent<HTMLInputElement>) => {
+    e.currentTarget.blur()
+  }
+
+  const ERROR_FIELD_ORDER = [
+    'title',
+    'supplier',
+    'images',
+    'sellingPrice',
+    'stockAmount',
+    'options',
+    'variants',
+  ]
+
+  const scrollToFirstError = (errs: Record<string, string>) => {
+    const keys = Object.keys(errs)
+    const ordered = [
+      ...ERROR_FIELD_ORDER.filter((k) => keys.includes(k)),
+      ...keys.filter((k) => !ERROR_FIELD_ORDER.includes(k)),
+    ]
+    for (const key of ordered) {
+      const el = document.querySelector(`[data-field="${key}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const focusable = el.querySelector('input, textarea, select, button') as HTMLElement | null
+        focusable?.focus()
+        break
+      }
+    }
+  }
+
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {}
 
@@ -1102,6 +1133,9 @@ export default function AddProductPage() {
     }
 
     setErrors(newErrors)
+    if (Object.keys(newErrors).length > 0) {
+      setTimeout(() => scrollToFirstError(newErrors), 50)
+    }
     return Object.keys(newErrors).length === 0
   }
 
@@ -1384,7 +1418,7 @@ export default function AddProductPage() {
             <div className="bg-white border border-gray-300 rounded-2xl p-4 sm:p-6 lg:p-8">
               {/* Supplier Selector (for purchasers and admin) */}
               {(userRole === 'purchaser' || userRole === 'admin') && (
-                <div className="mb-6 relative">
+                <div className="mb-6 relative" data-field="supplier" data-error={errors.supplier ? 'true' : undefined}>
                   <label htmlFor="supplier" className="block text-sm font-semibold text-gray-900 mb-2">
                     Supplier <span className="text-red-500">*</span>
                   </label>
@@ -1474,7 +1508,7 @@ export default function AddProductPage() {
               )}
 
               {/* 1. Product Title */}
-              <div className="mb-6">
+              <div className="mb-6" data-field="title" data-error={errors.title ? 'true' : undefined}>
                 <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
                   Product Title <span className="text-red-500">*</span>
                 </label>
@@ -1625,7 +1659,7 @@ export default function AddProductPage() {
               {!formData.hasVariants && (
                 <>
                   {/* Product Selling Price */}
-                  <div className="mb-6">
+                  <div className="mb-6" data-field="sellingPrice" data-error={errors.sellingPrice ? 'true' : undefined}>
                     <label htmlFor="mainSellingPrice" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
                       Product Selling Price <span>(Product Price + Fulfillment Cost + Margin)</span> <span className="text-red-500">*</span>
                     </label>
@@ -1641,6 +1675,7 @@ export default function AddProductPage() {
                         step="1"
                         value={sellingPriceInput}
                         onChange={handleChange}
+                        onWheel={preventWheelOnNumber}
                         className="flex-1 min-w-0 px-4 py-3 border-0 rounded-r-xl bg-white text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none focus:ring-0"
                         placeholder="0"
                         required
@@ -1652,7 +1687,7 @@ export default function AddProductPage() {
                   </div>
 
                   {/* Stock Available in Your Shop */}
-                  <div className="mb-6">
+                  <div className="mb-6" data-field="stockAmount" data-error={errors.stockAmount ? 'true' : undefined}>
                     <label htmlFor="mainStockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
                       Stock Available in Your Shop <span className="text-red-500">*</span>
                     </label>
@@ -1663,6 +1698,7 @@ export default function AddProductPage() {
                       min="0"
                       value={stockAmountInput}
                       onChange={handleChange}
+                      onWheel={preventWheelOnNumber}
                       className={`w-full px-4 py-3 border-2 rounded-xl bg-white text-gray-900 transition-all ${
                         errors.stockAmount ? 'border-red-500' : 'border-gray-200'
                       } focus:border-primary-blue focus:shadow-[0_0_0_4px_rgba(74,159,245,0.1)] focus:outline-none placeholder:text-gray-400`}
@@ -1678,7 +1714,7 @@ export default function AddProductPage() {
 
               {/* 7. Product Media (images & videos) - only when product has NO variants */}
               {!formData.hasVariants && (
-              <div className="mb-6">
+              <div className="mb-6" data-field="images" data-error={errors.images ? 'true' : undefined}>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Product Media (Images and Videos) <span className="text-red-500">*</span> (Max 5)
                 </label>
@@ -1751,7 +1787,7 @@ export default function AddProductPage() {
 
               {/* 8. Create variants (when hasVariants = true) */}
               {formData.hasVariants && (
-                <div className="mb-6 bg-gray-50 rounded-xl border-2 border-gray-200">
+                <div className="mb-6 bg-gray-50 rounded-xl border-2 border-gray-200" data-field="variants" data-error={errors.variants ? 'true' : undefined}>
                   <div 
                     className="flex items-center justify-between p-4 sm:p-6 cursor-pointer border-b border-gray-300"
                     onClick={() => setIsVariantsSectionOpen(!isVariantsSectionOpen)}
@@ -1878,6 +1914,7 @@ export default function AddProductPage() {
                                           placeholder={`Number (${config.unit})`}
                                           value={numericValueByOptionId[option.id] ?? ''}
                                           onChange={(e) => setNumericValueByOptionId(prev => ({ ...prev, [option.id]: e.target.value }))}
+                                          onWheel={preventWheelOnNumber}
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                               e.preventDefault()
@@ -1995,7 +2032,18 @@ export default function AddProductPage() {
 
                           <div className="space-y-4">
                             {formData.variants.map((variant, index) => (
-                              <div key={variant.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <div
+                                key={variant.id}
+                                className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+                                data-field={`variant_price_${index}`}
+                                data-error={
+                                  errors[`variant_price_${index}`] ||
+                                  errors[`variant_stock_${index}`] ||
+                                  errors[`variant_images_${index}`]
+                                    ? 'true'
+                                    : undefined
+                                }
+                              >
                                 <div className="flex items-start justify-between mb-4">
                                   <div className="flex items-center gap-3">
                                     <input
@@ -2037,6 +2085,7 @@ export default function AddProductPage() {
                                         step="1"
                                         value={variant.price === 0 ? '' : variant.price}
                                         onChange={(e) => updateVariant(variant.id, 'price', e.target.value === '' ? 0 : Number(e.target.value) || 0)}
+                                        onWheel={preventWheelOnNumber}
                                         className="flex-1 min-w-0 px-3 py-2 border-0 bg-white text-gray-900 focus:outline-none"
                                         placeholder="0"
                                       />
@@ -2055,6 +2104,7 @@ export default function AddProductPage() {
                                       min="0"
                                       value={variant.stock === 0 ? '' : variant.stock}
                                       onChange={(e) => updateVariant(variant.id, 'stock', e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0)}
+                                      onWheel={preventWheelOnNumber}
                                       className={`w-full px-3 py-2 border-2 rounded-lg bg-white text-gray-900 ${
                                         errors[`variant_stock_${index}`] ? 'border-red-500' : 'border-gray-200'
                                       } focus:border-primary-blue focus:outline-none`}

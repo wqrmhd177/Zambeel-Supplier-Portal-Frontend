@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { MetabaseOrder } from '@/app/api/orders/route'
+import { isDateInRange, parseSearchTerms, rowMatchesSearch } from '@/lib/filterUtils'
 
 const METABASE_ORDERS_URL =
   'https://zambeel.metabaseapp.com/public/question/deab3d2c-9fbc-4d1e-8400-e93d1513582e.json'
@@ -67,6 +68,8 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(200, Math.max(10, parseInt(sp.get('limit') || String(PAGE_LIMIT), 10)))
     const search = sp.get('search') || ''
     const vendorId = sp.get('vendorId') || ''
+    const dateFrom = sp.get('dateFrom') || undefined
+    const dateTo = sp.get('dateTo') || undefined
     const forceRefresh = sp.get('refresh') === '1'
 
     let all = await getAllOrders(forceRefresh)
@@ -82,18 +85,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search by order number, Metabase row id (matches Orders tab), or tracking IDs
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      all = all.filter(
-        (o) =>
-          o.order_number?.toLowerCase().includes(q) ||
-          String(o.id).includes(q) ||
-          o.Courier_tracking_id?.toLowerCase().includes(q) ||
-          o.System_gen_tracking_id_removed?.toLowerCase().includes(q) ||
-          o.sku?.toLowerCase().includes(q) ||
-          o.title?.toLowerCase().includes(q)
-      )
+    if (dateFrom || dateTo) {
+      all = all.filter((o) => isDateInRange(o.Returned_date, dateFrom, dateTo))
+    }
+
+    const terms = parseSearchTerms(search)
+    if (terms.length > 0) {
+      all = all.filter((o) => rowMatchesSearch(o, terms))
     }
 
     all.sort((a, b) => {
@@ -108,17 +106,16 @@ export async function GET(request: NextRequest) {
     const start = (safePage - 1) * limit
     const pageRows = all.slice(start, start + limit)
 
-    // Fetch Supabase return_management records for this page
-    const keys = pageRows.map((o) => ({ order_id: String(o.order_number), sku: o.sku }))
+    // Fetch Supabase return_management for all filtered rows (stats) + page merge
+    const allOrderIds = Array.from(new Set(all.map((o) => String(o.order_number))))
     let supabaseMap: Record<string, ReturnManagementRecord> = {}
 
-    if (keys.length > 0) {
-      const orderIds = keys.map((k) => k.order_id)
+    if (allOrderIds.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: rmData } = await (getSupabase() as any)
         .from('return_management')
         .select('order_id, sku, vendor_id, receiving_status, return_condition, updated_at')
-        .in('order_id', orderIds)
+        .in('order_id', allOrderIds)
 
       if (rmData) {
         for (const rec of rmData as ReturnManagementRecord[]) {
@@ -127,8 +124,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Merge Metabase rows with Supabase editable fields
-    const orders: ReturnOrder[] = pageRows.map((o) => {
+    const mergeRow = (o: MetabaseOrder): ReturnOrder => {
       const key = `${o.order_number}__${o.sku}`
       const rm = supabaseMap[key]
       return {
@@ -136,9 +132,20 @@ export async function GET(request: NextRequest) {
         receiving_status: rm?.receiving_status ?? null,
         return_condition: rm?.return_condition ?? null,
       }
-    })
+    }
 
-    return NextResponse.json({ orders, total, page: safePage, limit, totalPages })
+    let tabStats = { all: 0, pending: 0, notReceived: 0, received: 0 }
+    for (const o of all) {
+      const rs = supabaseMap[`${o.order_number}__${o.sku}`]?.receiving_status ?? ''
+      tabStats.all++
+      if (!rs) tabStats.pending++
+      else if (rs === 'No') tabStats.notReceived++
+      else if (rs === 'Yes') tabStats.received++
+    }
+
+    const orders: ReturnOrder[] = pageRows.map(mergeRow)
+
+    return NextResponse.json({ orders, total, page: safePage, limit, totalPages, tabStats })
   } catch (error) {
     console.error('Error in returns GET:', error)
     return NextResponse.json({ error: 'Unable to load returns.' }, { status: 500 })

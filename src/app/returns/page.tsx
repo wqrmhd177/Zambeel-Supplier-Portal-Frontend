@@ -17,6 +17,13 @@ import Header from '@/components/Header'
 import { PaginationLight } from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
 import type { ReturnOrder } from '@/app/api/returns/route'
+import {
+  DATE_FILTER_PRESETS,
+  type DateFilterPreset,
+  getDateRange,
+  parseSearchTerms,
+  serializeSearchTerms,
+} from '@/lib/filterUtils'
 
 const PAGE_SIZE = 25
 const SEARCH_DEBOUNCE_MS = 400
@@ -47,6 +54,8 @@ export default function ReturnsPage() {
   const [fetchError, setFetchError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [dateFilter, setDateFilter] = useState<DateFilterPreset>('all')
+  const [tabStats, setTabStats] = useState({ all: 0, pending: 0, notReceived: 0, received: 0 })
 
   const prevDebouncedSearch = useRef(debouncedSearch)
   const autoReceiveRan = useRef(false)
@@ -79,6 +88,7 @@ export default function ReturnsPage() {
       page: number
       search: string
       vendorId: string
+      dateFilter: DateFilterPreset
       refresh?: boolean
     }) => {
       setFetchError('')
@@ -92,6 +102,11 @@ export default function ReturnsPage() {
         })
         if (opts.vendorId) params.set('vendorId', opts.vendorId)
         if (opts.refresh) params.set('refresh', '1')
+        const range = getDateRange(opts.dateFilter)
+        if (range) {
+          params.set('dateFrom', range.dateFrom)
+          params.set('dateTo', range.dateTo)
+        }
 
         const res = await fetch(`/api/returns?${params.toString()}`)
         if (!res.ok) throw new Error('Failed to fetch returns')
@@ -100,6 +115,7 @@ export default function ReturnsPage() {
           total: number
           page: number
           totalPages: number
+          tabStats?: { all: number; pending: number; notReceived: number; received: number }
         }
 
         const rows: ReturnOrder[] = json.orders ?? []
@@ -107,6 +123,7 @@ export default function ReturnsPage() {
         setPage(json.page)
         setTotalPages(json.totalPages)
         setTotalFiltered(json.total)
+        if (json.tabStats) setTabStats(json.tabStats)
 
         const newState: Record<string, ReturnRowState> = {}
         for (const o of rows) {
@@ -158,12 +175,12 @@ export default function ReturnsPage() {
             sku: order.sku,
             vendor_id: order.vendor_id ?? null,
             receiving_status: 'Yes',
-            return_condition: current.return_condition || null,
+            return_condition: 'Good',
           }),
         })
         setRowState((prev) => ({
           ...prev,
-          [key]: { ...prev[key], receiving_status: 'Yes' },
+          [key]: { ...prev[key], receiving_status: 'Yes', return_condition: 'Good' },
         }))
       } catch {
         // silent — will be retried on next load
@@ -185,12 +202,31 @@ export default function ReturnsPage() {
       }
     }
 
-    void loadReturns({ page: effectivePage, search: debouncedSearch, vendorId })
-  }, [isAuthenticated, page, debouncedSearch, vendorId, userRole, loadReturns])
+    void loadReturns({
+      page: effectivePage,
+      search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
+      vendorId,
+      dateFilter,
+    })
+  }, [isAuthenticated, page, debouncedSearch, vendorId, dateFilter, userRole, loadReturns])
 
   const handleRefresh = () => {
-    void loadReturns({ page, search: debouncedSearch, vendorId, refresh: true })
+    void loadReturns({
+      page,
+      search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
+      vendorId,
+      dateFilter,
+      refresh: true,
+    })
   }
+
+  const setDateFilterAndReset = (value: DateFilterPreset) => {
+    setDateFilter(value)
+    setPage(1)
+    setCurrentPage(1)
+  }
+
+  const searchTermCount = parseSearchTerms(debouncedSearch).length
 
   const handleDropdownChange = async (
     order: ReturnOrder,
@@ -252,18 +288,7 @@ export default function ReturnsPage() {
     }
   }
 
-  // Tab counts (based on rowState for live accuracy)
-  const tabCounts = useMemo(() => {
-    let pending = 0, notReceived = 0, received = 0
-    for (const o of orders) {
-      const key = rowKey(o)
-      const status = rowState[key]?.receiving_status ?? ''
-      if (!status) pending++
-      else if (status === 'No') notReceived++
-      else if (status === 'Yes') received++
-    }
-    return { all: orders.length, pending, notReceived, received }
-  }, [orders, rowState])
+  const tabCounts = tabStats
 
   // Filter orders by active tab
   const tabFiltered = useMemo(() => {
@@ -282,8 +307,6 @@ export default function ReturnsPage() {
     setActiveTab(tab)
     setCurrentPage(1)
   }
-
-  const isReceived = activeTab === 'received'
 
   if (authLoading || (isFetching && orders.length === 0)) {
     return (
@@ -339,6 +362,24 @@ export default function ReturnsPage() {
             <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm mb-4">{fetchError}</div>
           )}
 
+          {/* Date filter */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {DATE_FILTER_PRESETS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setDateFilterAndReset(value)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  dateFilter === value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* Status cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {statCards.map(({ tab, label, count, icon: Icon, color }) => (
@@ -367,11 +408,16 @@ export default function ReturnsPage() {
               <Search className="absolute left-3 top-3 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Search by Order ID or Tracking ID…"
+                placeholder="Search by Order ID or Tracking ID (paste multiple, comma or newline separated)…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
+              {searchTermCount > 1 && (
+                <span className="absolute right-3 top-2.5 text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                  {searchTermCount} IDs
+                </span>
+              )}
             </div>
           </div>
 
@@ -450,7 +496,7 @@ export default function ReturnsPage() {
 
                           {/* Receiving Status */}
                           <td className="px-4 py-3">
-                            {isReceived ? (
+                            {rs.receiving_status === 'Yes' ? (
                               <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
                                 Yes — Received
                               </span>
@@ -474,7 +520,7 @@ export default function ReturnsPage() {
 
                           {/* Return Condition */}
                           <td className="px-4 py-3">
-                            {isReceived ? (
+                            {rs.receiving_status === 'Yes' ? (
                               <span className="text-sm text-gray-700">
                                 {rs.return_condition || '—'}
                               </span>
