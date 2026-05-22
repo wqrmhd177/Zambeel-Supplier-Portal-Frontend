@@ -604,15 +604,29 @@ export default function ProductsPage() {
     setPriceSaveSuccess('')
   }
 
+  const canSupplierRequestUpdates = (product: Product) => {
+    const status = product.status || 'active'
+    if (!product.variants?.length) return false
+    if (status !== 'active' && status !== 'inactive') return false
+    if (getDisplayStatus(product, pendingStatusChanges) === 'Pending Approval') return false
+    return userRole === 'supplier' || userRole === 'purchaser'
+  }
+
   const handleSavePrices = async () => {
     if (!selectedProduct || selectedProduct.variants.length === 0) return
-    if (selectedProduct.status !== 'active' && userRole !== 'admin' && userRole !== 'listing_agent') {
-      setPriceSaveError('Only active products can submit price/status update requests.')
+    const productStatus = selectedProduct.status || 'active'
+    if (
+      (productStatus === 'pending' || productStatus === 'rejected') &&
+      userRole !== 'admin' &&
+      userRole !== 'listing_agent'
+    ) {
+      setPriceSaveError('Update requests cannot be submitted for pending or rejected products.')
       return
     }
-    const currentProductStatusForEdit: 'active' = 'active'
+    const currentProductActive = productStatus === 'active'
+    const targetProductActive = editedProductActiveStatus === 'active'
     const hasProductLevelStatusChange =
-      isProductStatusEdited && editedProductActiveStatus !== currentProductStatusForEdit
+      isProductStatusEdited && targetProductActive !== currentProductActive
     const hasAnyChange = selectedProduct.variants.some(
       v => (editedVariantPrices.get(v.variant_id) ?? v.variant_selling_price) !== v.variant_selling_price
     ) || selectedProduct.variants.some(
@@ -631,16 +645,16 @@ export default function ProductsPage() {
       const purchaserIntId = (userRole === 'purchaser' && userId) ? await getPurchaserIntegerId(userId) : null
 
       if (hasProductLevelStatusChange && userFriendlyId) {
-        await createVariantStatusChangeRequest(
+        const created = await createVariantStatusChangeRequest(
           productIdNum,
           selectedProduct.variants[0].variant_id,
-          true,
-          false,
+          currentProductActive,
+          targetProductActive,
           userFriendlyId,
           purchaserIntId ?? null,
           'product'
         )
-        hasPendingChanges = true
+        if (created) hasPendingChanges = true
       }
 
       for (const variant of selectedProduct.variants) {
@@ -652,7 +666,6 @@ export default function ProductsPage() {
         // Normalize numeric comparisons; inputs might be strings at runtime.
         const priceChanged = !Number.isNaN(oldPrice) && !Number.isNaN(newPrice) && oldPrice !== newPrice
         const oldActive = variant.active !== false
-        const productLevelTarget = editedProductActiveStatus === 'active'
         const variantLevelEdited = editedVariantActive.has(variant.variant_id)
         const newActive = variantLevelEdited
           ? (editedVariantActive.get(variant.variant_id) ?? oldActive)
@@ -687,7 +700,7 @@ export default function ProductsPage() {
             purchaserIntId ?? null,
             'variant'
           )
-          hasPendingChanges = true
+          if (created) hasPendingChanges = true
         }
       }
 
@@ -1604,7 +1617,7 @@ export default function ProductsPage() {
                     >
                       Close
                     </button>
-                    {selectedProduct.status === 'active' && selectedProduct.variants && selectedProduct.variants.length > 0 && (
+                    {canSupplierRequestUpdates(selectedProduct) && (
                       <button
                         onClick={handleStartEditPrices}
                         className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base text-white font-semibold transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
@@ -1615,7 +1628,7 @@ export default function ProductsPage() {
                         }}
                       >
                         <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
-                        Request updates
+                        {selectedProduct.status === 'inactive' ? 'Request reactivation' : 'Request updates'}
                       </button>
                     )}
                   </>
