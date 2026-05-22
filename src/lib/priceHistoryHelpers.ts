@@ -367,13 +367,11 @@ export async function getVariantPriceStats(variantId: number): Promise<{
  * Fetch all pending price change requests
  * Used by agents to see what needs approval
  */
-export async function fetchPendingPriceRequests(): Promise<PriceHistoryEntry[]> {
+export async function fetchPendingPriceRequests(supplierId?: string): Promise<PriceHistoryEntry[]> {
   try {
-    const { data, error } = await supabase
-      .from('price_history')
-      .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
+    let query = supabase.from('price_history').select('*').eq('status', 'pending')
+    if (supplierId) query = query.eq('created_by_supplier_id', supplierId)
+    const { data, error } = await query.order('created_at', { ascending: false })
     
     if (error) {
       console.error('Error fetching pending price requests:', error)
@@ -469,21 +467,64 @@ export async function approvePriceChange(
     
     if (fetchError || !priceHistory) {
       console.error('Error fetching price history entry:', fetchError)
+      // #region agent log
+      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'priceHistoryHelpers.ts:approvePriceChange:fetchFail',message:'price history fetch failed',data:{priceHistoryId,fetchError:fetchError?.message},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
       return false
     }
-    
-    // Update the products table with the new price
+
+    // #region agent log
+    fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'priceHistoryHelpers.ts:approvePriceChange:entry',message:'applying price approval',data:{priceHistoryId,productId:priceHistory.product_id,variantId:priceHistory.variant_id,updatedPrice:priceHistory.updated_price},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+
+    const updatedAt = new Date().toISOString()
+    const pricePayload = {
+      price: priceHistory.updated_price,
+      updated_at: updatedAt,
+    }
+
+    let { data: pvRows, error: pvUpdateError } = await supabase
+      .from('product_variants')
+      .update(pricePayload)
+      .eq('variant_id', priceHistory.variant_id)
+      .eq('product_id', priceHistory.product_id)
+      .select('variant_id, price')
+
+    if (!pvUpdateError && (pvRows?.length ?? 0) === 0) {
+      const retry = await supabase
+        .from('product_variants')
+        .update(pricePayload)
+        .eq('variant_id', priceHistory.variant_id)
+        .select('variant_id, price')
+      pvRows = retry.data
+      pvUpdateError = retry.error
+    }
+
     const { error: updateProductError } = await supabase
       .from('products')
-      .update({ 
+      .update({
         variant_selling_price: priceHistory.updated_price,
-        updated_at: new Date().toISOString()
+        updated_at: updatedAt,
       })
       .eq('variant_id', priceHistory.variant_id)
       .eq('product_id', priceHistory.product_id)
-    
-    if (updateProductError) {
-      console.error('Error updating product price:', updateProductError)
+
+    const { data: readBack } = await supabase
+      .from('product_variants')
+      .select('variant_id, price')
+      .eq('variant_id', priceHistory.variant_id)
+      .maybeSingle()
+
+    // #region agent log
+    fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'priceHistoryHelpers.ts:approvePriceChange:updates',message:'price table update results',data:{pvRowCount:pvRows?.length??0,pvUpdateError:pvUpdateError?.message??null,legacyUpdateError:updateProductError?.message??null,readBackPrice:readBack?.price??null,expectedPrice:priceHistory.updated_price},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+    // #endregion
+
+    const pvApplied = !pvUpdateError && (pvRows?.length ?? 0) > 0
+    const legacyApplied = !updateProductError
+    const readBackOk =
+      readBack != null && Number(readBack.price) === Number(priceHistory.updated_price)
+    if (!pvApplied && !legacyApplied && !readBackOk) {
+      console.error('Error updating variant price:', pvUpdateError, updateProductError)
       return false
     }
     
@@ -678,36 +719,37 @@ export async function fetchRequestsByStatus(
     if (!priceHistoryData || priceHistoryData.length === 0) {
       return []
     }
-    
-    // Get unique variant_ids to fetch product details
-    const variantIds = Array.from(new Set(priceHistoryData.map(entry => entry.variant_id)))
-    
-    // Fetch product details for these variants
-    const { data: productsData, error: productsError } = await supabase
-      .from('products')
-      .select('variant_id, product_title, size, color, company_sku')
-      .in('variant_id', variantIds)
-    
-    if (productsError) {
-      console.error('Error fetching products:', productsError)
-      // Return price history without product details
-      return priceHistoryData
-    }
-    
-    // Create a map of variant_id to product details
-    const productsMap = new Map(
-      (productsData || []).map(p => [p.variant_id, p])
+
+    const productIds = Array.from(new Set(priceHistoryData.map((entry) => entry.product_id)))
+    const variantIds = Array.from(new Set(priceHistoryData.map((entry) => entry.variant_id)))
+
+    const [{ data: productsByProductId }, { data: productsByVariantId }] = await Promise.all([
+      supabase
+        .from('products')
+        .select('product_id, product_title, size, color, company_sku')
+        .in('product_id', productIds),
+      supabase
+        .from('products')
+        .select('variant_id, product_title, size, color, company_sku')
+        .in('variant_id', variantIds),
+    ])
+
+    const byProductId = new Map(
+      (productsByProductId || []).map((p) => [p.product_id, p])
     )
-    
-    // Merge price history with product details
-    return priceHistoryData.map(entry => {
-      const product = productsMap.get(entry.variant_id)
+    const byVariantId = new Map(
+      (productsByVariantId || []).map((p) => [p.variant_id, p])
+    )
+
+    return priceHistoryData.map((entry) => {
+      const fromProduct = byProductId.get(entry.product_id)
+      const fromVariant = byVariantId.get(entry.variant_id)
       return {
         ...entry,
-        product_title: product?.product_title,
-        size: product?.size,
-        color: product?.color,
-        company_sku: product?.company_sku
+        product_title: fromProduct?.product_title ?? fromVariant?.product_title,
+        size: fromProduct?.size ?? fromVariant?.size,
+        color: fromProduct?.color ?? fromVariant?.color,
+        company_sku: fromProduct?.company_sku ?? fromVariant?.company_sku,
       }
     })
   } catch (err) {

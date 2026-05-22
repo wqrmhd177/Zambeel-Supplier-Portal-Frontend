@@ -148,34 +148,23 @@ export default function ApprovalsPage() {
         variantMetaMap = new Map((variantMetaData || []).map((v: { variant_id: number; sku?: string; option_values?: Record<string, string>; image?: string | string[] | null }) => [v.variant_id, v]))
       }
 
-      const allProductIds = Array.from(new Set([
-        ...priceData.map((r) => r.product_id),
-        ...statusData.map((r) => r.product_id),
-      ]))
+      const allProductIds = Array.from(
+        new Set([...priceData.map((r) => r.product_id), ...statusData.map((r) => r.product_id)])
+      )
       let productImageMap = new Map<number, string | string[] | null>()
+      let statusProductsMap = new Map<
+        number,
+        { product_title?: string; size?: string; color?: string; company_sku?: string }
+      >()
       if (allProductIds.length > 0) {
-        const { data: productsImgData } = await supabase
-          .from('products')
-          .select('product_id, image')
-          .in('product_id', allProductIds)
-        productImageMap = new Map(
-          (productsImgData || []).map((p: { product_id: number; image?: string | string[] | null }) => [
-            p.product_id,
-            p.image ?? null,
-          ])
-        )
-      }
-
-      // Enrich status requests with product details for display consistency.
-      const statusVariantIds = Array.from(new Set(statusData.map((r) => r.variant_id)))
-      let statusProductsMap = new Map<number, { product_title?: string; size?: string; color?: string; company_sku?: string }>()
-      if (statusVariantIds.length > 0) {
-        const productIds = Array.from(new Set(statusData.map((r) => r.product_id)))
         const { data: productsData } = await supabase
           .from('products')
-          .select('product_id, product_title, size, color, company_sku')
-          .in('product_id', productIds)
-        statusProductsMap = new Map((productsData || []).map((p: any) => [p.product_id, p]))
+          .select('product_id, product_title, size, color, company_sku, image')
+          .in('product_id', allProductIds)
+        for (const p of productsData || []) {
+          statusProductsMap.set(p.product_id, p)
+          productImageMap.set(p.product_id, p.image ?? null)
+        }
       }
 
       // Combine price+status requests created in same minute for same product/variant/requester/status.
@@ -257,6 +246,9 @@ export default function ApprovalsPage() {
       }).sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
 
       setRequests(merged)
+      // #region agent log
+      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'approvals/page.tsx:fetchRequests:merged',message:'merged requests sample',data:{filter,total:merged.length,sample:merged.slice(0,3).map(r=>({type:r.request_type,title:r.product_title,status:r.status,id:r.id}))},timestamp:Date.now(),hypothesisId:'H1-H4'})}).catch(()=>{});
+      // #endregion
       const supplierIds = Array.from(new Set(merged.map((r) => r.created_by_supplier_id).filter(Boolean))) as string[]
       const map = await getCurrenciesForUserIds(supplierIds)
       setCurrencyBySupplierId(map)
@@ -301,15 +293,28 @@ export default function ApprovalsPage() {
     setSuccess('')
 
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'approvals/page.tsx:handleApprove:entry',message:'approve clicked',data:{requestType:request.request_type,id:request.id,productTitle:request.product_title,productId:request.product_id,variantId:request.variant_id,priceRequestId:'price_request_id' in request?request.price_request_id:null,statusRequestId:'status_request_id' in request?request.status_request_id:null},timestamp:Date.now(),hypothesisId:'H1-H3'})}).catch(()=>{});
+      // #endregion
       const result = request.request_type === 'price'
         ? await approvePriceChange(request.id, userFriendlyId)
         : request.request_type === 'status'
           ? await approveStatusChangeRequest(request.id, userFriendlyId)
           : (await approvePriceChange(request.price_request_id, userFriendlyId)) &&
             (await approveStatusChangeRequest(request.status_request_id, userFriendlyId))
+      // #region agent log
+      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'approvals/page.tsx:handleApprove:result',message:'approve finished',data:{requestType:request.request_type,result,productTitle:request.product_title},timestamp:Date.now(),hypothesisId:'H3-H4'})}).catch(()=>{});
+      // #endregion
       
       if (result) {
-        setSuccess(`${request.request_type === 'price' ? 'Price' : 'Status'} change approved for ${request.product_title}`)
+        const label =
+          request.request_type === 'both'
+            ? 'Price and status'
+            : request.request_type === 'price'
+              ? 'Price'
+              : 'Status'
+        const name = request.product_title || `Product #${request.product_id}`
+        setSuccess(`${label} change approved for ${name}`)
         // Refresh the list
         await fetchRequests()
       } else {

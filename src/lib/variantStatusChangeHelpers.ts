@@ -123,11 +123,23 @@ export async function approveStatusChangeRequest(
       : await pvQuery.eq('variant_id', req.variant_id)
 
     if (isProductScope) {
-      // Keep product-level status in sync for whole-product requests.
       await supabase
         .from('products')
         .update({
           status: req.updated_active ? 'active' : 'inactive',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('product_id', req.product_id)
+    } else {
+      const { data: variantRows } = await supabase
+        .from('product_variants')
+        .select('active')
+        .eq('product_id', req.product_id)
+      const anyActive = (variantRows || []).some((v: { active?: boolean }) => v.active !== false)
+      await supabase
+        .from('products')
+        .update({
+          status: anyActive ? 'active' : 'inactive',
           updated_at: new Date().toISOString(),
         })
         .eq('product_id', req.product_id)
@@ -182,6 +194,27 @@ export async function rejectStatusChangeRequest(
   } catch (err) {
     console.error('Unexpected error rejecting status change request:', err)
     return false
+  }
+}
+
+export async function fetchPendingStatusRequestsForSupplier(
+  supplierId: string
+): Promise<VariantStatusChangeRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from('variant_status_change_requests')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('created_by_supplier_id', supplierId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('Error fetching pending status requests:', error)
+      return []
+    }
+    return data || []
+  } catch (err) {
+    console.error('Unexpected error fetching pending status requests:', err)
+    return []
   }
 }
 

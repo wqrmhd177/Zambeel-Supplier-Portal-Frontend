@@ -32,6 +32,10 @@ import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, Va
 import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import { fetchPendingPriceRequests, PriceHistoryEntry, createPriceHistoryEntry } from '@/lib/priceHistoryHelpers'
+import {
+  fetchPendingStatusRequestsForSupplier,
+  VariantStatusChangeRequest,
+} from '@/lib/variantStatusChangeHelpers'
 import { createVariantStatusChangeRequest } from '@/lib/variantStatusChangeHelpers'
 import { getCurrencyForUserId, getCurrenciesForUserIds } from '@/lib/currencyHelpers'
 
@@ -62,13 +66,21 @@ function sortVariantOptionNames(optionNames: string[]): string[] {
   })
 }
 
-function getDisplayStatus(product: Product): 'Pending Approval' | 'Active' | 'Inactive' | 'Rejected' {
+function getDisplayStatus(
+  product: Product,
+  pendingStatusByVariant?: Map<number, VariantStatusChangeRequest>
+): 'Pending Approval' | 'Active' | 'Inactive' | 'Rejected' {
   const status = product.status || 'active'
-  // Backend is source of truth for status. If SKU gating is required,
-  // we update products.status in the backend when SKUs change.
   if (status === 'pending') return 'Pending Approval'
-  if (status === 'active') return 'Active'
   if (status === 'rejected') return 'Rejected'
+  if (pendingStatusByVariant && product.variants?.some((v) => pendingStatusByVariant.has(v.variant_id))) {
+    return 'Pending Approval'
+  }
+  if (product.variants && product.variants.length > 0) {
+    const anyActive = product.variants.some((v) => v.active !== false)
+    return anyActive ? 'Active' : 'Inactive'
+  }
+  if (status === 'active') return 'Active'
   if (status === 'inactive') return 'Inactive'
   return 'Inactive'
 }
@@ -142,6 +154,9 @@ export default function ProductsPage() {
   
   // Pending price changes
   const [pendingPriceChanges, setPendingPriceChanges] = useState<Map<number, PriceHistoryEntry>>(new Map())
+  const [pendingStatusChanges, setPendingStatusChanges] = useState<
+    Map<number, VariantStatusChangeRequest>
+  >(new Map())
 
   // Currency by stock location (current user when supplier, per-owner when purchaser/admin)
   const [currentUserCurrency, setCurrentUserCurrency] = useState<string>('USD')
@@ -284,10 +299,21 @@ export default function ProductsPage() {
 
   const fetchPendingChanges = async () => {
     try {
-      const pending = await fetchPendingPriceRequests()
-      const map = new Map<number, PriceHistoryEntry>()
-      pending.forEach(req => map.set(req.variant_id, req))
-      setPendingPriceChanges(map)
+      const supplierScope =
+        userRole === 'supplier' && userFriendlyId ? userFriendlyId : undefined
+      const pending = await fetchPendingPriceRequests(supplierScope)
+      const priceMap = new Map<number, PriceHistoryEntry>()
+      pending.forEach((req) => priceMap.set(req.variant_id, req))
+      setPendingPriceChanges(priceMap)
+
+      if (userRole === 'supplier' && userFriendlyId) {
+        const statusPending = await fetchPendingStatusRequestsForSupplier(userFriendlyId)
+        const statusMap = new Map<number, VariantStatusChangeRequest>()
+        statusPending.forEach((req) => statusMap.set(req.variant_id, req))
+        setPendingStatusChanges(statusMap)
+      } else {
+        setPendingStatusChanges(new Map())
+      }
     } catch (err) {
       console.error('Error fetching pending price changes:', err)
     }
@@ -414,6 +440,13 @@ export default function ProductsPage() {
       calculateStats(groupedProducts)
       
       await fetchPendingChanges()
+
+      // #region agent log
+      if (userRole === 'supplier' && groupedProducts.length > 0) {
+        const p = groupedProducts[0]
+        fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'products/page.tsx:fetchProducts:supplierSample',message:'supplier product load sample',data:{title:p.product_title,status:p.status,variants:(p.variants||[]).slice(0,3).map(v=>({id:v.variant_id,price:v.variant_selling_price,active:v.active}))},timestamp:Date.now(),hypothesisId:'H2-H5',runId:'post-fix'})}).catch(()=>{});
+      }
+      // #endregion
     } catch (err) {
       console.error('Unexpected error:', err)
       setProducts([])
@@ -466,7 +499,7 @@ export default function ProductsPage() {
     let rejected = 0
 
     productsData.forEach(product => {
-      const display = getDisplayStatus(product)
+      const display = getDisplayStatus(product, pendingStatusChanges)
       if (display === 'Pending Approval') pendingApproval++
       else if (display === 'Active') active++
       else if (display === 'Inactive') inactive++
@@ -487,7 +520,7 @@ export default function ProductsPage() {
     if (allProducts.length > 0) {
       calculateStats(allProducts)
     }
-  }, [pendingPriceChanges, allProducts])
+  }, [pendingPriceChanges, pendingStatusChanges, allProducts])
 
   // Currency: current user when supplier, per-owner when purchaser/admin
   useEffect(() => {
@@ -990,7 +1023,7 @@ export default function ProductsPage() {
                           </td>
                           <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                             <div className="flex items-center justify-center">
-                              {getDisplayStatus(product) === 'Pending Approval' ? (
+                              {getDisplayStatus(product, pendingStatusChanges) === 'Pending Approval' ? (
                                 <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                   Pending Approval
                                 </span>
@@ -1071,7 +1104,7 @@ export default function ProductsPage() {
                 {paginatedProducts.map((product) => {
                   const hasVariants = product.variants && product.variants.length > 0
                   const status = product.status || 'active'
-                  const displayStatus = getDisplayStatus(product)
+                  const displayStatus = getDisplayStatus(product, pendingStatusChanges)
                   const imageUrl = getProductThumbnail(product)
 
                   return (
@@ -1313,13 +1346,13 @@ export default function ProductsPage() {
                     </select>
                   ) : (
                     <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-semibold rounded-full ${
-                      getDisplayStatus(selectedProduct) === 'Active'
+                      getDisplayStatus(selectedProduct, pendingStatusChanges) === 'Active'
                         ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                        : getDisplayStatus(selectedProduct) === 'Pending Approval'
+                        : getDisplayStatus(selectedProduct, pendingStatusChanges) === 'Pending Approval'
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
                     }`}>
-                      {getDisplayStatus(selectedProduct)}
+                      {getDisplayStatus(selectedProduct, pendingStatusChanges)}
                     </span>
                   )}
                 </div>
