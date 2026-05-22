@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   RotateCcw,
@@ -34,6 +34,7 @@ type ReturnTab = 'all' | 'pending' | 'not_received' | 'received'
 interface ReturnRowState {
   receiving_status: string
   return_condition: string
+  auto_received_by_system: boolean
   saving: boolean
   saved: boolean
 }
@@ -48,7 +49,6 @@ export default function ReturnsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalFiltered, setTotalFiltered] = useState(0)
   const [activeTab, setActiveTab] = useState<ReturnTab>('all')
-  const [currentPage, setCurrentPage] = useState(1)
 
   const [isFetching, setIsFetching] = useState(true)
   const [fetchError, setFetchError] = useState('')
@@ -89,6 +89,7 @@ export default function ReturnsPage() {
       search: string
       vendorId: string
       dateFilter: DateFilterPreset
+      tab: ReturnTab
       refresh?: boolean
     }) => {
       setFetchError('')
@@ -99,6 +100,7 @@ export default function ReturnsPage() {
           page: String(opts.page),
           limit: String(PAGE_SIZE),
           search: opts.search,
+          tab: opts.tab,
         })
         if (opts.vendorId) params.set('vendorId', opts.vendorId)
         if (opts.refresh) params.set('refresh', '1')
@@ -131,6 +133,7 @@ export default function ReturnsPage() {
           newState[key] = {
             receiving_status: o.receiving_status ?? '',
             return_condition: o.return_condition ?? '',
+            auto_received_by_system: Boolean(o.auto_received_by_system),
             saving: false,
             saved: false,
           }
@@ -165,7 +168,6 @@ export default function ReturnsPage() {
 
     staleRows.forEach(async (order) => {
       const key = rowKey(order)
-      const current = rowState[key] ?? { receiving_status: '', return_condition: '' }
       try {
         await fetch('/api/returns', {
           method: 'PATCH',
@@ -176,12 +178,30 @@ export default function ReturnsPage() {
             vendor_id: order.vendor_id ?? null,
             receiving_status: 'Yes',
             return_condition: 'Good',
+            auto_received_by_system: true,
           }),
         })
         setRowState((prev) => ({
           ...prev,
-          [key]: { ...prev[key], receiving_status: 'Yes', return_condition: 'Good' },
+          [key]: {
+            ...prev[key],
+            receiving_status: 'Yes',
+            return_condition: 'Good',
+            auto_received_by_system: true,
+          },
         }))
+        setOrders((prev) =>
+          prev.map((o) =>
+            rowKey(o) === key
+              ? {
+                  ...o,
+                  receiving_status: 'Yes',
+                  return_condition: 'Good',
+                  auto_received_by_system: true,
+                }
+              : o
+          )
+        )
       } catch {
         // silent — will be retried on next load
       }
@@ -207,8 +227,9 @@ export default function ReturnsPage() {
       search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
       vendorId,
       dateFilter,
+      tab: activeTab,
     })
-  }, [isAuthenticated, page, debouncedSearch, vendorId, dateFilter, userRole, loadReturns])
+  }, [isAuthenticated, page, debouncedSearch, vendorId, dateFilter, activeTab, userRole, loadReturns])
 
   const handleRefresh = () => {
     void loadReturns({
@@ -216,6 +237,7 @@ export default function ReturnsPage() {
       search: serializeSearchTerms(parseSearchTerms(debouncedSearch)),
       vendorId,
       dateFilter,
+      tab: activeTab,
       refresh: true,
     })
   }
@@ -223,7 +245,6 @@ export default function ReturnsPage() {
   const setDateFilterAndReset = (value: DateFilterPreset) => {
     setDateFilter(value)
     setPage(1)
-    setCurrentPage(1)
   }
 
   const searchTermCount = parseSearchTerms(debouncedSearch).length
@@ -236,17 +257,30 @@ export default function ReturnsPage() {
     const key = rowKey(order)
     setRowState((prev) => ({
       ...prev,
-      [key]: { ...prev[key], [field]: value, saving: true, saved: false },
+      [key]: {
+        ...prev[key],
+        [field]: value,
+        saving: true,
+        saved: false,
+        ...(field === 'receiving_status' ? { auto_received_by_system: false } : {}),
+      },
     }))
 
     try {
-      const current = rowState[key] ?? { receiving_status: '', return_condition: '' }
-      const payload = {
+      const current = rowState[key] ?? {
+        receiving_status: '',
+        return_condition: '',
+        auto_received_by_system: false,
+      }
+      const payload: Record<string, unknown> = {
         order_id: String(order.order_number),
         sku: order.sku,
         vendor_id: order.vendor_id ?? null,
         receiving_status: field === 'receiving_status' ? value || null : current.receiving_status || null,
         return_condition: field === 'return_condition' ? value || null : current.return_condition || null,
+      }
+      if (field === 'receiving_status') {
+        payload.auto_received_by_system = false
       }
 
       const res = await fetch('/api/returns', {
@@ -290,22 +324,9 @@ export default function ReturnsPage() {
 
   const tabCounts = tabStats
 
-  // Filter orders by active tab
-  const tabFiltered = useMemo(() => {
-    if (activeTab === 'pending') return orders.filter((o) => !rowState[rowKey(o)]?.receiving_status)
-    if (activeTab === 'not_received') return orders.filter((o) => rowState[rowKey(o)]?.receiving_status === 'No')
-    if (activeTab === 'received') return orders.filter((o) => rowState[rowKey(o)]?.receiving_status === 'Yes')
-    return orders
-  }, [activeTab, orders, rowState])
-
-  // Client-side pagination over tabFiltered
-  const ITEMS = 25
-  const totalTabPages = Math.max(1, Math.ceil(tabFiltered.length / ITEMS))
-  const paginatedRows = tabFiltered.slice((currentPage - 1) * ITEMS, currentPage * ITEMS)
-
   const switchTab = (tab: ReturnTab) => {
     setActiveTab(tab)
-    setCurrentPage(1)
+    setPage(1)
   }
 
   if (authLoading || (isFetching && orders.length === 0)) {
@@ -344,7 +365,7 @@ export default function ReturnsPage() {
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Return Management</h2>
               <p className="text-gray-600 text-sm">
-                {totalFiltered} returned order{totalFiltered !== 1 ? 's' : ''} · {ITEMS} per page
+                {totalFiltered} returned order{totalFiltered !== 1 ? 's' : ''} · {PAGE_SIZE} per page
               </p>
             </div>
             <button
@@ -431,7 +452,7 @@ export default function ReturnsPage() {
               </div>
             )}
 
-            {tabFiltered.length === 0 && !isFetching ? (
+            {orders.length === 0 && !isFetching ? (
               <div className="p-12 text-center">
                 <RotateCcw className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">No returns found</h3>
@@ -463,9 +484,15 @@ export default function ReturnsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {paginatedRows.map((order) => {
+                    {orders.map((order) => {
                       const key = rowKey(order)
-                      const rs = rowState[key] ?? { receiving_status: '', return_condition: '', saving: false, saved: false }
+                      const rs = rowState[key] ?? {
+                        receiving_status: '',
+                        return_condition: '',
+                        auto_received_by_system: false,
+                        saving: false,
+                        saved: false,
+                      }
 
                       return (
                         <tr key={key} className="hover:bg-gray-50 transition-colors">
@@ -497,9 +524,19 @@ export default function ReturnsPage() {
                           {/* Receiving Status */}
                           <td className="px-4 py-3">
                             {rs.receiving_status === 'Yes' ? (
-                              <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                                Yes — Received
-                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                  Yes — Received
+                                </span>
+                                {rs.auto_received_by_system && (
+                                  <span
+                                    className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
+                                    title="Marked received by system after 48 hours with no action"
+                                  >
+                                    Auto (48h)
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <div className="flex items-center gap-2">
                                 <select
@@ -547,10 +584,10 @@ export default function ReturnsPage() {
                 </table>
 
                 <PaginationLight
-                  currentPage={currentPage}
-                  totalPages={totalTabPages}
-                  totalItems={tabFiltered.length}
-                  onPageChange={setCurrentPage}
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalFiltered}
+                  onPageChange={setPage}
                 />
               </div>
             )}

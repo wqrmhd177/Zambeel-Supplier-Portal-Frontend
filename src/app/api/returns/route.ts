@@ -9,9 +9,8 @@ const METABASE_ORDERS_URL =
 const CACHE_TTL_MS = 5 * 60 * 1000
 const PAGE_LIMIT = 50
 
-// ---------------------------------------------------------------------------
-// Supabase — lazy singleton (evaluated per serverless instance, not at build)
-// ---------------------------------------------------------------------------
+export type ReturnTab = 'all' | 'pending' | 'not_received' | 'received'
+
 let _supabase: ReturnType<typeof createClient> | null = null
 
 function getSupabase() {
@@ -26,9 +25,6 @@ function getSupabase() {
   return _supabase
 }
 
-// ---------------------------------------------------------------------------
-// Metabase cache (shared concept — separate instance from orders route cache)
-// ---------------------------------------------------------------------------
 let _cache: { data: MetabaseOrder[]; expires: number } | null = null
 
 async function getAllOrders(forceRefresh = false): Promise<MetabaseOrder[]> {
@@ -50,17 +46,78 @@ export interface ReturnManagementRecord {
   receiving_status: string | null
   return_condition: string | null
   updated_at: string | null
+  auto_received_by_system?: boolean | null
 }
 
 export interface ReturnOrder extends MetabaseOrder {
   receiving_status: string | null
   return_condition: string | null
+  auto_received_by_system?: boolean
 }
 
-// ---------------------------------------------------------------------------
-// GET /api/returns
-// Query params: page, limit, search, vendorId, refresh
-// ---------------------------------------------------------------------------
+function receivingStatusForKey(
+  supabaseMap: Record<string, ReturnManagementRecord>,
+  o: MetabaseOrder
+): string {
+  return supabaseMap[`${o.order_number}__${o.sku}`]?.receiving_status ?? ''
+}
+
+function matchesReturnTab(tab: ReturnTab, receivingStatus: string): boolean {
+  if (tab === 'pending') return !receivingStatus
+  if (tab === 'not_received') return receivingStatus === 'No'
+  if (tab === 'received') return receivingStatus === 'Yes'
+  return true
+}
+
+async function fetchReturnManagementMap(
+  orderIds: string[]
+): Promise<Record<string, ReturnManagementRecord>> {
+  const supabaseMap: Record<string, ReturnManagementRecord> = {}
+  if (orderIds.length === 0) return supabaseMap
+
+  const selectWithFlag =
+    'order_id, sku, vendor_id, receiving_status, return_condition, updated_at, auto_received_by_system'
+  const selectBase = 'order_id, sku, vendor_id, receiving_status, return_condition, updated_at'
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let { data: rmData, error } = await (getSupabase() as any)
+    .from('return_management')
+    .select(selectWithFlag)
+    .in('order_id', orderIds)
+
+  if (error) {
+    const msg = error?.message?.toLowerCase?.() || ''
+    if (msg.includes('auto_received_by_system') && (msg.includes('column') || msg.includes('does not exist'))) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fallback = await (getSupabase() as any)
+        .from('return_management')
+        .select(selectBase)
+        .in('order_id', orderIds)
+      rmData = fallback.data
+    } else {
+      console.error('Error fetching return_management:', error)
+    }
+  }
+
+  if (rmData) {
+    for (const rec of rmData as ReturnManagementRecord[]) {
+      supabaseMap[`${rec.order_id}__${rec.sku}`] = rec
+    }
+  }
+  return supabaseMap
+}
+
+function mergeRow(o: MetabaseOrder, supabaseMap: Record<string, ReturnManagementRecord>): ReturnOrder {
+  const key = `${o.order_number}__${o.sku}`
+  const rm = supabaseMap[key]
+  return {
+    ...o,
+    receiving_status: rm?.receiving_status ?? null,
+    return_condition: rm?.return_condition ?? null,
+    auto_received_by_system: Boolean(rm?.auto_received_by_system),
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams
@@ -71,13 +128,14 @@ export async function GET(request: NextRequest) {
     const dateFrom = sp.get('dateFrom') || undefined
     const dateTo = sp.get('dateTo') || undefined
     const forceRefresh = sp.get('refresh') === '1'
+    const tab = (sp.get('tab') || 'all') as ReturnTab
+    const validTabs: ReturnTab[] = ['all', 'pending', 'not_received', 'received']
+    const activeTab: ReturnTab = validTabs.includes(tab) ? tab : 'all'
 
     let all = await getAllOrders(forceRefresh)
 
-    // Only return orders
     all = all.filter((o) => o.status?.toLowerCase().includes('return'))
 
-    // Scope to vendor when provided
     if (vendorId) {
       const vid = Number(vendorId)
       if (!isNaN(vid)) {
@@ -100,73 +158,58 @@ export async function GET(request: NextRequest) {
       return db - da
     })
 
-    const total = all.length
-    const totalPages = Math.max(1, Math.ceil(total / limit))
-    const safePage = Math.min(page, totalPages)
-    const start = (safePage - 1) * limit
-    const pageRows = all.slice(start, start + limit)
-
-    // Fetch Supabase return_management for all filtered rows (stats) + page merge
     const allOrderIds = Array.from(new Set(all.map((o) => String(o.order_number))))
-    let supabaseMap: Record<string, ReturnManagementRecord> = {}
-
-    if (allOrderIds.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: rmData } = await (getSupabase() as any)
-        .from('return_management')
-        .select('order_id, sku, vendor_id, receiving_status, return_condition, updated_at')
-        .in('order_id', allOrderIds)
-
-      if (rmData) {
-        for (const rec of rmData as ReturnManagementRecord[]) {
-          supabaseMap[`${rec.order_id}__${rec.sku}`] = rec
-        }
-      }
-    }
-
-    const mergeRow = (o: MetabaseOrder): ReturnOrder => {
-      const key = `${o.order_number}__${o.sku}`
-      const rm = supabaseMap[key]
-      return {
-        ...o,
-        receiving_status: rm?.receiving_status ?? null,
-        return_condition: rm?.return_condition ?? null,
-      }
-    }
+    const supabaseMap = await fetchReturnManagementMap(allOrderIds)
 
     let tabStats = { all: 0, pending: 0, notReceived: 0, received: 0 }
     for (const o of all) {
-      const rs = supabaseMap[`${o.order_number}__${o.sku}`]?.receiving_status ?? ''
+      const rs = receivingStatusForKey(supabaseMap, o)
       tabStats.all++
       if (!rs) tabStats.pending++
       else if (rs === 'No') tabStats.notReceived++
       else if (rs === 'Yes') tabStats.received++
     }
 
-    const orders: ReturnOrder[] = pageRows.map(mergeRow)
+    const tabFiltered =
+      activeTab === 'all'
+        ? all
+        : all.filter((o) => matchesReturnTab(activeTab, receivingStatusForKey(supabaseMap, o)))
 
-    return NextResponse.json({ orders, total, page: safePage, limit, totalPages, tabStats })
+    const total = tabFiltered.length
+    const totalPages = Math.max(1, Math.ceil(total / limit))
+    const safePage = Math.min(page, totalPages)
+    const start = (safePage - 1) * limit
+    const pageRows = tabFiltered.slice(start, start + limit)
+
+    const orders: ReturnOrder[] = pageRows.map((o) => mergeRow(o, supabaseMap))
+
+    return NextResponse.json({
+      orders,
+      total,
+      page: safePage,
+      limit,
+      totalPages,
+      tabStats,
+      tab: activeTab,
+    })
   } catch (error) {
     console.error('Error in returns GET:', error)
     return NextResponse.json({ error: 'Unable to load returns.' }, { status: 500 })
   }
 }
 
-// ---------------------------------------------------------------------------
-// PATCH /api/returns
-// Body: { order_id, sku, vendor_id, receiving_status?, return_condition? }
-// ---------------------------------------------------------------------------
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       order_id: string
       sku: string
       vendor_id?: number | null
       receiving_status?: string | null
       return_condition?: string | null
+      auto_received_by_system?: boolean
     }
 
-    const { order_id, sku, vendor_id, receiving_status, return_condition } = body
+    const { order_id, sku, vendor_id, receiving_status, return_condition, auto_received_by_system } = body
 
     if (!order_id || !sku) {
       return NextResponse.json({ error: 'order_id and sku are required.' }, { status: 400 })
@@ -181,10 +224,28 @@ export async function PATCH(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }
 
+    if (auto_received_by_system !== undefined) {
+      upsertPayload.auto_received_by_system = auto_received_by_system
+    } else if (receiving_status === 'Yes') {
+      upsertPayload.auto_received_by_system = false
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (getSupabase() as any)
+    let { error } = await (getSupabase() as any)
       .from('return_management')
       .upsert(upsertPayload, { onConflict: 'order_id,sku' })
+
+    if (error) {
+      const msg = error?.message?.toLowerCase?.() || ''
+      if (msg.includes('auto_received_by_system') && (msg.includes('column') || msg.includes('does not exist'))) {
+        const { auto_received_by_system: _drop, ...basePayload } = upsertPayload
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const retry = await (getSupabase() as any)
+          .from('return_management')
+          .upsert(basePayload, { onConflict: 'order_id,sku' })
+        error = retry.error
+      }
+    }
 
     if (error) {
       console.error('Supabase upsert error:', error)
