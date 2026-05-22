@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { MetabaseOrder } from '@/app/api/orders/route'
-import { isDateInRange, parseSearchTerms, rowMatchesSearch } from '@/lib/filterUtils'
+import {
+  isDateInRange,
+  isReturnedOrderStatus,
+  parseSearchTerms,
+  rowMatchesSearch,
+} from '@/lib/filterUtils'
 
 const METABASE_ORDERS_URL =
   'https://zambeel.metabaseapp.com/public/question/deab3d2c-9fbc-4d1e-8400-e93d1513582e.json'
@@ -134,7 +139,8 @@ export async function GET(request: NextRequest) {
 
     let all = await getAllOrders(forceRefresh)
 
-    all = all.filter((o) => o.status?.toLowerCase().includes('return'))
+    // Match Orders "Returned" bucket — exclude "Return in Transit" and other non-returned statuses
+    all = all.filter((o) => isReturnedOrderStatus(o.status ?? ''))
 
     if (vendorId) {
       const vid = Number(vendorId)

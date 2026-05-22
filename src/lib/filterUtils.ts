@@ -106,10 +106,16 @@ export function matchesOrderStatusBucket(status: string, bucket: string): boolea
     case 'returning':
       return s.includes('return in transit')
     case 'returned':
-      return s.includes('return') && !s.includes('return in transit')
+      return isReturnedOrderStatus(status)
     default:
       return s.includes(bucket.toLowerCase())
   }
+}
+
+/** Fully returned orders only (excludes "Return in Transit" / returning). Matches Orders "Returned" bucket. */
+export function isReturnedOrderStatus(status: string): boolean {
+  const s = status?.toLowerCase().trim() || ''
+  return s.includes('return') && !s.includes('return in transit')
 }
 
 /** Multi-term search against order/return row fields. */
