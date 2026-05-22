@@ -440,13 +440,6 @@ export default function ProductsPage() {
       calculateStats(groupedProducts)
       
       await fetchPendingChanges()
-
-      // #region agent log
-      if (userRole === 'supplier' && groupedProducts.length > 0) {
-        const p = groupedProducts[0]
-        fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'products/page.tsx:fetchProducts:supplierSample',message:'supplier product load sample',data:{title:p.product_title,status:p.status,variants:(p.variants||[]).slice(0,3).map(v=>({id:v.variant_id,price:v.variant_selling_price,active:v.active}))},timestamp:Date.now(),hypothesisId:'H2-H5',runId:'post-fix'})}).catch(()=>{});
-      }
-      // #endregion
     } catch (err) {
       console.error('Unexpected error:', err)
       setProducts([])

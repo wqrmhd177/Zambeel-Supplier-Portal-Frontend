@@ -467,15 +467,8 @@ export async function approvePriceChange(
     
     if (fetchError || !priceHistory) {
       console.error('Error fetching price history entry:', fetchError)
-      // #region agent log
-      fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'priceHistoryHelpers.ts:approvePriceChange:fetchFail',message:'price history fetch failed',data:{priceHistoryId,fetchError:fetchError?.message},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
       return false
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'priceHistoryHelpers.ts:approvePriceChange:entry',message:'applying price approval',data:{priceHistoryId,productId:priceHistory.product_id,variantId:priceHistory.variant_id,updatedPrice:priceHistory.updated_price},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
 
     const updatedAt = new Date().toISOString()
     const pricePayload = {
@@ -514,10 +507,6 @@ export async function approvePriceChange(
       .select('variant_id, price')
       .eq('variant_id', priceHistory.variant_id)
       .maybeSingle()
-
-    // #region agent log
-    fetch('http://127.0.0.1:7744/ingest/cf8ad616-2757-428a-b0c7-1ddd68a3b548',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a8deff'},body:JSON.stringify({sessionId:'a8deff',location:'priceHistoryHelpers.ts:approvePriceChange:updates',message:'price table update results',data:{pvRowCount:pvRows?.length??0,pvUpdateError:pvUpdateError?.message??null,legacyUpdateError:updateProductError?.message??null,readBackPrice:readBack?.price??null,expectedPrice:priceHistory.updated_price},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
-    // #endregion
 
     const pvApplied = !pvUpdateError && (pvRows?.length ?? 0) > 0
     const legacyApplied = !updateProductError
