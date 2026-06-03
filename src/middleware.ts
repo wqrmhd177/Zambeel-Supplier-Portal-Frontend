@@ -3,9 +3,6 @@ import type { NextRequest } from 'next/server'
 
 const SESSION_COOKIE = 'supplier_session'
 
-// UUID v4 pattern — the cookie value is now the userId set by the server auth routes
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 const protectedPaths = [
   '/dashboard',
   '/onboarding',
@@ -25,10 +22,9 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 function isValidSession(value: string | undefined): boolean {
-  if (!value) return false
-  // Accept UUID format (new secure sessions) or any non-empty non-"0" string
-  // to stay backward-compatible during the cookie migration window
-  return UUID_RE.test(value) || (value.length > 4 && value !== '0' && value !== '1')
+  if (!value || value.trim() === '') return false
+  // Accept UUID format, numeric IDs (e.g. "41"), or any non-empty truthy value
+  return value !== '0' && value !== 'undefined' && value !== 'null'
 }
 
 export function middleware(request: NextRequest) {
