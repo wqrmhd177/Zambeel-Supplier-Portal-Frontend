@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { createClient } from '@supabase/supabase-js'
 
 function getAdminSupabase() {
@@ -33,13 +32,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'An account with this email already exists. Please sign in instead.' }, { status: 409 })
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10)
-
+    // Store password as plaintext so admin can look it up and share if needed
     const { error: insertError } = await supabase
       .from('users')
       .insert([{
         email: emailNormalized,
-        password: hashedPassword,
+        password,
         full_name: String(fullName).trim(),
         phone_number: phone ? String(phone).trim() : null,
         country,

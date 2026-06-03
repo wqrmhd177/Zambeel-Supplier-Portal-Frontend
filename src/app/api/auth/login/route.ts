@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { createClient } from '@supabase/supabase-js'
 
 const SESSION_COOKIE = 'supplier_session'
-// 12 hours — matches IDLE_TIMEOUT_MS in authCookie.ts
 const COOKIE_MAX_AGE = 12 * 60 * 60
 
 function getAdminSupabase() {
@@ -23,7 +21,7 @@ export async function POST(request: NextRequest) {
     const emailNormalized = String(email).trim().toLowerCase()
     const supabase = getAdminSupabase()
 
-    // Fetch all users with this email (handles duplicates, same logic as before)
+    // Fetch all users with this email (handles duplicate rows)
     const { data: matchingUsers, error: fetchError } = await supabase
       .from('users')
       .select('*')
@@ -39,41 +37,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account not found. Please sign up first to create an account.' }, { status: 401 })
     }
 
-    // Filter to non-archived users, find best password match
     const candidates = users.filter((u) => u.archived !== true)
     const pool = candidates.length ? candidates : users
 
-    // Try to find a user whose password matches (bcrypt or legacy plaintext)
-    let matchedUser: Record<string, unknown> | null = null
-    for (const u of pool) {
-      const stored = String(u.password || '')
-      if (!stored) continue
+    // Find matching user by plaintext password comparison
+    const passwordMatchedPool = pool.filter(
+      (u) => typeof u.password === 'string' && u.password === password
+    )
 
-      // Try bcrypt compare first (hashed passwords)
-      let matches = false
-      if (stored.startsWith('$2')) {
-        try {
-          matches = await bcrypt.compare(password, stored)
-        } catch {
-          matches = false
-        }
-      } else {
-        // Legacy plaintext comparison
-        matches = stored === password
-      }
-
-      if (matches) {
-        // Prefer approved/onboarded suppliers over non-approved
-        if (!matchedUser) {
-          matchedUser = u
-        } else {
-          // Keep highest priority user (same logic as client-side)
-          const aApproved = String(matchedUser.account_approval || '').toLowerCase().includes('approv')
-          const bApproved = String(u.account_approval || '').toLowerCase().includes('approv')
-          if (!aApproved && bApproved) matchedUser = u
-        }
-      }
+    // Pick best candidate (prefer approved/onboarded suppliers)
+    const pickBest = (arr: Record<string, unknown>[]) => {
+      return arr.slice().sort((a, b) => {
+        const aApproved = String(a.account_approval || '').toLowerCase().includes('approv') ? 1 : 0
+        const bApproved = String(b.account_approval || '').toLowerCase().includes('approv') ? 1 : 0
+        if (bApproved !== aApproved) return bApproved - aApproved
+        const aTs = Math.max(Date.parse(String(a.updated_at || '')) || 0, Date.parse(String(a.created_at || '')) || 0)
+        const bTs = Math.max(Date.parse(String(b.updated_at || '')) || 0, Date.parse(String(b.created_at || '')) || 0)
+        return bTs - aTs
+      })[0]
     }
+
+    const matchedUser = pickBest(passwordMatchedPool.length > 0 ? passwordMatchedPool : pool)
 
     if (!matchedUser) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
@@ -83,23 +67,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account not found. Please sign up first to create an account.' }, { status: 401 })
     }
 
-    // Migrate legacy plaintext password to bcrypt hash in background
-    const storedPw = String(matchedUser.password || '')
-    if (!storedPw.startsWith('$2')) {
-      bcrypt.hash(password, 10).then(async (hash) => {
-        await supabase
-          .from('users')
-          .update({ password: hash })
-          .eq('id', matchedUser!.id)
-      }).catch(() => { /* non-blocking migration */ })
+    // Verify password (plaintext)
+    if (!matchedUser.password || matchedUser.password !== password) {
+      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
     }
 
-    // Strip password before returning
+    // Strip password before returning to client
     const { password: _pw, ...safeUser } = matchedUser as Record<string, unknown> & { password: string }
 
     const response = NextResponse.json({ user: safeUser }, { status: 200 })
-
-    // Set HttpOnly, Secure, SameSite=Strict cookie bound to userId
     response.cookies.set(SESSION_COOKIE, String(matchedUser.id), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -107,7 +83,6 @@ export async function POST(request: NextRequest) {
       maxAge: COOKIE_MAX_AGE,
       path: '/',
     })
-
     return response
   } catch (err) {
     console.error('[auth/login] Unexpected error:', err)

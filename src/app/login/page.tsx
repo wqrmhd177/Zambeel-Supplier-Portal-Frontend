@@ -436,7 +436,7 @@ function LoginPageContent() {
                   <input type="checkbox" className="w-4 h-4 md:w-[18px] md:h-[18px] border-2 border-gray-300 rounded cursor-pointer accent-purple-600 focus:ring-2 focus:ring-purple-500/30" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="text-xs md:text-sm text-violet-600 font-semibold hover:text-indigo-700 transition-colors py-2 px-1 -m-1 rounded hover:bg-violet-50">
+                <a href="/forgot-password" className="text-xs md:text-sm text-violet-600 font-semibold hover:text-indigo-700 transition-colors py-2 px-1 -m-1 rounded hover:bg-violet-50">
                   Forgot password?
                 </a>
               </div>

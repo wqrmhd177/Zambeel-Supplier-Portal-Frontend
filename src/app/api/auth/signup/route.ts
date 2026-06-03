@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { createClient } from '@supabase/supabase-js'
 
 const SESSION_COOKIE = 'supplier_session'
@@ -26,7 +25,6 @@ export async function POST(request: NextRequest) {
     const emailNormalized = String(email).trim().toLowerCase()
     const supabase = getAdminSupabase()
 
-    // Check if email already exists
     const { data: existingUser } = await supabase
       .from('users')
       .select('id, email, archived, user_id, role, onboarded')
@@ -37,15 +35,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email already exists. Please sign in instead.' }, { status: 409 })
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10)
-
     if (existingUser && existingUser.archived === true) {
-      // Restore archived account with new hashed password
+      // Restore archived account
       const { data: restoredUser, error: restoreError } = await supabase
         .from('users')
         .update({
-          password: hashedPassword,
+          password,
           archived: false,
           onboarded: false,
           updated_at: new Date().toISOString(),
@@ -70,12 +65,12 @@ export async function POST(request: NextRequest) {
       return response
     }
 
-    // Create new account with hashed password
+    // Create new account — password stored as plaintext so admin can look it up
     const { data, error: insertError } = await supabase
       .from('users')
       .insert([{
         email: emailNormalized,
-        password: hashedPassword,
+        password,
         created_at: new Date().toISOString(),
         account_approval: 'Wait',
       }])
