@@ -158,6 +158,10 @@ export default function ProductsPage() {
     Map<number, VariantStatusChangeRequest>
   >(new Map())
 
+  // Delete product
+  const [deleteConfirmProductId, setDeleteConfirmProductId] = useState<number | null>(null)
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false)
+
   // Currency by stock location (current user when supplier, per-owner when purchaser/admin)
   const [currentUserCurrency, setCurrentUserCurrency] = useState<string>('USD')
   const [currencyByOwnerId, setCurrencyByOwnerId] = useState<Map<string, string>>(new Map())
@@ -441,9 +445,11 @@ export default function ProductsPage() {
       
       await fetchPendingChanges()
     } catch (err) {
-      console.error('Unexpected error:', err)
+      console.error('Unexpected error loading products:', err)
       setProducts([])
       setAllProducts([])
+      const msg = err instanceof Error ? err.message : 'Failed to load products. Please refresh the page.'
+      alert(msg)
     } finally {
       setIsLoading(false)
     }
@@ -564,6 +570,24 @@ export default function ProductsPage() {
     } catch (err) {
       console.error('Unexpected error updating status:', err)
       alert('An unexpected error occurred. Please try again.')
+    }
+  }
+
+  const handleDeleteProduct = async (productId: number) => {
+    setIsDeletingProduct(true)
+    try {
+      // Delete variants first, then the product
+      await supabase.from('product_variants').delete().eq('product_id', productId)
+      const { error } = await supabase.from('products').delete().eq('product_id', productId)
+      if (error) throw error
+      setProducts((prev) => prev.filter((p) => p.product_id !== productId))
+      setAllProducts((prev) => prev.filter((p) => p.product_id !== productId))
+    } catch (err) {
+      console.error('Error deleting product:', err)
+      alert('Failed to delete product. Please try again.')
+    } finally {
+      setIsDeletingProduct(false)
+      setDeleteConfirmProductId(null)
     }
   }
 
@@ -1089,6 +1113,7 @@ export default function ProductsPage() {
                                     <Edit className="w-4 h-4" />
                                   </button>
                                   <button
+                                    onClick={() => setDeleteConfirmProductId(product.product_id)}
                                     className="p-1.5 sm:p-2 theme-muted hover:text-red-300 hover:bg-white/10 rounded-lg transition-all"
                                     title="Delete"
                                   >
@@ -1211,6 +1236,34 @@ export default function ProductsPage() {
           </div>
         </main>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmProductId !== null && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Delete Product</h3>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete this product and all its variants? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteConfirmProductId(null)}
+                disabled={isDeletingProduct}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteProduct(deleteConfirmProductId)}
+                disabled={isDeletingProduct}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+              >
+                {isDeletingProduct ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* View Product Modal */}
       {isViewModalOpen && selectedProduct && (

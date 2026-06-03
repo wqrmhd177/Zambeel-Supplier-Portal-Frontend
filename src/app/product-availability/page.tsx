@@ -149,7 +149,8 @@ export default function ProductAvailabilityPage() {
   const isManager = userRole === 'manager'
   const canCreate = isAgent || isAdmin
   const isPurchaser = userRole === 'purchaser'
-  const canAccess = Boolean(userRole)
+  // Only specific roles can access product availability; suppliers are excluded
+  const canAccess = isAgent || isAdmin || isPurchaser || isManager
 
   const displayedRequests = useMemo(() => {
     if (!searchQuery.trim()) return requests

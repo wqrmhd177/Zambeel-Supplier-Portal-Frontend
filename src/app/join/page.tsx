@@ -1,12 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 
 const COUNTRIES = ['UAE', 'KSA', 'PAK'] as const
 const TEAMS = ['Growth', 'Operations', 'CS', 'Finance', 'Listing', 'Strategy'] as const
 
+// Invite code protects this page from public registrations.
+// Set NEXT_PUBLIC_JOIN_INVITE_CODE in your environment variables.
+const INVITE_CODE = process.env.NEXT_PUBLIC_JOIN_INVITE_CODE || 'ZBL-TEAM-2025'
+
 export default function JoinPage() {
+  const [inviteInput, setInviteInput] = useState('')
+  const [inviteVerified, setInviteVerified] = useState(false)
+  const [inviteError, setInviteError] = useState('')
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -36,48 +42,29 @@ export default function JoinPage() {
 
     if (!form.fullName.trim()) { setError('Full name is required.'); return }
     if (!form.email.trim()) { setError('Email is required.'); return }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return }
     if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
     if (!form.country) { setError('Please select your country.'); return }
     if (!form.team) { setError('Please select your team.'); return }
 
     setIsLoading(true)
     try {
-      const emailNormalized = form.email.trim().toLowerCase()
+      const res = await fetch('/api/auth/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          fullName: form.fullName.trim(),
+          phone: form.phone.trim() || null,
+          country: form.country,
+          team: form.team,
+        }),
+      })
+      const result = await res.json()
 
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id, archived')
-        .ilike('email', emailNormalized)
-        .maybeSingle()
-
-      if (existing && existing.archived !== true) {
-        setError('An account with this email already exists. Please sign in instead.')
-        setIsLoading(false)
-        return
-      }
-
-      // Role is left as default ('supplier') so the admin can set the correct
-      // role from the database or admin panel before the user logs in.
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            email: emailNormalized,
-            password: form.password,
-            full_name: form.fullName.trim(),
-            phone_number: form.phone.trim() || null,
-            country: form.country,
-            team: form.team,
-            account_approval: 'Wait',
-            onboarded: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-
-      if (insertError) {
-        setError(insertError.message || 'Failed to create account. Please try again.')
+      if (!res.ok) {
+        setError(result.error || 'Failed to create account. Please try again.')
         setIsLoading(false)
         return
       }
@@ -125,6 +112,46 @@ export default function JoinPage() {
                 Go to Sign In
               </a>
             </div>
+          ) : !inviteVerified ? (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h1 className="text-2xl font-bold text-gray-900">Team Registration</h1>
+                <p className="text-sm text-gray-500 mt-1">Internal Zambeel staff only</p>
+              </div>
+              <p className="text-sm text-gray-600 text-center">
+                Please enter your invite code to continue.
+              </p>
+              {inviteError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {inviteError}
+                </div>
+              )}
+              <input
+                type="text"
+                value={inviteInput}
+                onChange={(e) => setInviteInput(e.target.value)}
+                placeholder="Invite code"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (inviteInput.trim() === INVITE_CODE) {
+                    setInviteVerified(true)
+                    setInviteError('')
+                  } else {
+                    setInviteError('Invalid invite code. Please contact your manager.')
+                  }
+                }}
+                className="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+              >
+                Continue
+              </button>
+              <p className="text-xs text-center text-gray-400">
+                Not a Zambeel team member?{' '}
+                <a href="/login" className="text-violet-600 hover:underline">Sign in as supplier</a>
+              </p>
+            </div>
           ) : (
             <>
               <div className="text-center">
@@ -168,7 +195,7 @@ export default function JoinPage() {
                       type="password"
                       value={form.password}
                       onChange={set('password')}
-                      placeholder="Min. 6 characters"
+                      placeholder="Min. 8 characters"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
                     />
                   </div>

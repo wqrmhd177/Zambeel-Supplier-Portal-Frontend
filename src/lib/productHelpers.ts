@@ -94,7 +94,7 @@ export async function fetchProductsWithVariants(
 
     if (productsError) {
       console.error('Error fetching products:', productsError)
-      return []
+      throw new Error(productsError.message || 'Failed to load products. Please refresh the page.')
     }
 
     if (!productsData || productsData.length === 0) {
@@ -158,7 +158,7 @@ export async function fetchProductsWithVariants(
     return grouped
   } catch (err) {
     console.error('Unexpected error fetching products with variants:', err)
-    return []
+    throw err
   }
 }
 

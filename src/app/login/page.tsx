@@ -3,8 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { setSessionCookie, updateLastActivity } from '@/lib/authCookie'
+import { updateLastActivity } from '@/lib/authCookie'
 
 function LoginPageContent() {
   const router = useRouter()
@@ -64,208 +63,79 @@ function LoginPageContent() {
       const emailNormalized = email.trim().toLowerCase()
       if (isSignUp) {
         // Sign up flow
-        // Validate passwords match
         if (password !== confirmPassword) {
           setError('Passwords do not match')
           setIsLoading(false)
           return
         }
 
-        if (password.length < 6) {
-          setError('Password must be at least 6 characters')
+        if (password.length < 8) {
+          setError('Password must be at least 8 characters')
           setIsLoading(false)
           return
         }
 
-        // Check if email already exists
-        const { data: existingUser, error: checkError } = await supabase
-          .from('users')
-          .select('id, email, archived, user_id')
-          .ilike('email', emailNormalized)
-          .maybeSingle()
+        // Call server-side signup route (hashes password, sets HttpOnly cookie)
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailNormalized, password }),
+        })
+        const result = await res.json()
 
-        if (existingUser) {
-          // If account exists and is archived, restore it
-          if (existingUser.archived === true) {
-            // Restore the archived account and reset onboarding
-            const { data: restoredUser, error: restoreError } = await supabase
-              .from('users')
-              .update({
-                password: password, // Update password
-                archived: false, // Restore account
-                onboarded: false, // Reset onboarding so user goes through it again
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existingUser.id)
-              .select()
-              .single()
-
-            if (restoreError) {
-              setError(restoreError.message || 'Failed to restore account. Please try again.')
-              setIsLoading(false)
-              return
-            }
-
-            if (restoredUser) {
-              // Store user ID in localStorage
-              localStorage.setItem('userId', restoredUser.id)
-              localStorage.setItem('userFriendlyId', restoredUser.user_id || '')
-              localStorage.setItem('userEmail', emailNormalized)
-              localStorage.setItem('isLoggedIn', 'true')
-              localStorage.setItem('userRole', String(restoredUser.role || 'supplier').trim().toLowerCase())
-              setSessionCookie()
-              updateLastActivity() // Initialize activity tracking
-              localStorage.removeItem('isOnboarded') // Clear onboarding flag
-              localStorage.removeItem('supplierInfo') // Clear old supplier info
-              
-              // Restored accounts always go to onboarding (onboarded was reset to false)
-              // Account approval will be checked after they complete onboarding
-              router.push('/onboarding')
-              setIsLoading(false)
-              return
-            }
-          } else {
-            // Account exists and is active
-            setError('Email already exists. Please sign in instead.')
-            setIsLoading(false)
-            return
-          }
-        }
-
-        // If email doesn't exist or check returned error (user not found), create new account
-        if (checkError) {
-          // Some other error occurred
-          setError(checkError.message || 'An error occurred. Please try again.')
+        if (!res.ok) {
+          setError(result.error || 'Failed to create account. Please try again.')
           setIsLoading(false)
           return
         }
 
-        // Create new account
-        const { data, error: insertError } = await supabase
-          .from('users')
-          .insert([
-            {
-              email: emailNormalized,
-              password: password, // Note: In production, hash passwords before storing
-              created_at: new Date().toISOString(),
-              account_approval: 'Wait',
-            }
-          ])
-          .select()
-          .single()
-
-        if (insertError) {
-          setError(insertError.message || 'Failed to create account. Please try again.')
-          setIsLoading(false)
-          return
-        }
-
+        const data = result.user
         if (data) {
-          // Store user ID in localStorage
           localStorage.setItem('userId', data.id)
           localStorage.setItem('userFriendlyId', data.user_id || '')
           localStorage.setItem('userEmail', emailNormalized)
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', String(data.role || 'supplier').trim().toLowerCase())
-          setSessionCookie()
-          updateLastActivity() // Initialize activity tracking
-          
-          // Check user role and redirect accordingly
-          const userRole = String(data.role || 'supplier').trim().toLowerCase()
-          if (userRole === 'admin' || userRole === 'purchaser') {
-            router.push('/dashboard')
-          } else if (userRole === 'agent') {
-            router.push('/product-availability')
-          } else {
+          updateLastActivity()
+
+          if (result.restored) {
+            localStorage.removeItem('isOnboarded')
+            localStorage.removeItem('supplierInfo')
             router.push('/onboarding')
+          } else {
+            const userRole = String(data.role || 'supplier').trim().toLowerCase()
+            if (userRole === 'admin' || userRole === 'purchaser') {
+              router.push('/dashboard')
+            } else if (userRole === 'agent') {
+              router.push('/product-availability')
+            } else {
+              router.push('/onboarding')
+            }
           }
         } else {
           setError('Failed to create account. Please try again.')
           setIsLoading(false)
         }
       } else {
-        // Login flow
-        // First, check if user exists in Supabase
-        const { data: matchingUsers, error: fetchError } = await supabase
-          .from('users')
-          .select('*')
-          .ilike('email', emailNormalized)
-          .limit(50)
+        // Login flow — call server-side route (verifies bcrypt or legacy plaintext, sets HttpOnly cookie)
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailNormalized, password }),
+        })
+        const result = await res.json()
 
-        if (fetchError) {
-          setError(fetchError.message || 'An error occurred. Please try again.')
+        if (!res.ok) {
+          setError(result.error || 'Invalid email or password.')
           setIsLoading(false)
           return
         }
 
-        const users = (matchingUsers as any[] | null)?.filter(Boolean) || []
-        if (users.length === 0) {
-          setError('Account not found. Please sign up first to create an account.')
-          setIsLoading(false)
-          return
-        }
-
-        // If there are duplicates with same email, prefer the best candidate:
-        // - not archived
-        // - supplier/admin/agent (any role), but for suppliers prefer onboarded + approved
-        // - newest updated/created as last tie-breaker
-        const candidates = users.filter(u => u.archived !== true)
-        const pickBest = (arr: any[]) => {
-          const getPriority = (u: any) => {
-            const role = String(u.role || 'supplier').trim().toLowerCase()
-            const onboarded = u.onboarded === true || String(u.onboarded || '').trim().toLowerCase() === 'true'
-            const profileSubmitted = hasSubmittedOnboarding(u)
-            const { isApproved } = getApprovalFlags(u.account_approval)
-            const updatedOrCreated = Math.max(Date.parse(u.updated_at || '') || 0, Date.parse(u.created_at || '') || 0)
-
-            // IMPORTANT:
-            // Keep status priority separate from timestamp so "newest" does not override
-            // approved/onboarded supplier records.
-            return {
-              isSupplier: role === 'supplier' ? 1 : 0,
-              isApproved: isApproved ? 1 : 0,
-              isOnboarded: onboarded ? 1 : 0,
-              isProfileSubmitted: profileSubmitted ? 1 : 0,
-              updatedOrCreated,
-            }
-          }
-
-          return arr.slice().sort((a, b) => {
-            const pa = getPriority(a)
-            const pb = getPriority(b)
-            if (pb.isSupplier !== pa.isSupplier) return pb.isSupplier - pa.isSupplier
-            if (pb.isApproved !== pa.isApproved) return pb.isApproved - pa.isApproved
-            if (pb.isOnboarded !== pa.isOnboarded) return pb.isOnboarded - pa.isOnboarded
-            if (pb.isProfileSubmitted !== pa.isProfileSubmitted) return pb.isProfileSubmitted - pa.isProfileSubmitted
-            return pb.updatedOrCreated - pa.updatedOrCreated
-          })[0]
-        }
-        const pool = candidates.length ? candidates : users
-        // IMPORTANT: avoid selecting the wrong duplicate user row by first narrowing
-        // to rows that match entered password.
-        const passwordMatchedPool = pool.filter(
-          (u) => typeof u.password === 'string' && u.password === password
-        )
-        const existingUser = pickBest(passwordMatchedPool.length > 0 ? passwordMatchedPool : pool)
+        const existingUser = result.user
 
         if (existingUser) {
-          // Check if account is deleted
-          if (existingUser.archived === true) {
-            setError('Account not found. Please sign up first to create an account.')
-            setIsLoading(false)
-            return
-          }
-
-          // User exists, verify password
-          if (!existingUser.password || existingUser.password !== password) {
-            setError('Invalid email or password')
-            setIsLoading(false)
-            return
-          }
-
           // Check user role and approval status BEFORE setting session
           const userRole = String(existingUser.role || 'supplier').trim().toLowerCase()
-
           const onboarded = existingUser.onboarded === true || String(existingUser.onboarded || '').trim().toLowerCase() === 'true'
           const profileSubmitted = hasSubmittedOnboarding(existingUser)
           const { isApproved, isRefused } = getApprovalFlags(existingUser.account_approval)
@@ -278,9 +148,7 @@ function LoginPageContent() {
               setIsLoading(false)
               return
             }
-            
             if (!isApproved) {
-              // Status is 'Wait' or null - pending approval
               setPopupMessage('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
               setError('')
               setIsLoading(false)
@@ -288,22 +156,18 @@ function LoginPageContent() {
             }
           }
 
-          // Password matches and approval check passed - set session and login
           localStorage.setItem('userId', existingUser.id)
           localStorage.setItem('userFriendlyId', existingUser.user_id || '')
           localStorage.setItem('userEmail', emailNormalized)
           localStorage.setItem('isLoggedIn', 'true')
           localStorage.setItem('userRole', userRole)
-          setSessionCookie()
-          updateLastActivity() // Initialize activity tracking
-          
-          // Redirect based on role
+          updateLastActivity()
+
           if (userRole === 'admin' || userRole === 'purchaser' || userRole === 'supplier') {
             router.push('/dashboard')
           } else if (userRole === 'agent') {
             router.push('/product-availability')
           } else {
-            // Unknown role fallback for existing users
             router.push('/dashboard')
           }
           setIsLoading(false)
@@ -524,7 +388,7 @@ function LoginPageContent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={isSignUp ? 6 : undefined}
+                  minLength={isSignUp ? 8 : undefined}
                 />
                 <button
                   type="button"
@@ -552,7 +416,7 @@ function LoginPageContent() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
                   <button
                     type="button"

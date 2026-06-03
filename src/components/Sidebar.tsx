@@ -64,9 +64,9 @@ export default function Sidebar() {
   const { userRole, isLoading, userFriendlyId } = useAuth()
   const [activeItem, setActiveItem] = useState('Dashboard')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [, setListingPendingCount] = useState<number | null>(null)
-  const [, setApprovalsPendingCount] = useState<number | null>(null)
-  const [, setAvailabilityPendingCount] = useState<number | null>(null)
+  const [listingPendingCount, setListingPendingCount] = useState<number | null>(null)
+  const [approvalsPendingCount, setApprovalsPendingCount] = useState<number | null>(null)
+  const [availabilityPendingCount, setAvailabilityPendingCount] = useState<number | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -197,6 +197,14 @@ export default function Sidebar() {
             const isActive = activeItem === item.label
             const displayLabel = item.label
 
+            // Determine badge count for this menu item
+            let badgeCount: number | null = null
+            if ('showPendingCount' in item && item.showPendingCount) {
+              if (item.path === '/listings') badgeCount = listingPendingCount
+              else if (item.path === '/approvals') badgeCount = approvalsPendingCount
+              else if (item.path === '/product-availability') badgeCount = availabilityPendingCount
+            }
+
             return (
               <button
                 key={item.label}
@@ -219,7 +227,12 @@ export default function Sidebar() {
                   />
                 )}
                 <Icon className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium text-sm">{displayLabel}</span>
+                <span className="font-medium text-sm flex-1 text-left">{displayLabel}</span>
+                {badgeCount !== null && badgeCount > 0 && (
+                  <span className="mr-2 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
               </button>
             )
           })

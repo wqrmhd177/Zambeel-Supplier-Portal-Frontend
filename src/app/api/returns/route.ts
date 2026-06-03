@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { MetabaseOrder } from '@/app/api/orders/route'
+
+const SESSION_COOKIE = 'supplier_session'
+
+function isAuthenticated(request: NextRequest): boolean {
+  const val = request.cookies.get(SESSION_COOKIE)?.value
+  return Boolean(val && val.length > 1 && val !== '0')
+}
 import {
   isDateInRange,
   isReturnedOrderStatus,
@@ -124,6 +131,10 @@ function mergeRow(o: MetabaseOrder, supabaseMap: Record<string, ReturnManagement
 }
 
 export async function GET(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const sp = request.nextUrl.searchParams
     const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
@@ -205,6 +216,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = (await request.json()) as {
       order_id: string
