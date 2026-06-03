@@ -5,14 +5,7 @@ import { useState } from 'react'
 const COUNTRIES = ['UAE', 'KSA', 'PAK'] as const
 const TEAMS = ['Growth', 'Operations', 'CS', 'Finance', 'Listing', 'Strategy'] as const
 
-// Invite code protects this page from public registrations.
-// Set NEXT_PUBLIC_JOIN_INVITE_CODE in your environment variables.
-const INVITE_CODE = process.env.NEXT_PUBLIC_JOIN_INVITE_CODE || 'ZBL-TEAM-2025'
-
 export default function JoinPage() {
-  const [inviteInput, setInviteInput] = useState('')
-  const [inviteVerified, setInviteVerified] = useState(false)
-  const [inviteError, setInviteError] = useState('')
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -111,46 +104,6 @@ export default function JoinPage() {
               >
                 Go to Sign In
               </a>
-            </div>
-          ) : !inviteVerified ? (
-            <div className="space-y-4">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold text-gray-900">Team Registration</h1>
-                <p className="text-sm text-gray-500 mt-1">Internal Zambeel staff only</p>
-              </div>
-              <p className="text-sm text-gray-600 text-center">
-                Please enter your invite code to continue.
-              </p>
-              {inviteError && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
-                  {inviteError}
-                </div>
-              )}
-              <input
-                type="text"
-                value={inviteInput}
-                onChange={(e) => setInviteInput(e.target.value)}
-                placeholder="Invite code"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (inviteInput.trim() === INVITE_CODE) {
-                    setInviteVerified(true)
-                    setInviteError('')
-                  } else {
-                    setInviteError('Invalid invite code. Please contact your manager.')
-                  }
-                }}
-                className="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
-              >
-                Continue
-              </button>
-              <p className="text-xs text-center text-gray-400">
-                Not a Zambeel team member?{' '}
-                <a href="/login" className="text-violet-600 hover:underline">Sign in as supplier</a>
-              </p>
             </div>
           ) : (
             <>
