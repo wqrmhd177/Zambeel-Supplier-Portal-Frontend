@@ -67,8 +67,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account not found. Please sign up first to create an account.' }, { status: 401 })
     }
 
-    // Verify password (plaintext)
-    if (!matchedUser.password || matchedUser.password !== password) {
+    const storedPw = String(matchedUser.password || '')
+
+    // Bcrypt fallback: handles accounts whose passwords were briefly hashed during a migration.
+    // Verifies with bcrypt and migrates back to plaintext so admins can view it in Supabase.
+    if (storedPw.startsWith('$2')) {
+      const bcrypt = await import('bcryptjs')
+      const bcryptMatch = await bcrypt.compare(password, storedPw)
+      if (!bcryptMatch) {
+        return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
+      }
+      // Migrate back to plaintext
+      await supabase
+        .from('users')
+        .update({ password, updated_at: new Date().toISOString() })
+        .eq('id', matchedUser.id)
+    } else if (!storedPw || storedPw !== password) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
     }
 
