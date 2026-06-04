@@ -10,7 +10,7 @@ interface PaginationProps {
 }
 
 export default function Pagination({ currentPage, totalPages, totalItems, onPageChange }: PaginationProps) {
-  if (totalPages <= 1 && totalItems === 0) return null
+  if (totalItems === 0) return null
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-white/10 mt-2">
@@ -70,7 +70,7 @@ export default function Pagination({ currentPage, totalPages, totalItems, onPage
 
 /** Light variant for pages with white/light backgrounds (orders, returns) */
 export function PaginationLight({ currentPage, totalPages, totalItems, onPageChange }: PaginationProps) {
-  if (totalPages <= 1 && totalItems === 0) return null
+  if (totalItems === 0) return null
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 mt-2">

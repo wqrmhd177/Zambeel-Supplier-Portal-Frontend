@@ -166,7 +166,7 @@ export default function ProductAvailabilityPage() {
   }, [requests, searchQuery])
 
   const [paCurrentPage, setPaCurrentPage] = useState(1)
-  const PA_ITEMS = 25
+  const PA_ITEMS = 50
 
   // Reset pagination when filter or search changes
   useEffect(() => { setPaCurrentPage(1) }, [filter, searchQuery])
