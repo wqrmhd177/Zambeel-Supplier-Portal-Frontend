@@ -1101,6 +1101,37 @@ export default function ProductAvailabilityPage() {
 
               return (
                 <>
+                  {/* ── Top pagination bar ── */}
+                  {paTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl border border-white/10 mb-2"
+                      style={{ background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #1e1b4b 70%, #2d1b69 100%)' }}>
+                      <span className="text-xs text-white/60">
+                        Showing {((paCurrentPage - 1) * PA_ITEMS) + 1}–{Math.min(paCurrentPage * PA_ITEMS, displayedRequests.length)} of {displayedRequests.length} requests
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setPaCurrentPage(1)} disabled={paCurrentPage === 1}
+                          className="px-2 py-1 rounded text-xs text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                          « First
+                        </button>
+                        <button onClick={() => setPaCurrentPage(p => Math.max(1, p - 1))} disabled={paCurrentPage === 1}
+                          className="px-2 py-1 rounded text-xs text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                          ‹ Prev
+                        </button>
+                        <span className="px-3 py-1 rounded bg-white/10 text-white text-xs font-medium">
+                          {paCurrentPage} / {paTotalPages}
+                        </span>
+                        <button onClick={() => setPaCurrentPage(p => Math.min(paTotalPages, p + 1))} disabled={paCurrentPage >= paTotalPages}
+                          className="px-2 py-1 rounded text-xs text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                          Next ›
+                        </button>
+                        <button onClick={() => setPaCurrentPage(paTotalPages)} disabled={paCurrentPage >= paTotalPages}
+                          className="px-2 py-1 rounded text-xs text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                          Last »
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Mobile cards (hidden on md+) ── */}
                   <div className="md:hidden space-y-3">
                     {paginatedDisplayed.map((request) => {
