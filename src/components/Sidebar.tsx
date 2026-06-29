@@ -241,13 +241,8 @@ export default function Sidebar() {
 
       {/* WhatsApp Support + Logout */}
       <div className="px-3 pb-3 pt-3 border-t border-white/10" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
-        {/* WhatsApp Support — full number visible */}
-        <a
-          href="https://wa.me/923054094932"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/8 transition-all mb-1"
-        >
+        {/* WhatsApp Support */}
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-white/80 mb-1">
           <span
             className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ background: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)' }}
@@ -258,10 +253,10 @@ export default function Sidebar() {
             <div className="text-xs font-semibold text-white/90 leading-tight">WhatsApp Support</div>
             <div className="text-xs text-white/60 flex items-center gap-1 mt-0.5">
               <Phone className="w-3 h-3 flex-shrink-0" />
-              +92-305-4094932
+              92XXX-XXXXXXX
             </div>
           </div>
-        </a>
+        </div>
 
         {/* Logout — icon + label */}
         <button
