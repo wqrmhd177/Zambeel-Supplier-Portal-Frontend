@@ -141,7 +141,7 @@ export type ProductAvailabilityListFilter =
   | 'cancelled'
   | 'draft'
 
-function matchesProductAvailabilityListFilter(
+export function matchesProductAvailabilityListFilter(
   row: ProductAvailabilityRequestWithDetails,
   filter: ProductAvailabilityListFilter
 ): boolean {
@@ -219,7 +219,33 @@ function countryMatchesMarket(market: string, country: string | null | undefined
   return keywords.some((keyword) => normalizedCountry.includes(keyword))
 }
 
-async function maybeSyncDelayedRequests(): Promise<void> {
+/** PostgREST rejects very large `.in()` filters — batch request IDs. */
+async function fetchResponsesForRequestIds(
+  requestIds: string[]
+): Promise<ProductAvailabilityResponse[]> {
+  if (requestIds.length === 0) return []
+
+  const CHUNK_SIZE = 80
+  const allRows: ProductAvailabilityResponse[] = []
+
+  for (let i = 0; i < requestIds.length; i += CHUNK_SIZE) {
+    const chunk = requestIds.slice(i, i + CHUNK_SIZE)
+    const { data, error } = await supabase
+      .from('product_availability_responses')
+      .select('*')
+      .in('request_id', chunk)
+      .order('round_number', { ascending: false })
+
+    if (error) {
+      throw new Error(error.message || 'Failed to fetch availability responses')
+    }
+    if (data) allRows.push(...(data as ProductAvailabilityResponse[]))
+  }
+
+  return allRows
+}
+
+export async function maybeSyncDelayedRequests(): Promise<void> {
   const thresholdIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
   await supabase
     .from('product_availability_requests')
@@ -335,13 +361,7 @@ export async function fetchProductAvailabilityRequests(params: {
   const requestIds = (requestRows || []).map((row: any) => row.id)
   if (requestIds.length === 0) return []
 
-  // Fetch all responses for these requests, ordered by round_number DESC
-  // (latest round first so we can take [0] as the current response)
-  const { data: allResponseRows } = await supabase
-    .from('product_availability_responses')
-    .select('*')
-    .in('request_id', requestIds)
-    .order('round_number', { ascending: false })
+  const allResponseRows = await fetchResponsesForRequestIds(requestIds)
 
   // Build per-request history maps
   const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {}
@@ -368,6 +388,112 @@ export async function fetchProductAvailabilityRequests(params: {
     .filter((row) => matchesProductAvailabilityListFilter(row, params.statusFilter))
 
   return withDerived
+}
+
+/**
+ * Fetch ALL data for the current user in exactly 2 round-trips (requests + responses).
+ * Does NOT call maybeSyncDelayedRequests — the caller is responsible for that.
+ * Returns every row (including drafts for agent/admin) before any status filter is applied.
+ * Use deriveCountsFromRows and matchesProductAvailabilityListFilter on the result.
+ */
+export async function fetchAllProductAvailabilityData(params: {
+  userRole: string
+  userFriendlyId: string
+}): Promise<ProductAvailabilityRequestWithDetails[]> {
+  const role = (params.userRole || '').toLowerCase()
+
+  let requestQuery = supabase
+    .from('product_availability_requests')
+    .select('*')
+    .order('created_at', { ascending: true })
+
+  if (role === 'agent') {
+    requestQuery = requestQuery.eq('requested_by_user_id', params.userFriendlyId)
+  } else if (role === 'purchaser') {
+    requestQuery = requestQuery
+      .eq('assigned_purchaser_user_id', params.userFriendlyId)
+      .eq('is_draft', false)
+  } else if (role === 'manager') {
+    const { data: mgrUser } = await supabase
+      .from('users')
+      .select('country')
+      .eq('user_id', params.userFriendlyId)
+      .single()
+    const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
+    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
+      keywords.some((k) => mgrCountry.includes(k))
+    )?.[0]
+    requestQuery = requestQuery.eq('is_draft', false)
+    if (mgrMarket) requestQuery = requestQuery.eq('market', mgrMarket)
+  }
+  // admin and other roles: no is_draft filter — returns everything including drafts
+
+  const { data: requestRows, error: requestError } = await requestQuery
+  if (requestError) throw new Error(requestError.message || 'Failed to fetch availability requests')
+
+  const requestIds = (requestRows || []).map((row: any) => row.id)
+  if (requestIds.length === 0) return []
+
+  const allResponseRows = await fetchResponsesForRequestIds(requestIds)
+
+  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {}
+  ;(allResponseRows || []).forEach((r: any) => {
+    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = []
+    historyByRequestId[r.request_id].push(r)
+  })
+
+  return (requestRows || []).map((request: any) => {
+    const derived = deriveStatus(
+      request.status,
+      request.assignment_status ?? 'pending',
+      request.created_at
+    )
+    const history = historyByRequestId[request.id] || []
+    return {
+      ...request,
+      derived_status: derived,
+      response: history[0] ?? null,
+      responseHistory: history,
+    } as ProductAvailabilityRequestWithDetails
+  })
+}
+
+/**
+ * Derive tab badge counts from a pre-loaded set of rows — zero round-trips.
+ * Pass the result of fetchAllProductAvailabilityData.
+ */
+export function deriveCountsFromRows(allRows: ProductAvailabilityRequestWithDetails[]): {
+  urgent: number
+  normalRequests: number
+  delayed: number
+  completed: number
+  cancelled: number
+  drafts: number
+  all: number
+} {
+  const liveRows = allRows.filter((r) => !r.is_draft)
+  const draftRows = allRows.filter((r) => r.is_draft)
+
+  const counts = {
+    urgent: 0,
+    normalRequests: 0,
+    delayed: 0,
+    completed: 0,
+    cancelled: 0,
+    drafts: draftRows.length,
+    all: liveRows.length,
+  }
+
+  liveRows.forEach((row) => {
+    const priority = row.priority_level as PriorityLevel
+    if (row.derived_status === 'cancelled') { counts.cancelled += 1; return }
+    if (priority === 'urgent' && row.derived_status === 'pending') counts.urgent += 1
+    if (priority === 'normal' && row.derived_status === 'pending') counts.normalRequests += 1
+    if (row.derived_status === 'delayed') counts.delayed += 1
+    if (row.derived_status === 'completed') counts.completed += 1
+  })
+
+  return counts
 }
 
 export async function submitProductAvailabilityResponse(
@@ -645,38 +771,52 @@ export async function getProductAvailabilityCounts(
   drafts: number
   all: number
 }> {
-  const canCreateRole = userRole === 'agent' || userRole === 'admin'
-  const [liveRows, draftRows] = await Promise.all([
-    fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'all' }),
-    canCreateRole
-      ? fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'draft' })
-      : Promise.resolve([]),
-  ])
-
-  const counts = {
-    urgent: 0,
-    normalRequests: 0,
-    delayed: 0,
-    completed: 0,
-    cancelled: 0,
-    drafts: draftRows.length,
-    all: liveRows.length,
-  }
-  liveRows.forEach((row) => {
-    const priority = row.priority_level as PriorityLevel
-    if (row.derived_status === 'cancelled') { counts.cancelled += 1; return }
-    if (priority === 'urgent' && row.derived_status === 'pending') counts.urgent += 1
-    if (priority === 'normal' && row.derived_status === 'pending') counts.normalRequests += 1
-    if (row.derived_status === 'delayed') counts.delayed += 1
-    if (row.derived_status === 'completed') counts.completed += 1
-  })
-  return counts
+  await maybeSyncDelayedRequests()
+  const allRows = await fetchAllProductAvailabilityData({ userRole, userFriendlyId })
+  return deriveCountsFromRows(allRows)
 }
 
+/**
+ * Lightweight sidebar badge count — single COUNT query per role.
+ * Returns the number of non-draft, non-cancelled requests visible to this user.
+ */
 export async function getPendingProductAvailabilityCount(
   userRole: string,
   userFriendlyId: string
 ): Promise<number> {
-  const counts = await getProductAvailabilityCounts(userRole, userFriendlyId)
-  return counts.all
+  const role = userRole.toLowerCase()
+
+  if (role === 'manager') {
+    const { data: mgrUser } = await supabase
+      .from('users')
+      .select('country')
+      .eq('user_id', userFriendlyId)
+      .single()
+    const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
+    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
+      keywords.some((k) => mgrCountry.includes(k))
+    )?.[0]
+    let q = supabase
+      .from('product_availability_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_draft', false)
+    if (mgrMarket) q = q.eq('market', mgrMarket)
+    const { count } = await q
+    return count ?? 0
+  }
+
+  let q = supabase
+    .from('product_availability_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_draft', false)
+
+  if (role === 'agent') {
+    q = q.eq('requested_by_user_id', userFriendlyId)
+  } else if (role === 'purchaser') {
+    q = q.eq('assigned_purchaser_user_id', userFriendlyId)
+  }
+
+  const { count, error } = await q
+  if (error) return 0
+  return count ?? 0
 }
