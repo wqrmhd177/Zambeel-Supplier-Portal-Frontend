@@ -12,11 +12,13 @@ import {
   cancelProductAvailabilityRequest,
   createBulkDraftRequests,
   createProductAvailabilityRequest,
-  fetchProductAvailabilityRequests,
+  deriveCountsFromRows,
+  fetchAllProductAvailabilityData,
   formatAvailabilityLabel,
   formatDerivedStatusLabel,
   formatStockStatusLabel,
-  getProductAvailabilityCounts,
+  matchesProductAvailabilityListFilter,
+  maybeSyncDelayedRequests,
   parseBulkUploadCsv,
   parseBulkUploadFromRows,
   ProductAvailabilityListFilter,
@@ -99,16 +101,10 @@ export default function ProductAvailabilityPage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<FilterTab>('normal_requests')
+  const [purchaserDefaultApplied, setPurchaserDefaultApplied] = useState(false)
   const [newTabMode, setNewTabMode] = useState<NewTabMode>('single')
-  const [counts, setCounts] = useState({
-    urgent: 0,
-    normalRequests: 0,
-    delayed: 0,
-    completed: 0,
-    cancelled: 0,
-    drafts: 0,
-    all: 0,
-  })
+  // All raw rows fetched from DB — single source of truth; filtered client-side per tab
+  const [allRawRequests, setAllRawRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [showAltSearch, setShowAltSearch] = useState(false)
@@ -123,8 +119,6 @@ export default function ProductAvailabilityPage() {
   const [draftPhotoFiles, setDraftPhotoFiles] = useState<Record<string, File[]>>({})
   const [draftPhotoOpen, setDraftPhotoOpen] = useState<string | null>(null)
   const [draftSubmitting, setDraftSubmitting] = useState<string | null>(null)
-  const [draftRequests, setDraftRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
-  const [requests, setRequests] = useState<ProductAvailabilityRequestWithDetails[]>([])
   const [createForm, setCreateForm] = useState<CreateFormState>(initialCreateForm)
   const [responseForm, setResponseForm] = useState<PurchaserResponseState>(initialResponseForm)
   const [selectedAssignment, setSelectedAssignment] = useState<{ requestId: string } | null>(null)
@@ -149,8 +143,39 @@ export default function ProductAvailabilityPage() {
   const isManager = userRole === 'manager'
   const canCreate = isAgent || isAdmin
   const isPurchaser = userRole === 'purchaser'
+
+  // Purchasers land on Urgent: new UAE work is typically urgent, and Normal is often empty.
+  useEffect(() => {
+    if (isPurchaser && !purchaserDefaultApplied) {
+      setFilter('urgent')
+      setPurchaserDefaultApplied(true)
+    }
+  }, [isPurchaser, purchaserDefaultApplied])
+
   // Only specific roles can access product availability; suppliers are excluded
   const canAccess = isAgent || isAdmin || isPurchaser || isManager
+
+  const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
+    if (filter === 'new') return 'all'
+    if (filter === 'drafts') return 'draft'
+    if (filter === 'urgent') return 'urgent_open'
+    if (filter === 'normal_requests') return 'normal_pending'
+    if (filter === 'delayed') return 'delayed'
+    if (filter === 'completed') return 'completed'
+    if (filter === 'cancelled') return 'cancelled'
+    return 'all'
+  }, [filter])
+
+  // Derived from allRawRequests — no extra fetches when switching tabs
+  const draftRequests = useMemo(
+    () => allRawRequests.filter((r) => r.is_draft === true),
+    [allRawRequests]
+  )
+  const requests = useMemo(
+    () => allRawRequests.filter((r) => matchesProductAvailabilityListFilter(r, dataFilter)),
+    [allRawRequests, dataFilter]
+  )
+  const counts = useMemo(() => deriveCountsFromRows(allRawRequests), [allRawRequests])
 
   const displayedRequests = useMemo(() => {
     if (!searchQuery.trim()) return requests
@@ -180,39 +205,22 @@ export default function ProductAvailabilityPage() {
     return String(images[0])
   }
 
-  const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
-    if (filter === 'new') return 'all'
-    if (filter === 'drafts') return 'draft'
-    if (filter === 'urgent') return 'urgent_open'
-    if (filter === 'normal_requests') return 'normal_pending'
-    if (filter === 'delayed') return 'delayed'
-    if (filter === 'completed') return 'completed'
-    if (filter === 'cancelled') return 'cancelled'
-    return 'all'
-  }, [filter])
-
   const refreshData = useCallback(async () => {
     if (!userFriendlyId || !userRole) return
     setIsLoading(true)
     try {
-      const fetches: Promise<any>[] = [
-        fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: dataFilter }),
-        getProductAvailabilityCounts(userRole, userFriendlyId),
-      ]
-      if (canCreate) {
-        fetches.push(fetchProductAvailabilityRequests({ userRole, userFriendlyId, statusFilter: 'draft' }))
-      }
-      const [requestsData, countData, draftsData] = await Promise.all(fetches)
-      setRequests(requestsData)
-      setCounts(countData)
-      if (draftsData) setDraftRequests(draftsData)
+      // Sync delayed status once, then fetch all rows in 2 queries total.
+      // Tab filtering and badge counts are derived client-side from the cached data.
+      await maybeSyncDelayedRequests()
+      const allRows = await fetchAllProductAvailabilityData({ userRole, userFriendlyId })
+      setAllRawRequests(allRows)
     } catch (err) {
       console.error(err)
       setError('Failed to load product availability requests')
     } finally {
       setIsLoading(false)
     }
-  }, [dataFilter, userFriendlyId, userRole])
+  }, [userFriendlyId, userRole])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {

@@ -219,6 +219,9 @@ function countryMatchesMarket(market: string, country: string | null | undefined
   return keywords.some((keyword) => normalizedCountry.includes(keyword))
 }
 
+/** PostgREST max-rows is 1000; page until the last incomplete page. */
+const POSTGREST_PAGE_SIZE = 1000
+
 /** PostgREST rejects very large `.in()` filters — batch request IDs. */
 async function fetchResponsesForRequestIds(
   requestIds: string[]
@@ -243,6 +246,92 @@ async function fetchResponsesForRequestIds(
   }
 
   return allRows
+}
+
+async function resolveManagerMarket(userFriendlyId: string): Promise<string | undefined> {
+  const { data: mgrUser } = await supabase
+    .from('users')
+    .select('country')
+    .eq('user_id', userFriendlyId)
+    .single()
+  const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
+  return Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
+    keywords.some((k) => mgrCountry.includes(k))
+  )?.[0]
+}
+
+/**
+ * Fetch every matching request row, paging past PostgREST's 1000-row cap.
+ * Without this, UAE purchasers (1000+ historical rows) never receive the newest requests.
+ */
+async function fetchAllRequestRows(params: {
+  userRole: string
+  userFriendlyId: string
+  includeDrafts: boolean
+}): Promise<any[]> {
+  const role = (params.userRole || '').toLowerCase()
+  const mgrMarket = role === 'manager' ? await resolveManagerMarket(params.userFriendlyId) : undefined
+
+  const allRows: any[] = []
+  let from = 0
+
+  for (;;) {
+    let requestQuery = supabase
+      .from('product_availability_requests')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (role === 'agent') {
+      requestQuery = requestQuery.eq('requested_by_user_id', params.userFriendlyId)
+    } else if (role === 'purchaser') {
+      requestQuery = requestQuery
+        .eq('assigned_purchaser_user_id', params.userFriendlyId)
+        .eq('is_draft', false)
+    } else if (role === 'manager') {
+      requestQuery = requestQuery.eq('is_draft', false)
+      if (mgrMarket) requestQuery = requestQuery.eq('market', mgrMarket)
+    } else if (!params.includeDrafts) {
+      requestQuery = requestQuery.eq('is_draft', false)
+    }
+
+    const { data, error } = await requestQuery.range(from, from + POSTGREST_PAGE_SIZE - 1)
+    if (error) {
+      throw new Error(error.message || 'Failed to fetch availability requests')
+    }
+
+    const page = data || []
+    allRows.push(...page)
+    if (page.length < POSTGREST_PAGE_SIZE) break
+    from += POSTGREST_PAGE_SIZE
+  }
+
+  return allRows
+}
+
+function attachResponsesToRequests(
+  requestRows: any[],
+  allResponseRows: ProductAvailabilityResponse[]
+): ProductAvailabilityRequestWithDetails[] {
+  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {}
+  allResponseRows.forEach((r) => {
+    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = []
+    historyByRequestId[r.request_id].push(r)
+  })
+
+  return requestRows.map((request: any) => {
+    const derived = deriveStatus(
+      request.status,
+      request.assignment_status ?? 'pending',
+      request.created_at
+    )
+    const history = historyByRequestId[request.id] || []
+    return {
+      ...request,
+      derived_status: derived,
+      response: history[0] ?? null,
+      responseHistory: history,
+    } as ProductAvailabilityRequestWithDetails
+  })
 }
 
 export async function maybeSyncDelayedRequests(): Promise<void> {
@@ -321,77 +410,22 @@ export async function fetchProductAvailabilityRequests(params: {
   await maybeSyncDelayedRequests()
 
   const role = (params.userRole || '').toLowerCase()
-
-  let requestQuery = supabase
-    .from('product_availability_requests')
-    .select('*')
-    .order('created_at', { ascending: true })
-
-  if (role === 'agent') {
-    requestQuery = requestQuery.eq('requested_by_user_id', params.userFriendlyId)
-  } else if (role === 'purchaser') {
-    requestQuery = requestQuery
-      .eq('assigned_purchaser_user_id', params.userFriendlyId)
-      .eq('is_draft', false)
-  } else if (role === 'manager') {
-    // Managers see only requests for their country's market
-    const { data: mgrUser } = await supabase
-      .from('users')
-      .select('country')
-      .eq('user_id', params.userFriendlyId)
-      .single()
-    const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
-    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
-      keywords.some((k) => mgrCountry.includes(k))
-    )?.[0]
-    requestQuery = requestQuery.eq('is_draft', false)
-    if (mgrMarket) requestQuery = requestQuery.eq('market', mgrMarket)
-  } else {
-    if (params.statusFilter !== 'draft') {
-      requestQuery = requestQuery.eq('is_draft', false)
-    }
-  }
-
-  const { data: requestRows, error: requestError } = await requestQuery
-
-  if (requestError) {
-    throw new Error(requestError.message || 'Failed to fetch availability requests')
-  }
-
-  const requestIds = (requestRows || []).map((row: any) => row.id)
-  if (requestIds.length === 0) return []
-
-  const allResponseRows = await fetchResponsesForRequestIds(requestIds)
-
-  // Build per-request history maps
-  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {}
-  ;(allResponseRows || []).forEach((r: any) => {
-    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = []
-    historyByRequestId[r.request_id].push(r)
+  const includeDrafts = role === 'agent' || params.statusFilter === 'draft'
+  const requestRows = await fetchAllRequestRows({
+    userRole: params.userRole,
+    userFriendlyId: params.userFriendlyId,
+    includeDrafts,
   })
+  if (requestRows.length === 0) return []
 
-  const withDerived = (requestRows || [])
-    .map((request: any) => {
-      const derived = deriveStatus(
-        request.status,
-        request.assignment_status ?? 'pending',
-        request.created_at
-      )
-      const history = historyByRequestId[request.id] || []
-      return {
-        ...request,
-        derived_status: derived,
-        response: history[0] ?? null,
-        responseHistory: history,
-      } as ProductAvailabilityRequestWithDetails
-    })
-    .filter((row) => matchesProductAvailabilityListFilter(row, params.statusFilter))
-
-  return withDerived
+  const allResponseRows = await fetchResponsesForRequestIds(requestRows.map((row) => row.id))
+  return attachResponsesToRequests(requestRows, allResponseRows).filter((row) =>
+    matchesProductAvailabilityListFilter(row, params.statusFilter)
+  )
 }
 
 /**
- * Fetch ALL data for the current user in exactly 2 round-trips (requests + responses).
+ * Fetch ALL matching request rows for the current user (paged past PostgREST's 1000-row cap).
  * Does NOT call maybeSyncDelayedRequests — the caller is responsible for that.
  * Returns every row (including drafts for agent/admin) before any status filter is applied.
  * Use deriveCountsFromRows and matchesProductAvailabilityListFilter on the result.
@@ -401,61 +435,16 @@ export async function fetchAllProductAvailabilityData(params: {
   userFriendlyId: string
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
   const role = (params.userRole || '').toLowerCase()
-
-  let requestQuery = supabase
-    .from('product_availability_requests')
-    .select('*')
-    .order('created_at', { ascending: true })
-
-  if (role === 'agent') {
-    requestQuery = requestQuery.eq('requested_by_user_id', params.userFriendlyId)
-  } else if (role === 'purchaser') {
-    requestQuery = requestQuery
-      .eq('assigned_purchaser_user_id', params.userFriendlyId)
-      .eq('is_draft', false)
-  } else if (role === 'manager') {
-    const { data: mgrUser } = await supabase
-      .from('users')
-      .select('country')
-      .eq('user_id', params.userFriendlyId)
-      .single()
-    const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
-    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
-      keywords.some((k) => mgrCountry.includes(k))
-    )?.[0]
-    requestQuery = requestQuery.eq('is_draft', false)
-    if (mgrMarket) requestQuery = requestQuery.eq('market', mgrMarket)
-  }
-  // admin and other roles: no is_draft filter — returns everything including drafts
-
-  const { data: requestRows, error: requestError } = await requestQuery
-  if (requestError) throw new Error(requestError.message || 'Failed to fetch availability requests')
-
-  const requestIds = (requestRows || []).map((row: any) => row.id)
-  if (requestIds.length === 0) return []
-
-  const allResponseRows = await fetchResponsesForRequestIds(requestIds)
-
-  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {}
-  ;(allResponseRows || []).forEach((r: any) => {
-    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = []
-    historyByRequestId[r.request_id].push(r)
+  const includeDrafts = role !== 'purchaser' && role !== 'manager'
+  const requestRows = await fetchAllRequestRows({
+    userRole: params.userRole,
+    userFriendlyId: params.userFriendlyId,
+    includeDrafts,
   })
+  if (requestRows.length === 0) return []
 
-  return (requestRows || []).map((request: any) => {
-    const derived = deriveStatus(
-      request.status,
-      request.assignment_status ?? 'pending',
-      request.created_at
-    )
-    const history = historyByRequestId[request.id] || []
-    return {
-      ...request,
-      derived_status: derived,
-      response: history[0] ?? null,
-      responseHistory: history,
-    } as ProductAvailabilityRequestWithDetails
-  })
+  const allResponseRows = await fetchResponsesForRequestIds(requestRows.map((row) => row.id))
+  return attachResponsesToRequests(requestRows, allResponseRows)
 }
 
 /**
