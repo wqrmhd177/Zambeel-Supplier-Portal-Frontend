@@ -1,6 +1,8 @@
 // Helper functions for purchaser-supplier relationships
 
 import { supabase } from './supabase'
+import { fetchAllPages } from './supabasePagination'
+import { fetchAllProductRows } from './productHelpers'
 
 /**
  * Get purchaser's country (and optional stock_location_country) for pre-filling new supplier form.
@@ -146,18 +148,7 @@ export async function fetchProductsForPurchaser(purchaserUuid: string) {
     const supplierUserIds = supplierList.map(s => s.user_id).filter(Boolean)
     if (supplierUserIds.length === 0) return []
 
-    const { data: productsData, error: productsError } = await supabase
-      .from('products')
-      .select('*')
-      .in('fk_owned_by', supplierUserIds)
-      .order('created_at', { ascending: false })
-
-    if (productsError) {
-      console.error('Error fetching products for purchaser:', productsError)
-      return []
-    }
-
-    return productsData || []
+    return fetchAllProductRows({ ownerIds: supplierUserIds })
   } catch (err) {
     console.error('Unexpected error fetching products for purchaser:', err)
     return []
@@ -217,17 +208,15 @@ export async function getSupplierByUserId(userId: string): Promise<SupplierInfo 
  */
 export async function getProductCountForSupplier(supplierUserId: string): Promise<number> {
   try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('product_id')
-      .eq('fk_owned_by', supplierUserId)
+    const data = await fetchAllPages((from, to) =>
+      supabase
+        .from('products')
+        .select('product_id')
+        .eq('fk_owned_by', supplierUserId)
+        .range(from, to)
+    )
 
-    if (error) {
-      console.error('Error counting products:', error)
-      return 0
-    }
-
-    const distinctProductIds = new Set((data || []).map((r) => r.product_id))
+    const distinctProductIds = new Set(data.map((r) => r.product_id))
     return distinctProductIds.size
   } catch (err) {
     console.error('Unexpected error counting products:', err)

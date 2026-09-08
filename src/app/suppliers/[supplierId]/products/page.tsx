@@ -27,7 +27,7 @@ import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import { groupProductsByProductId, GroupedProduct } from '@/lib/productHelpers'
+import { groupProductsByProductId, fetchAllProductRows, GroupedProduct } from '@/lib/productHelpers'
 import {
   fetchPendingPriceRequests,
   PriceHistoryEntry,
@@ -252,20 +252,7 @@ export default function SupplierProductsPage() {
       setSupplier(supplierInfo)
 
       // Fetch products for this supplier
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('fk_owned_by', supplierUserId)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching supplier products:', error)
-        setProducts([])
-        setAllProducts([])
-        return
-      }
-
-      const rows = data || []
+      const rows = await fetchAllProductRows({ ownerId: supplierUserId })
       if (rows.length > 0) {
         const grouped = groupProductsByProductId(rows)
         setAllProducts(grouped)

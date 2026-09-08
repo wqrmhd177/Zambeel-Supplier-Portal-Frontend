@@ -1,4 +1,9 @@
 import { supabase } from '@/lib/supabase'
+import {
+  fetchAllByInChunks,
+  fetchAllPages,
+  POSTGREST_IN_CHUNK_SIZE,
+} from '@/lib/supabasePagination'
 
 export interface ProductRow {
   product_id: number
@@ -64,37 +69,99 @@ export interface VariantInfo {
 }
 
 /**
+ * Fetch all product rows, paging past PostgREST's 1000-row cap.
+ */
+export async function fetchAllProductRows(filters?: {
+  ownerId?: string
+  ownerIds?: string[]
+  status?: string
+}): Promise<ProductRow[]> {
+  const applyFilters = (query: ReturnType<typeof supabase.from>) => {
+    let nextQuery = query
+    if (filters?.ownerId) {
+      nextQuery = nextQuery.eq('fk_owned_by', filters.ownerId)
+    }
+    if (filters?.status) {
+      nextQuery = nextQuery.eq('status', filters.status)
+    }
+    return nextQuery
+  }
+
+  if (filters?.ownerIds && filters.ownerIds.length > 0) {
+    const rows = await fetchAllByInChunks(
+      filters.ownerIds,
+      POSTGREST_IN_CHUNK_SIZE,
+      (chunk, from, to) =>
+        applyFilters(supabase.from('products').select('*'))
+          .in('fk_owned_by', chunk)
+          .order('created_at', { ascending: false })
+          .range(from, to)
+    )
+    return rows.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+  }
+
+  return fetchAllPages((from, to) =>
+    applyFilters(supabase.from('products').select('*'))
+      .order('created_at', { ascending: false })
+      .range(from, to)
+  )
+}
+
+async function fetchVariantsForProductIds(productIds: number[]): Promise<ProductVariantRow[]> {
+  if (productIds.length === 0) return []
+
+  try {
+    return await fetchAllByInChunks(
+      productIds,
+      POSTGREST_IN_CHUNK_SIZE,
+      (chunk, from, to) =>
+        supabase
+          .from('product_variants')
+          .select('*')
+          .in('product_id', chunk)
+          .range(from, to)
+    )
+  } catch (err) {
+    console.error('Error fetching variants:', err)
+    return []
+  }
+}
+
+/**
  * Fetch products with their variants from the new product_variants table.
  * Returns GroupedProduct[] with variants loaded from product_variants.
  */
 export async function fetchProductsWithVariants(
   filters?: {
     ownerId?: string
+    ownerIds?: string[]
     status?: string
     productIds?: number[]
   }
 ): Promise<GroupedProduct[]> {
   try {
-    let productsQuery = supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false })
+    let productsData: ProductRow[]
 
-    if (filters?.ownerId) {
-      productsQuery = productsQuery.eq('fk_owned_by', filters.ownerId)
-    }
-    if (filters?.status) {
-      productsQuery = productsQuery.eq('status', filters.status)
-    }
     if (filters?.productIds && filters.productIds.length > 0) {
-      productsQuery = productsQuery.in('product_id', filters.productIds)
-    }
-
-    const { data: productsData, error: productsError } = await productsQuery
-
-    if (productsError) {
-      console.error('Error fetching products:', productsError)
-      throw new Error(productsError.message || 'Failed to load products. Please refresh the page.')
+      productsData = await fetchAllByInChunks(
+        filters.productIds,
+        POSTGREST_IN_CHUNK_SIZE,
+        (chunk, from, to) =>
+          supabase
+            .from('products')
+            .select('*')
+            .in('product_id', chunk)
+            .order('created_at', { ascending: false })
+            .range(from, to)
+      )
+    } else {
+      productsData = await fetchAllProductRows({
+        ownerId: filters?.ownerId,
+        ownerIds: filters?.ownerIds,
+        status: filters?.status,
+      })
     }
 
     if (!productsData || productsData.length === 0) {
@@ -102,15 +169,7 @@ export async function fetchProductsWithVariants(
     }
 
     const productIds = productsData.map(p => p.product_id)
-
-    const { data: variantsData, error: variantsError } = await supabase
-      .from('product_variants')
-      .select('*')
-      .in('product_id', productIds)
-
-    if (variantsError) {
-      console.error('Error fetching variants:', variantsError)
-    }
+    const variantsData = await fetchVariantsForProductIds(productIds)
 
     const variantsByProductId = new Map<number, ProductVariantRow[]>()
     if (variantsData) {
@@ -212,16 +271,14 @@ export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
  */
 export async function getPendingListingsCount(): Promise<number> {
   try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('product_id')
-      .eq('status', 'pending')
-
-    if (error) {
-      console.error('Error fetching pending listings count:', error)
-      return 0
-    }
-    if (!data || data.length === 0) return 0
+    const data = await fetchAllPages((from, to) =>
+      supabase
+        .from('products')
+        .select('product_id')
+        .eq('status', 'pending')
+        .range(from, to)
+    )
+    if (data.length === 0) return 0
     const distinctProductIds = new Set(data.map((r) => r.product_id))
     return distinctProductIds.size
   } catch (err) {
@@ -236,15 +293,10 @@ export async function getPendingListingsCount(): Promise<number> {
  */
 export async function getListingsSidebarCount(): Promise<number> {
   try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('product_id')
-
-    if (error) {
-      console.error('Error fetching listings sidebar count:', error)
-      return 0
-    }
-    if (!data || data.length === 0) return 0
+    const data = await fetchAllPages((from, to) =>
+      supabase.from('products').select('product_id').range(from, to)
+    )
+    if (data.length === 0) return 0
     const distinctProductIds = new Set(data.map((r) => r.product_id))
     return distinctProductIds.size
   } catch (err) {

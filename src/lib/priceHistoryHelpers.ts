@@ -7,6 +7,11 @@
 
 import { supabase } from './supabase'
 import { getPendingStatusChangeCount } from './variantStatusChangeHelpers'
+import {
+  fetchAllByInChunks,
+  fetchAllPages,
+  POSTGREST_IN_CHUNK_SIZE,
+} from './supabasePagination'
 
 export interface PriceHistoryEntry {
   id: string
@@ -369,16 +374,11 @@ export async function getVariantPriceStats(variantId: number): Promise<{
  */
 export async function fetchPendingPriceRequests(supplierId?: string): Promise<PriceHistoryEntry[]> {
   try {
-    let query = supabase.from('price_history').select('*').eq('status', 'pending')
-    if (supplierId) query = query.eq('created_by_supplier_id', supplierId)
-    const { data, error } = await query.order('created_at', { ascending: false })
-    
-    if (error) {
-      console.error('Error fetching pending price requests:', error)
-      return []
-    }
-    
-    return data || []
+    return await fetchAllPages((from, to) => {
+      let query = supabase.from('price_history').select('*').eq('status', 'pending')
+      if (supplierId) query = query.eq('created_by_supplier_id', supplierId)
+      return query.order('created_at', { ascending: false }).range(from, to)
+    })
   } catch (err) {
     console.error('Unexpected error fetching pending price requests:', err)
     return []
@@ -396,36 +396,31 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
   company_sku?: string
 }>> {
   try {
-    // First, get all pending price history entries
-    const { data: priceHistoryData, error: priceHistoryError } = await supabase
-      .from('price_history')
-      .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-    
-    if (priceHistoryError) {
-      console.error('Error fetching pending requests:', priceHistoryError)
+    const priceHistoryData = await fetchAllPages((from, to) =>
+      supabase
+        .from('price_history')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    )
+
+    if (priceHistoryData.length === 0) {
       return []
     }
-    
-    if (!priceHistoryData || priceHistoryData.length === 0) {
-      return []
-    }
-    
-    // Get unique variant_ids to fetch product details
+
     const variantIds = Array.from(new Set(priceHistoryData.map(entry => entry.variant_id)))
-    
-    // Fetch product details for these variants
-    const { data: productsData, error: productsError } = await supabase
-      .from('products')
-      .select('variant_id, product_title, size, color, company_sku')
-      .in('variant_id', variantIds)
-    
-    if (productsError) {
-      console.error('Error fetching products:', productsError)
-      // Return price history without product details
-      return priceHistoryData
-    }
+
+    const productsData = await fetchAllByInChunks(
+      variantIds,
+      POSTGREST_IN_CHUNK_SIZE,
+      (chunk, from, to) =>
+        supabase
+          .from('products')
+          .select('variant_id, product_title, size, color, company_sku')
+          .in('variant_id', chunk)
+          .range(from, to)
+    )
     
     // Create a map of variant_id to product details
     const productsMap = new Map(
@@ -599,40 +594,42 @@ export async function getPendingRequestCount(): Promise<number> {
 export async function getPendingApprovalsCount(): Promise<number> {
   try {
     let priceRows: any[] = []
-    let priceQueryOk = true
-    const { data: priceRowsMaybe, error: priceError } = await supabase
-      .from('price_history')
-      .select('product_id, variant_id, created_by_supplier_id, created_at, status')
-      .eq('status', 'pending')
-
-    if (priceError) {
-      const msg = priceError?.message?.toLowerCase?.() || ''
-      // If the DB doesn't yet have `status`, treat all price_history rows as pending for badge purposes.
-      if (msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
-        priceQueryOk = false
-        const { data: priceRowsNoStatus, error: priceError2 } = await supabase
+    try {
+      priceRows = await fetchAllPages((from, to) =>
+        supabase
           .from('price_history')
-          .select('product_id, variant_id, created_by_supplier_id, created_at')
-
-        if (priceError2) {
-          console.error('Error fetching pending approvals count (fallback):', priceError2)
-          return await getPendingStatusChangeCount()
-        }
-
-        priceRows = (priceRowsNoStatus || []).map((r: any) => ({ ...r, status: 'pending' }))
+          .select('product_id, variant_id, created_by_supplier_id, created_at, status')
+          .eq('status', 'pending')
+          .range(from, to)
+      )
+    } catch (priceError: any) {
+      const msg = priceError?.message?.toLowerCase?.() || ''
+      if (msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
+        const priceRowsNoStatus = await fetchAllPages((from, to) =>
+          supabase
+            .from('price_history')
+            .select('product_id, variant_id, created_by_supplier_id, created_at')
+            .range(from, to)
+        )
+        priceRows = priceRowsNoStatus.map((r: any) => ({ ...r, status: 'pending' }))
       } else {
-        priceQueryOk = false
         console.error('Error fetching pending approvals count:', priceError)
         return await getPendingStatusChangeCount()
       }
-    } else {
-      priceRows = priceRowsMaybe || []
     }
 
-    const { data: statusRows } = await supabase
-      .from('variant_status_change_requests')
-      .select('product_id, variant_id, request_scope, created_by_supplier_id, created_at, status')
-      .eq('status', 'pending')
+    let statusRows: any[] = []
+    try {
+      statusRows = await fetchAllPages((from, to) =>
+        supabase
+          .from('variant_status_change_requests')
+          .select('product_id, variant_id, request_scope, created_by_supplier_id, created_at, status')
+          .eq('status', 'pending')
+          .range(from, to)
+      )
+    } catch {
+      statusRows = []
+    }
 
     const toMinuteBucket = (iso: string) => {
       const d = new Date(iso)
@@ -670,64 +667,66 @@ export async function fetchRequestsByStatus(
   company_sku?: string
 }>> {
   try {
-    // First, get price history entries
-    let query = supabase.from('price_history').select('*')
-
-    // Only filter by status if not 'all'
-    if (status !== 'all') query = query.eq('status', status)
-
-    const { data: priceHistoryData, error: priceHistoryError } = await query.order('created_at', { ascending: false })
-
-    if (priceHistoryError) {
+    let priceHistoryData: PriceHistoryEntry[] = []
+    try {
+      priceHistoryData = await fetchAllPages((from, to) => {
+        let query = supabase.from('price_history').select('*')
+        if (status !== 'all') query = query.eq('status', status)
+        return query.order('created_at', { ascending: false }).range(from, to)
+      })
+    } catch (priceHistoryError: any) {
       const msg = priceHistoryError?.message?.toLowerCase?.() || ''
-      // If the DB hasn't been migrated yet and `status` column is missing,
-      // fetch everything and assume it matches the requested status.
       if (status !== 'all' && msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
-        const { data: priceHistoryData2, error: priceHistoryError2 } = await supabase
-          .from('price_history')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (priceHistoryError2) {
-          console.error('Error fetching requests by status (fallback):', priceHistoryError2)
-          return []
-        }
-
-        return (priceHistoryData2 || []).map((entry: any) => ({
+        const priceHistoryData2 = await fetchAllPages((from, to) =>
+          supabase.from('price_history').select('*').order('created_at', { ascending: false }).range(from, to)
+        )
+        return priceHistoryData2.map((entry: any) => ({
           ...entry,
           status,
           reviewed_at: entry.reviewed_at ?? null,
-          reviewed_by: entry.reviewed_by ?? null
+          reviewed_by: entry.reviewed_by ?? null,
         }))
       }
 
       console.error('Error fetching requests by status:', priceHistoryError)
       return []
     }
-    
-    if (!priceHistoryData || priceHistoryData.length === 0) {
+
+    if (priceHistoryData.length === 0) {
       return []
     }
 
     const productIds = Array.from(new Set(priceHistoryData.map((entry) => entry.product_id)))
     const variantIds = Array.from(new Set(priceHistoryData.map((entry) => entry.variant_id)))
 
-    const [{ data: productsByProductId }, { data: productsByVariantId }] = await Promise.all([
-      supabase
-        .from('products')
-        .select('product_id, product_title, size, color, company_sku')
-        .in('product_id', productIds),
-      supabase
-        .from('products')
-        .select('variant_id, product_title, size, color, company_sku')
-        .in('variant_id', variantIds),
+    const [productsByProductId, productsByVariantId] = await Promise.all([
+      fetchAllByInChunks(
+        productIds,
+        POSTGREST_IN_CHUNK_SIZE,
+        (chunk, from, to) =>
+          supabase
+            .from('products')
+            .select('product_id, product_title, size, color, company_sku')
+            .in('product_id', chunk)
+            .range(from, to)
+      ),
+      fetchAllByInChunks(
+        variantIds,
+        POSTGREST_IN_CHUNK_SIZE,
+        (chunk, from, to) =>
+          supabase
+            .from('products')
+            .select('variant_id, product_title, size, color, company_sku')
+            .in('variant_id', chunk)
+            .range(from, to)
+      ),
     ])
 
     const byProductId = new Map(
-      (productsByProductId || []).map((p) => [p.product_id, p])
+      productsByProductId.map((p) => [p.product_id, p])
     )
     const byVariantId = new Map(
-      (productsByVariantId || []).map((p) => [p.variant_id, p])
+      productsByVariantId.map((p) => [p.variant_id, p])
     )
 
     return priceHistoryData.map((entry) => {

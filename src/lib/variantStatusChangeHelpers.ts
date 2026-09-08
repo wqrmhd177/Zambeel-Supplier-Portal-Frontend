@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { fetchAllPages } from './supabasePagination'
 
 export interface VariantStatusChangeRequest {
   id: string
@@ -85,14 +86,11 @@ export async function fetchStatusRequestsByStatus(
   status: 'pending' | 'approved' | 'rejected' | 'all'
 ): Promise<VariantStatusChangeRequest[]> {
   try {
-    let query = supabase.from('variant_status_change_requests').select('*')
-    if (status !== 'all') query = query.eq('status', status)
-    const { data, error } = await query.order('created_at', { ascending: false })
-    if (error) {
-      console.error('Error fetching status change requests:', error)
-      return []
-    }
-    return data || []
+    return await fetchAllPages((from, to) => {
+      let query = supabase.from('variant_status_change_requests').select('*')
+      if (status !== 'all') query = query.eq('status', status)
+      return query.order('created_at', { ascending: false }).range(from, to)
+    })
   } catch (err) {
     console.error('Unexpected error fetching status change requests:', err)
     return []
@@ -201,17 +199,15 @@ export async function fetchPendingStatusRequestsForSupplier(
   supplierId: string
 ): Promise<VariantStatusChangeRequest[]> {
   try {
-    const { data, error } = await supabase
-      .from('variant_status_change_requests')
-      .select('*')
-      .eq('status', 'pending')
-      .eq('created_by_supplier_id', supplierId)
-      .order('created_at', { ascending: false })
-    if (error) {
-      console.error('Error fetching pending status requests:', error)
-      return []
-    }
-    return data || []
+    return await fetchAllPages((from, to) =>
+      supabase
+        .from('variant_status_change_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .eq('created_by_supplier_id', supplierId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    )
   } catch (err) {
     console.error('Unexpected error fetching pending status requests:', err)
     return []

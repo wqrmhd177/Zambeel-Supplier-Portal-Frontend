@@ -29,6 +29,17 @@ export async function POST(request: NextRequest) {
       .limit(50)
 
     if (fetchError) {
+      console.error('[auth/login] Supabase users fetch failed:', fetchError.message)
+      const msg = fetchError.message || ''
+      if (/restricted|egress|quota|spend cap/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              'The portal is temporarily unavailable because the database service limit has been reached. Please contact your administrator or try again later.',
+          },
+          { status: 503 }
+        )
+      }
       return NextResponse.json({ error: 'An error occurred. Please try again.' }, { status: 500 })
     }
 

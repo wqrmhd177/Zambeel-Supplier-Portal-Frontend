@@ -1,4 +1,10 @@
 import { supabase } from './supabase'
+import {
+  fetchAllByInChunks,
+  fetchAllPages,
+  POSTGREST_IN_CHUNK_SIZE,
+  POSTGREST_PAGE_SIZE,
+} from './supabasePagination'
 
 export type ProductAvailabilityStatus = 'pending' | 'delayed' | 'completed' | 'cancelled'
 export type ProductStatusInput = 'already_listed' | 'not_listed' | 'not_sure'
@@ -219,30 +225,25 @@ function countryMatchesMarket(market: string, country: string | null | undefined
   return keywords.some((keyword) => normalizedCountry.includes(keyword))
 }
 
-/** PostgREST max-rows is 1000; page until the last incomplete page. */
-const POSTGREST_PAGE_SIZE = 1000
-
 /** PostgREST rejects very large `.in()` filters — batch request IDs. */
 async function fetchResponsesForRequestIds(
   requestIds: string[]
 ): Promise<ProductAvailabilityResponse[]> {
   if (requestIds.length === 0) return []
 
-  const CHUNK_SIZE = 80
   const allRows: ProductAvailabilityResponse[] = []
 
-  for (let i = 0; i < requestIds.length; i += CHUNK_SIZE) {
-    const chunk = requestIds.slice(i, i + CHUNK_SIZE)
-    const { data, error } = await supabase
-      .from('product_availability_responses')
-      .select('*')
-      .in('request_id', chunk)
-      .order('round_number', { ascending: false })
-
-    if (error) {
-      throw new Error(error.message || 'Failed to fetch availability responses')
-    }
-    if (data) allRows.push(...(data as ProductAvailabilityResponse[]))
+  for (let i = 0; i < requestIds.length; i += POSTGREST_IN_CHUNK_SIZE) {
+    const chunk = requestIds.slice(i, i + POSTGREST_IN_CHUNK_SIZE)
+    const rows = await fetchAllPages((from, to) =>
+      supabase
+        .from('product_availability_responses')
+        .select('*')
+        .in('request_id', chunk)
+        .order('round_number', { ascending: false })
+        .range(from, to)
+    )
+    allRows.push(...(rows as ProductAvailabilityResponse[]))
   }
 
   return allRows
@@ -272,10 +273,7 @@ async function fetchAllRequestRows(params: {
   const role = (params.userRole || '').toLowerCase()
   const mgrMarket = role === 'manager' ? await resolveManagerMarket(params.userFriendlyId) : undefined
 
-  const allRows: any[] = []
-  let from = 0
-
-  for (;;) {
+  return fetchAllPages((from, to) => {
     let requestQuery = supabase
       .from('product_availability_requests')
       .select('*')
@@ -294,18 +292,8 @@ async function fetchAllRequestRows(params: {
       requestQuery = requestQuery.eq('is_draft', false)
     }
 
-    const { data, error } = await requestQuery.range(from, from + POSTGREST_PAGE_SIZE - 1)
-    if (error) {
-      throw new Error(error.message || 'Failed to fetch availability requests')
-    }
-
-    const page = data || []
-    allRows.push(...page)
-    if (page.length < POSTGREST_PAGE_SIZE) break
-    from += POSTGREST_PAGE_SIZE
-  }
-
-  return allRows
+    return requestQuery.range(from, from + POSTGREST_PAGE_SIZE - 1)
+  })
 }
 
 function attachResponsesToRequests(

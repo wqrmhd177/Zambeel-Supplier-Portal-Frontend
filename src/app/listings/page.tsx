@@ -8,7 +8,7 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
-import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
+import { groupProductsByProductId, fetchProductsWithVariants, fetchAllProductRows, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import {
   formatVariantLabel,
@@ -87,17 +87,7 @@ export default function ListingsPage() {
     setError('')
     try {
       // Legacy products (multiple rows per product_id)
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (legacyError) {
-        console.error('Error fetching products:', legacyError)
-        setError('Failed to load products')
-        setIsLoading(false)
-        return
-      }
+      const legacyData = await fetchAllProductRows()
 
       const legacyGrouped = groupProductsByProductId(legacyData || [])
 

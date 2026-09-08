@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Package, 
@@ -28,7 +28,7 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
-import { groupProductsByProductId, fetchProductsWithVariants, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
+import { groupProductsByProductId, fetchProductsWithVariants, fetchAllProductRows, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
 import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import { fetchPendingPriceRequests, PriceHistoryEntry, createPriceHistoryEntry } from '@/lib/priceHistoryHelpers'
@@ -130,7 +130,6 @@ export default function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
-  const purchaserFilterInitialized = useRef(false)
   const [filterSupplier, setFilterSupplier] = useState<string>('all') // For purchasers
   const [suppliers, setSuppliers] = useState<SupplierInfo[]>([]) // For purchasers
   const [supplierMap, setSupplierMap] = useState<Map<string, SupplierInfo>>(new Map()) // Map user_id to supplier info
@@ -185,15 +184,6 @@ export default function ProductsPage() {
       fetchProducts()
     }
   }, [isAuthenticated, authLoading, router])
-
-  // Default status filter for purchaser: show Active products (same-country active products)
-  useEffect(() => {
-    if (authLoading || !userRole) return
-    if (userRole === 'purchaser' && !purchaserFilterInitialized.current) {
-      purchaserFilterInitialized.current = true
-      setFilterStatus('active')
-    }
-  }, [authLoading, userRole])
 
   // Cache extracted images for the viewer product
   const viewerImages = useMemo(() => {
@@ -344,8 +334,7 @@ export default function ProductsPage() {
         const legacyGrouped = groupProductsByProductId(legacyProductsData)
 
         const supplierIds = supplierList.map(s => s.user_id).filter(Boolean)
-        const newProducts = await fetchProductsWithVariants()
-        const newGrouped = newProducts.filter(p => supplierIds.includes(p.fk_owned_by))
+        const newGrouped = await fetchProductsWithVariants({ ownerIds: supplierIds })
 
         const allProductIds = new Set([
           ...legacyGrouped.map(p => p.product_id),
@@ -379,19 +368,7 @@ export default function ProductsPage() {
           setSupplierMap(map)
         }
 
-        const { data: legacyData, error: legacyError } = await supabase
-          .from('products')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (legacyError) {
-          console.error('Error fetching products:', legacyError)
-          setProducts([])
-          setAllProducts([])
-          setIsLoading(false)
-          return
-        }
-
+        const legacyData = await fetchAllProductRows()
         const legacyGrouped = groupProductsByProductId(legacyData || [])
         const newGrouped = await fetchProductsWithVariants()
 
@@ -411,20 +388,7 @@ export default function ProductsPage() {
           return
         }
 
-        const { data: legacyData, error: legacyError } = await supabase
-          .from('products')
-          .select('*')
-          .eq('fk_owned_by', userFriendlyId)
-          .order('created_at', { ascending: false })
-
-        if (legacyError) {
-          console.error('Error fetching products:', legacyError)
-          setProducts([])
-          setAllProducts([])
-          setIsLoading(false)
-          return
-        }
-
+        const legacyData = await fetchAllProductRows({ ownerId: userFriendlyId })
         const legacyGrouped = groupProductsByProductId(legacyData || [])
         const newGrouped = await fetchProductsWithVariants({ ownerId: userFriendlyId })
 

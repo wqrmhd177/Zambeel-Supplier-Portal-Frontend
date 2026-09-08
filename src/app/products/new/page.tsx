@@ -70,6 +70,8 @@ const VARIANT_NAME_SUGGESTIONS = [
   'Weight',
   'Power Output',
   'Pack SIZE',
+  'Multi Colors',
+  'Multi Variants',
 ]
 
 const VARIANT_PRIMARY_ORDER = [
@@ -1689,7 +1691,7 @@ export default function AddProductPage() {
                   {/* Stock Available in Your Shop */}
                   <div className="mb-6" data-field="stockAmount" data-error={errors.stockAmount ? 'true' : undefined}>
                     <label htmlFor="mainStockAmount" className="block text-sm font-semibold text-gray-900 mb-2">
-                      Stock Available in Your Shop <span className="text-red-500">*</span>
+                      Stock Available in Your Shop <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                     </label>
                     <input
                       id="mainStockAmount"
