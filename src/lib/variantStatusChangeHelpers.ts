@@ -86,7 +86,7 @@ export async function fetchStatusRequestsByStatus(
   status: 'pending' | 'approved' | 'rejected' | 'all'
 ): Promise<VariantStatusChangeRequest[]> {
   try {
-    return await fetchAllPages((from, to) => {
+    return await fetchAllPages<VariantStatusChangeRequest>(async (from, to) => {
       let query = supabase.from('variant_status_change_requests').select('*')
       if (status !== 'all') query = query.eq('status', status)
       return query.order('created_at', { ascending: false }).range(from, to)
@@ -199,7 +199,7 @@ export async function fetchPendingStatusRequestsForSupplier(
   supplierId: string
 ): Promise<VariantStatusChangeRequest[]> {
   try {
-    return await fetchAllPages((from, to) =>
+    return await fetchAllPages<VariantStatusChangeRequest>(async (from, to) =>
       supabase
         .from('variant_status_change_requests')
         .select('*')

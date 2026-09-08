@@ -4,14 +4,17 @@ export const POSTGREST_PAGE_SIZE = 1000
 /** Max IDs per `.in()` filter before the request URL gets too long. */
 export const POSTGREST_IN_CHUNK_SIZE = 80
 
-type QueryResult<T> = {
-  data: T[] | null
+type SupabaseListResponse = {
+  data: unknown
   error: { message: string } | null
 }
 
-/** Page through a query until all rows are loaded. */
+/**
+ * Page through a query until all rows are loaded.
+ * Pass an async callback that returns a Supabase `.range()` query.
+ */
 export async function fetchAllPages<T>(
-  runQuery: (from: number, to: number) => Promise<QueryResult<T>> | QueryResult<T>
+  runQuery: (from: number, to: number) => Promise<SupabaseListResponse>
 ): Promise<T[]> {
   const allRows: T[] = []
   let from = 0
@@ -20,7 +23,7 @@ export async function fetchAllPages<T>(
     const { data, error } = await runQuery(from, from + POSTGREST_PAGE_SIZE - 1)
     if (error) throw new Error(error.message)
 
-    const page = data ?? []
+    const page = (Array.isArray(data) ? data : []) as T[]
     allRows.push(...page)
     if (page.length < POSTGREST_PAGE_SIZE) break
     from += POSTGREST_PAGE_SIZE
@@ -33,14 +36,14 @@ export async function fetchAllPages<T>(
 export async function fetchAllByInChunks<T, Id>(
   ids: Id[],
   chunkSize: number,
-  runChunkQuery: (chunk: Id[], from: number, to: number) => Promise<QueryResult<T>> | QueryResult<T>
+  runChunkQuery: (chunk: Id[], from: number, to: number) => Promise<SupabaseListResponse>
 ): Promise<T[]> {
   if (ids.length === 0) return []
 
   const allRows: T[] = []
   for (let i = 0; i < ids.length; i += chunkSize) {
     const chunk = ids.slice(i, i + chunkSize)
-    const rows = await fetchAllPages((from, to) => runChunkQuery(chunk, from, to))
+    const rows = await fetchAllPages<T>((from, to) => runChunkQuery(chunk, from, to))
     allRows.push(...rows)
   }
 

@@ -1,6 +1,5 @@
 import { supabase } from './supabase'
 import {
-  fetchAllByInChunks,
   fetchAllPages,
   POSTGREST_IN_CHUNK_SIZE,
   POSTGREST_PAGE_SIZE,
@@ -235,7 +234,7 @@ async function fetchResponsesForRequestIds(
 
   for (let i = 0; i < requestIds.length; i += POSTGREST_IN_CHUNK_SIZE) {
     const chunk = requestIds.slice(i, i + POSTGREST_IN_CHUNK_SIZE)
-    const rows = await fetchAllPages((from, to) =>
+    const rows = await fetchAllPages<ProductAvailabilityResponse>(async (from, to) =>
       supabase
         .from('product_availability_responses')
         .select('*')
@@ -243,7 +242,7 @@ async function fetchResponsesForRequestIds(
         .order('round_number', { ascending: false })
         .range(from, to)
     )
-    allRows.push(...(rows as ProductAvailabilityResponse[]))
+    allRows.push(...rows)
   }
 
   return allRows
@@ -273,7 +272,7 @@ async function fetchAllRequestRows(params: {
   const role = (params.userRole || '').toLowerCase()
   const mgrMarket = role === 'manager' ? await resolveManagerMarket(params.userFriendlyId) : undefined
 
-  return fetchAllPages((from, to) => {
+  return fetchAllPages<ProductAvailabilityRequest>(async (from, to) => {
     let requestQuery = supabase
       .from('product_availability_requests')
       .select('*')

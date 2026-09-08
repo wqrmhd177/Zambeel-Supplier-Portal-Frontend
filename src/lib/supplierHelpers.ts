@@ -208,7 +208,7 @@ export async function getSupplierByUserId(userId: string): Promise<SupplierInfo 
  */
 export async function getProductCountForSupplier(supplierUserId: string): Promise<number> {
   try {
-    const data = await fetchAllPages((from, to) =>
+    const data = await fetchAllPages<{ product_id: number }>(async (from, to) =>
       supabase
         .from('products')
         .select('product_id')

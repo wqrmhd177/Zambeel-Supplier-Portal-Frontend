@@ -76,7 +76,9 @@ export async function fetchAllProductRows(filters?: {
   ownerIds?: string[]
   status?: string
 }): Promise<ProductRow[]> {
-  const applyFilters = (query: ReturnType<typeof supabase.from>) => {
+  const withFilters = (
+    query: ReturnType<ReturnType<typeof supabase.from>['select']>
+  ) => {
     let nextQuery = query
     if (filters?.ownerId) {
       nextQuery = nextQuery.eq('fk_owned_by', filters.ownerId)
@@ -88,11 +90,11 @@ export async function fetchAllProductRows(filters?: {
   }
 
   if (filters?.ownerIds && filters.ownerIds.length > 0) {
-    const rows = await fetchAllByInChunks(
+    const rows = await fetchAllByInChunks<ProductRow, string>(
       filters.ownerIds,
       POSTGREST_IN_CHUNK_SIZE,
-      (chunk, from, to) =>
-        applyFilters(supabase.from('products').select('*'))
+      async (chunk, from, to) =>
+        withFilters(supabase.from('products').select('*'))
           .in('fk_owned_by', chunk)
           .order('created_at', { ascending: false })
           .range(from, to)
@@ -102,8 +104,8 @@ export async function fetchAllProductRows(filters?: {
     )
   }
 
-  return fetchAllPages((from, to) =>
-    applyFilters(supabase.from('products').select('*'))
+  return fetchAllPages<ProductRow>(async (from, to) =>
+    withFilters(supabase.from('products').select('*'))
       .order('created_at', { ascending: false })
       .range(from, to)
   )
@@ -113,10 +115,10 @@ async function fetchVariantsForProductIds(productIds: number[]): Promise<Product
   if (productIds.length === 0) return []
 
   try {
-    return await fetchAllByInChunks(
+    return await fetchAllByInChunks<ProductVariantRow, number>(
       productIds,
       POSTGREST_IN_CHUNK_SIZE,
-      (chunk, from, to) =>
+      async (chunk, from, to) =>
         supabase
           .from('product_variants')
           .select('*')
@@ -145,10 +147,10 @@ export async function fetchProductsWithVariants(
     let productsData: ProductRow[]
 
     if (filters?.productIds && filters.productIds.length > 0) {
-      productsData = await fetchAllByInChunks(
+      productsData = await fetchAllByInChunks<ProductRow, number>(
         filters.productIds,
         POSTGREST_IN_CHUNK_SIZE,
-        (chunk, from, to) =>
+        async (chunk, from, to) =>
           supabase
             .from('products')
             .select('*')
@@ -271,7 +273,7 @@ export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
  */
 export async function getPendingListingsCount(): Promise<number> {
   try {
-    const data = await fetchAllPages((from, to) =>
+    const data = await fetchAllPages<{ product_id: number }>(async (from, to) =>
       supabase
         .from('products')
         .select('product_id')
@@ -293,7 +295,7 @@ export async function getPendingListingsCount(): Promise<number> {
  */
 export async function getListingsSidebarCount(): Promise<number> {
   try {
-    const data = await fetchAllPages((from, to) =>
+    const data = await fetchAllPages<{ product_id: number }>(async (from, to) =>
       supabase.from('products').select('product_id').range(from, to)
     )
     if (data.length === 0) return 0

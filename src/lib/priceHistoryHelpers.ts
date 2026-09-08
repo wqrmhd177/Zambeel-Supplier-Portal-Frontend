@@ -374,7 +374,7 @@ export async function getVariantPriceStats(variantId: number): Promise<{
  */
 export async function fetchPendingPriceRequests(supplierId?: string): Promise<PriceHistoryEntry[]> {
   try {
-    return await fetchAllPages((from, to) => {
+    return await fetchAllPages<PriceHistoryEntry>(async (from, to) => {
       let query = supabase.from('price_history').select('*').eq('status', 'pending')
       if (supplierId) query = query.eq('created_by_supplier_id', supplierId)
       return query.order('created_at', { ascending: false }).range(from, to)
@@ -396,7 +396,7 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
   company_sku?: string
 }>> {
   try {
-    const priceHistoryData = await fetchAllPages((from, to) =>
+    const priceHistoryData = await fetchAllPages<PriceHistoryEntry>(async (from, to) =>
       supabase
         .from('price_history')
         .select('*')
@@ -411,10 +411,16 @@ export async function fetchPendingRequestsWithProducts(): Promise<Array<PriceHis
 
     const variantIds = Array.from(new Set(priceHistoryData.map(entry => entry.variant_id)))
 
-    const productsData = await fetchAllByInChunks(
+    const productsData = await fetchAllByInChunks<{
+      variant_id: number
+      product_title?: string
+      size?: string
+      color?: string
+      company_sku?: string
+    }, number>(
       variantIds,
       POSTGREST_IN_CHUNK_SIZE,
-      (chunk, from, to) =>
+      async (chunk, from, to) =>
         supabase
           .from('products')
           .select('variant_id, product_title, size, color, company_sku')
@@ -595,7 +601,13 @@ export async function getPendingApprovalsCount(): Promise<number> {
   try {
     let priceRows: any[] = []
     try {
-      priceRows = await fetchAllPages((from, to) =>
+      priceRows = await fetchAllPages<{
+        product_id: number
+        variant_id: number
+        created_by_supplier_id: string | null
+        created_at: string
+        status: string
+      }>(async (from, to) =>
         supabase
           .from('price_history')
           .select('product_id, variant_id, created_by_supplier_id, created_at, status')
@@ -605,7 +617,12 @@ export async function getPendingApprovalsCount(): Promise<number> {
     } catch (priceError: any) {
       const msg = priceError?.message?.toLowerCase?.() || ''
       if (msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
-        const priceRowsNoStatus = await fetchAllPages((from, to) =>
+        const priceRowsNoStatus = await fetchAllPages<{
+          product_id: number
+          variant_id: number
+          created_by_supplier_id: string | null
+          created_at: string
+        }>(async (from, to) =>
           supabase
             .from('price_history')
             .select('product_id, variant_id, created_by_supplier_id, created_at')
@@ -620,7 +637,14 @@ export async function getPendingApprovalsCount(): Promise<number> {
 
     let statusRows: any[] = []
     try {
-      statusRows = await fetchAllPages((from, to) =>
+      statusRows = await fetchAllPages<{
+        product_id: number
+        variant_id: number
+        request_scope: string | null
+        created_by_supplier_id: string | null
+        created_at: string
+        status: string
+      }>(async (from, to) =>
         supabase
           .from('variant_status_change_requests')
           .select('product_id, variant_id, request_scope, created_by_supplier_id, created_at, status')
@@ -669,7 +693,7 @@ export async function fetchRequestsByStatus(
   try {
     let priceHistoryData: PriceHistoryEntry[] = []
     try {
-      priceHistoryData = await fetchAllPages((from, to) => {
+      priceHistoryData = await fetchAllPages<PriceHistoryEntry>(async (from, to) => {
         let query = supabase.from('price_history').select('*')
         if (status !== 'all') query = query.eq('status', status)
         return query.order('created_at', { ascending: false }).range(from, to)
@@ -677,7 +701,7 @@ export async function fetchRequestsByStatus(
     } catch (priceHistoryError: any) {
       const msg = priceHistoryError?.message?.toLowerCase?.() || ''
       if (status !== 'all' && msg.includes('status') && (msg.includes('column') || msg.includes('does not exist'))) {
-        const priceHistoryData2 = await fetchAllPages((from, to) =>
+        const priceHistoryData2 = await fetchAllPages<PriceHistoryEntry>(async (from, to) =>
           supabase.from('price_history').select('*').order('created_at', { ascending: false }).range(from, to)
         )
         return priceHistoryData2.map((entry: any) => ({
@@ -700,20 +724,32 @@ export async function fetchRequestsByStatus(
     const variantIds = Array.from(new Set(priceHistoryData.map((entry) => entry.variant_id)))
 
     const [productsByProductId, productsByVariantId] = await Promise.all([
-      fetchAllByInChunks(
+      fetchAllByInChunks<{
+        product_id: number
+        product_title?: string
+        size?: string
+        color?: string
+        company_sku?: string
+      }, number>(
         productIds,
         POSTGREST_IN_CHUNK_SIZE,
-        (chunk, from, to) =>
+        async (chunk, from, to) =>
           supabase
             .from('products')
             .select('product_id, product_title, size, color, company_sku')
             .in('product_id', chunk)
             .range(from, to)
       ),
-      fetchAllByInChunks(
+      fetchAllByInChunks<{
+        variant_id: number
+        product_title?: string
+        size?: string
+        color?: string
+        company_sku?: string
+      }, number>(
         variantIds,
         POSTGREST_IN_CHUNK_SIZE,
-        (chunk, from, to) =>
+        async (chunk, from, to) =>
           supabase
             .from('products')
             .select('variant_id, product_title, size, color, company_sku')
