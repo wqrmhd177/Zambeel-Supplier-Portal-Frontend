@@ -110,14 +110,16 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
     
     console.log('Fetching suppliers for purchaser country:', purchaserCountry)
     
-    // Fetch suppliers from the same country only
+    // Fetch suppliers from the same country only.
+    // Match on either `country` OR `stock_location_country` so that suppliers whose personal
+    // country differs from their stock location are still visible to the correct purchaser.
     const { data, error } = await supabase
       .from('users')
       .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
       .eq('role', 'supplier')
       .eq('archived', false)
       .eq('account_approval', 'Approved')
-      .eq('country', purchaserCountry)
+      .or(`country.eq.${purchaserCountry},stock_location_country.eq.${purchaserCountry}`)
       .order('shop_name_on_zambeel', { ascending: true })
 
     if (error) {

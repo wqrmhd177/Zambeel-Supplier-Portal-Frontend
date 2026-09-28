@@ -33,7 +33,7 @@ const SEARCH_DEBOUNCE_MS = 400
 
 export default function OrdersPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId, userCountry } = useAuth()
 
   const [orders, setOrders] = useState<MetabaseOrder[]>([])
   const [page, setPage] = useState(1)
@@ -50,6 +50,8 @@ export default function OrdersPage() {
   const [filterStatusBucket, setFilterStatusBucket] = useState('all')
   const [filterCountry, setFilterCountry] = useState('all')
   const [dateFilter, setDateFilter] = useState<DateFilterPreset>('all')
+  // Whether the purchaser's country filter has been resolved (prevents premature all-country load)
+  const [purchaserCountryReady, setPurchaserCountryReady] = useState(false)
 
   const [stats, setStats] = useState({
     total: 0,
@@ -69,6 +71,20 @@ export default function OrdersPage() {
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login')
   }, [authLoading, isAuthenticated, router])
+
+  // Auto-apply country filter for purchasers so they only see their own country's orders
+  useEffect(() => {
+    if (authLoading) return
+    if (userRole === 'purchaser') {
+      if (userCountry) {
+        setFilterCountry(userCountry)
+      }
+      setPurchaserCountryReady(true)
+    } else {
+      // Non-purchasers (admin, supplier, manager) can see all countries freely
+      setPurchaserCountryReady(true)
+    }
+  }, [authLoading, userRole, userCountry])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), SEARCH_DEBOUNCE_MS)
@@ -131,6 +147,8 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return
+    // For purchasers: wait until their country is resolved to avoid a brief all-countries flash
+    if (!purchaserCountryReady) return
 
     let effectivePage = page
     if (prevDebouncedSearch.current !== debouncedSearch) {
@@ -151,7 +169,7 @@ export default function OrdersPage() {
       vendorId,
       dateFilter,
     })
-  }, [isAuthenticated, page, debouncedSearch, filterStatus, filterStatusBucket, filterCountry, vendorId, dateFilter, loadOrders])
+  }, [isAuthenticated, purchaserCountryReady, page, debouncedSearch, filterStatus, filterStatusBucket, filterCountry, vendorId, dateFilter, loadOrders])
 
   const handleRefresh = () => {
     void loadOrders({

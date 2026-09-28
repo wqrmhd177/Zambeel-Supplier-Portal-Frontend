@@ -131,6 +131,29 @@ function computeStats(rows: MetabaseOrder[]): OrderStats {
   return { total, inTransit, toBeDispatch, delivered, returned, returning }
 }
 
+// Country keyword groups for purchaser-country-based filtering.
+// Allows "Saudi Arabia" from Supabase to match "KSA" or "SAUDI ARABIA" in Metabase orders.
+const COUNTRY_KEYWORDS: Record<string, string[]> = {
+  'saudi arabia': ['ksa', 'saudi', 'saudi arabia'],
+  'united arab emirates': ['uae', 'united arab emirates', 'dubai', 'abu dhabi'],
+  'pakistan': ['pak', 'pakistan'],
+  'kuwait': ['kuwait'],
+}
+
+function matchesCountryFilter(orderCountry: string, filter: string): boolean {
+  const oc = (orderCountry || '').toLowerCase().trim()
+  const fc = filter.toLowerCase().trim()
+  if (!oc) return false
+  if (oc === fc) return true
+  // Check keyword groups for broader cross-format matching
+  for (const [canonical, keywords] of Object.entries(COUNTRY_KEYWORDS)) {
+    const filterMatchesGroup = fc === canonical || keywords.includes(fc)
+    const orderMatchesGroup = oc === canonical || keywords.some((k) => oc === k)
+    if (filterMatchesGroup && orderMatchesGroup) return true
+  }
+  return false
+}
+
 function filterRows(
   rows: MetabaseOrder[],
   search: string,
@@ -154,8 +177,7 @@ function filterRows(
   }
 
   if (country !== 'all') {
-    const cl = country.toLowerCase()
-    out = out.filter((o) => o.country?.toLowerCase() === cl)
+    out = out.filter((o) => matchesCountryFilter(o.country ?? '', country))
   }
 
   const terms = parseSearchTerms(search)
