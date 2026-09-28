@@ -248,17 +248,18 @@ async function fetchResponsesForRequestIds(
   return allRows
 }
 
-async function resolveManagerMarket(userFriendlyId: string): Promise<string | undefined> {
-  const { data: mgrUser } = await supabase
+async function resolveMarketForUser(userFriendlyId: string): Promise<string | undefined> {
+  const { data: user } = await supabase
     .from('users')
-    .select('country')
+    .select('country, stock_location_country')
     .eq('user_id', userFriendlyId)
     .single()
-  const mgrCountry = String(mgrUser?.country || '').trim().toUpperCase()
+  const country = String(user?.country || user?.stock_location_country || '').trim().toUpperCase()
   return Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
-    keywords.some((k) => mgrCountry.includes(k))
+    keywords.some((k) => country.includes(k))
   )?.[0]
 }
+
 
 /**
  * Fetch every matching request row, paging past PostgREST's 1000-row cap.
@@ -270,7 +271,11 @@ async function fetchAllRequestRows(params: {
   includeDrafts: boolean
 }): Promise<any[]> {
   const role = (params.userRole || '').toLowerCase()
-  const mgrMarket = role === 'manager' ? await resolveManagerMarket(params.userFriendlyId) : undefined
+  // Resolve market for both manager and purchaser roles
+  const userMarket =
+    role === 'manager' || role === 'purchaser'
+      ? await resolveMarketForUser(params.userFriendlyId)
+      : undefined
 
   return fetchAllPages<ProductAvailabilityRequest>(async (from, to) => {
     let requestQuery = supabase
@@ -284,9 +289,12 @@ async function fetchAllRequestRows(params: {
       requestQuery = requestQuery
         .eq('assigned_purchaser_user_id', params.userFriendlyId)
         .eq('is_draft', false)
+      // Additionally scope to the purchaser's own market so they never see
+      // another country's requests even if assigned_purchaser_user_id data is stale.
+      if (userMarket) requestQuery = requestQuery.eq('market', userMarket)
     } else if (role === 'manager') {
       requestQuery = requestQuery.eq('is_draft', false)
-      if (mgrMarket) requestQuery = requestQuery.eq('market', mgrMarket)
+      if (userMarket) requestQuery = requestQuery.eq('market', userMarket)
     } else if (!params.includeDrafts) {
       requestQuery = requestQuery.eq('is_draft', false)
     }

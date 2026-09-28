@@ -333,7 +333,16 @@ export default function ProductsPage() {
         const legacyProductsData = await fetchProductsForPurchaser(userId)
         const legacyGrouped = groupProductsByProductId(legacyProductsData)
 
-        const supplierIds = supplierList.map(s => s.user_id).filter(Boolean)
+        const supplierIds = supplierList.map(s => s.user_id).filter(Boolean) as string[]
+        // Guard: if no suppliers found for this purchaser's country, show nothing.
+        // Calling fetchProductsWithVariants({ ownerIds: [] }) would return ALL products.
+        if (supplierIds.length === 0) {
+          setAllProducts([])
+          setProducts([])
+          calculateStats([])
+          setIsLoading(false)
+          return
+        }
         const newGrouped = await fetchProductsWithVariants({ ownerIds: supplierIds })
 
         const allProductIds = new Set([

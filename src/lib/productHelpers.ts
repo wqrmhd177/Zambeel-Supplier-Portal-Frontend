@@ -89,7 +89,10 @@ export async function fetchAllProductRows(filters?: {
     return nextQuery
   }
 
-  if (filters?.ownerIds && filters.ownerIds.length > 0) {
+  // If ownerIds was explicitly provided but is empty it means "this scope has no owners" —
+  // return an empty list rather than falling through and fetching every product in the DB.
+  if (filters?.ownerIds !== undefined) {
+    if (filters.ownerIds.length === 0) return []
     const rows = await fetchAllByInChunks<ProductRow, string>(
       filters.ownerIds,
       POSTGREST_IN_CHUNK_SIZE,
