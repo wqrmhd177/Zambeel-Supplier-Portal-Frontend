@@ -18,7 +18,7 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
 import { getPurchaserIntegerId, getPurchaserCountry } from '@/lib/supplierHelpers'
-import { ALL_COUNTRIES, getCurrencyForCountry } from '@/lib/countryData'
+import { ALL_COUNTRIES, getCurrencyDisplayLabel, getCurrencyForCountry } from '@/lib/countryData'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SUPPLIER_TYPES = ['Trader', 'Wholesaler', 'Retailer', 'Selling from Home'] as const
@@ -48,29 +48,6 @@ interface FormData {
   categories: string[]
 }
 
-/** Must match Supabase `users.check_currency_valid` allowed values. */
-const ALLOWED_USER_CURRENCIES = ['PKR', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR', 'IQD'] as const
-type AllowedUserCurrency = (typeof ALLOWED_USER_CURRENCIES)[number]
-
-function resolveCurrencyForUserInsert(country: string): AllowedUserCurrency {
-  const fromMap = getCurrencyForCountry(country)
-  if (ALLOWED_USER_CURRENCIES.includes(fromMap as AllowedUserCurrency)) {
-    return fromMap as AllowedUserCurrency
-  }
-
-  const normalized = country.trim().toLowerCase()
-  if (normalized.includes('pak')) return 'PKR'
-  if (normalized.includes('emirates') || normalized.includes('uae')) return 'AED'
-  if (normalized.includes('saudi')) return 'SAR'
-  if (normalized.includes('qatar')) return 'QAR'
-  if (normalized.includes('kuwait')) return 'KWD'
-  if (normalized.includes('bahrain')) return 'BHD'
-  if (normalized.includes('oman')) return 'OMR'
-  if (normalized.includes('iraq')) return 'IQD'
-
-  return 'PKR'
-}
-
 const INIT: FormData = {
   email: '',
   password: '',
@@ -80,7 +57,7 @@ const INIT: FormData = {
   whatsapp: '',
   country: '',
   city: '',
-  currency: 'PKR',
+  currency: '',
   supplierType: '',
   categories: [],
 }
@@ -117,7 +94,7 @@ export default function CreateSupplierPage() {
         setForm((f) => ({
           ...f,
           country: result.country,
-          currency: resolveCurrencyForUserInsert(result.country),
+          currency: getCurrencyForCountry(result.country),
         }))
       }
     })
@@ -130,7 +107,7 @@ export default function CreateSupplierPage() {
   }
 
   function handleCountryChange(country: string) {
-    const currency = resolveCurrencyForUserInsert(country)
+    const currency = getCurrencyForCountry(country)
     setForm((f) => ({ ...f, country, currency }))
     setErrors((e) => ({ ...e, country: '' }))
   }
@@ -165,6 +142,10 @@ export default function CreateSupplierPage() {
     if (!form.phone.trim()) e.phone = 'Phone number is required'
     if (!form.whatsapp.trim()) e.whatsapp = 'WhatsApp number is required'
     if (!form.country) e.country = 'Country is required'
+    const currency = getCurrencyForCountry(form.country)
+    if (form.country && !currency) {
+      e.country = 'Could not determine currency for this country. Please pick another country or contact support.'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -205,7 +186,12 @@ export default function CreateSupplierPage() {
 
       const ownerName = form.ownerName.trim()
       const pickupCity = form.city.trim()
-      const currency = resolveCurrencyForUserInsert(form.country)
+      const currency = getCurrencyForCountry(form.country)
+      if (!currency) {
+        setSubmitError('Could not determine currency for the selected country.')
+        setSaving(false)
+        return
+      }
 
       const { data: newUser, error: insertError } = await supabase
         .from('users')
@@ -447,10 +433,16 @@ export default function CreateSupplierPage() {
               </div>
 
               {/* ── Currency (auto) ── */}
-              <Field label="Currency">
+              <Field label="Currency (auto)">
                 <input
                   type="text"
-                  value={form.currency}
+                  value={
+                    form.currency
+                      ? getCurrencyDisplayLabel(form.currency)
+                      : form.country
+                        ? 'Select a supported country'
+                        : 'Auto-set when you choose a country'
+                  }
                   readOnly
                   placeholder="Auto-set from country"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-500 focus:outline-none"

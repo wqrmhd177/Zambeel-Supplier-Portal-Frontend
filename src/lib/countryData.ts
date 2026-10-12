@@ -423,15 +423,15 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   Pakistan: 'PKR',
   'United Arab Emirates': 'AED',
   'Saudia Arabia': 'SAR',
+  'Saudi Arabia': 'SAR',
   Qatar: 'QAR',
   Kuwait: 'KWD',
   Bahrain: 'BHD',
   Oman: 'OMR',
   Iraq: 'IQD',
+  India: 'INR',
   'United States': 'USD',
   'United Kingdom': 'GBP',
-  'Saudi Arabia': 'SAR',
-  India: 'INR',
   Egypt: 'EGP',
   Turkey: 'TRY',
   China: 'CNY',
@@ -462,7 +462,73 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   'Sri Lanka': 'LKR',
 }
 
+/** Common abbreviations / alternate spellings stored on user records */
+const COUNTRY_NAME_ALIASES: Record<string, string> = {
+  pak: 'Pakistan',
+  pakistan: 'Pakistan',
+  uae: 'United Arab Emirates',
+  'united arab emirates': 'United Arab Emirates',
+  ksa: 'Saudi Arabia',
+  'saudia arabia': 'Saudia Arabia',
+  'saudi arabia': 'Saudi Arabia',
+  qatar: 'Qatar',
+  qtr: 'Qatar',
+  kuwait: 'Kuwait',
+  kwt: 'Kuwait',
+  bahrain: 'Bahrain',
+  bhr: 'Bahrain',
+  oman: 'Oman',
+  omn: 'Oman',
+  iraq: 'Iraq',
+  irq: 'Iraq',
+  india: 'India',
+  ind: 'India',
+}
+
+export const CURRENCY_LABELS: Record<string, string> = {
+  PKR: 'Pakistani Rupee',
+  INR: 'Indian Rupee',
+  AED: 'UAE Dirham',
+  IQD: 'Iraqi Dinar',
+  SAR: 'Saudi Riyal',
+  QAR: 'Qatari Riyal',
+  KWD: 'Kuwaiti Dinar',
+  BHD: 'Bahraini Dinar',
+  OMR: 'Omani Rial',
+  USD: 'US Dollar',
+  GBP: 'British Pound',
+  EUR: 'Euro',
+  EGP: 'Egyptian Pound',
+  TRY: 'Turkish Lira',
+  BDT: 'Bangladeshi Taka',
+  NPR: 'Nepalese Rupee',
+  LKR: 'Sri Lankan Rupee',
+}
+
+function normalizeCountryForCurrency(country: string): string {
+  const trimmed = country.trim()
+  if (!trimmed) return ''
+
+  const alias = COUNTRY_NAME_ALIASES[trimmed.toLowerCase()]
+  if (alias) return alias
+
+  const exactKey = Object.keys(COUNTRY_CURRENCY).find(
+    (key) => key.toLowerCase() === trimmed.toLowerCase()
+  )
+  if (exactKey) return exactKey
+
+  return trimmed
+}
+
+/** ISO currency code for a country name (used when creating users / showing prices). */
 export const getCurrencyForCountry = (country: string): string => {
-  if (!country || !country.trim()) return 'USD'
-  return COUNTRY_CURRENCY[country.trim()] ?? 'USD'
+  const normalized = normalizeCountryForCurrency(country)
+  if (!normalized) return ''
+  return COUNTRY_CURRENCY[normalized] ?? ''
+}
+
+export const getCurrencyDisplayLabel = (currencyCode: string): string => {
+  const code = currencyCode.trim().toUpperCase()
+  if (!code) return ''
+  return CURRENCY_LABELS[code] ? `${code} — ${CURRENCY_LABELS[code]}` : code
 }
