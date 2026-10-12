@@ -1,9 +1,13 @@
-name: Deploy to Vercel
+# Production deploys are handled by Vercel ↔ GitHub integration on the
+# supplier-portal project (https://supplier-portal-zm.vercel.app).
+#
+# This workflow is optional: run manually after updating GitHub secret VERCEL_TOKEN
+# (create at https://vercel.com/account/tokens).
+
+name: Deploy to Vercel (manual)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
