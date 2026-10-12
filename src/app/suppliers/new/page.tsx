@@ -180,6 +180,9 @@ export default function CreateSupplierPage() {
         }
       }
 
+      const ownerName = form.ownerName.trim()
+      const pickupCity = form.city.trim()
+
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
@@ -187,19 +190,19 @@ export default function CreateSupplierPage() {
           password: form.password,
           role: 'supplier',
           purchaser_id: purchaserIntId,
-          full_name: form.ownerName.trim() || null,
-          owner_name: form.ownerName.trim() || null,
+          name: ownerName || null,
           shop_name_on_zambeel: form.shopNameOnZambeel.trim(),
           phone_number: form.phone.trim(),
           whatsapp_phone_number: form.whatsapp.trim(),
           country: form.country || null,
           stock_location_country: form.country || null,
-          pickup_city: form.city.trim() || null,
+          pickup_city: pickupCity || null,
           currency: form.currency || 'USD',
           supplier_type: form.supplierType || null,
           category: form.categories.length > 0 ? JSON.stringify(form.categories) : null,
           onboarded: true,
           account_approval: 'Approved',
+          archived: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }])
@@ -325,7 +328,7 @@ export default function CreateSupplierPage() {
                 </div>
               </Field>
 
-              <Field label="Owner Name">
+              <Field label="Name">
                 <div className="relative">
                   <User className="absolute left-3 top-3.5 text-gray-400 w-4 h-4" />
                   <input
@@ -404,12 +407,12 @@ export default function CreateSupplierPage() {
                   </div>
                 </Field>
 
-                <Field label="City">
+                <Field label="Pickup City">
                   <input
                     type="text"
                     value={form.city}
                     onChange={(e) => set('city', e.target.value)}
-                    placeholder="City (optional)"
+                    placeholder="Pickup city (optional)"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:border-primary-blue"
                   />
                 </Field>
