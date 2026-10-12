@@ -1,83 +1,35 @@
 import { supabase } from '@/lib/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   fetchAllByInChunks,
   fetchAllPages,
   POSTGREST_IN_CHUNK_SIZE,
 } from '@/lib/supabasePagination'
+import {
+  groupProductsByProductId,
+  type GroupedProduct,
+  type ProductRow,
+  type ProductVariantRow,
+  type VariantInfo,
+} from '@/lib/productTypes'
 
-export interface ProductRow {
-  product_id: number
-  product_title: string
-  image: string | string[] | null
-  bar_code: string
-  fk_owned_by: string
-  status: 'pending' | 'active' | 'inactive' | 'rejected'
-  created_at: string
-  updated_at: string
-  has_variants?: boolean
-  options?: Array<{ name: string; values: string[] }> | null
-  variant_id: number | null
-  size: string | null
-  size_category: string | null
-  color: string | null
-  variant_selling_price: number | null
-  variant_stock: number | null
-  company_sku: string | null
-  active?: boolean | null
-}
-
-export interface ProductVariantRow {
-  variant_id: number
-  product_id: number
-  option_values: Record<string, string>
-  sku: string | null
-  price: number
-  stock: number
-  image: string[] | null
-  active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface GroupedProduct {
-  product_id: number
-  product_title: string
-  image: string | string[] | null
-  bar_code: string
-  fk_owned_by: string
-  status: 'pending' | 'active' | 'inactive' | 'rejected'
-  created_at: string
-  updated_at: string
-  has_variants?: boolean
-  options?: Array<{ name: string; values: string[] }> | null
-  variants: VariantInfo[]
-}
-
-export interface VariantInfo {
-  variant_id: number
-  bar_code: string | null
-  size: string | null
-  size_category: string | null
-  color: string | null
-  option_values?: Record<string, string>
-  sku?: string | null
-  variant_selling_price: number
-  variant_stock: number
-  company_sku: string | null
-  active?: boolean
-  image?: string[] | null
-}
+export type ProductDbClient = SupabaseClient
+export type { GroupedProduct, ProductRow, ProductVariantRow, VariantInfo }
+export { groupProductsByProductId }
 
 /**
  * Fetch all product rows, paging past PostgREST's 1000-row cap.
  */
-export async function fetchAllProductRows(filters?: {
-  ownerId?: string
-  ownerIds?: string[]
-  status?: string
-}): Promise<ProductRow[]> {
+export async function fetchAllProductRows(
+  filters?: {
+    ownerId?: string
+    ownerIds?: string[]
+    status?: string
+  },
+  db: ProductDbClient = supabase
+): Promise<ProductRow[]> {
   const withFilters = (
-    query: ReturnType<ReturnType<typeof supabase.from>['select']>
+    query: ReturnType<ReturnType<typeof db.from>['select']>
   ) => {
     let nextQuery = query
     if (filters?.ownerId) {
@@ -97,7 +49,7 @@ export async function fetchAllProductRows(filters?: {
       filters.ownerIds,
       POSTGREST_IN_CHUNK_SIZE,
       async (chunk, from, to) =>
-        withFilters(supabase.from('products').select('*'))
+        withFilters(db.from('products').select('*'))
           .in('fk_owned_by', chunk)
           .order('created_at', { ascending: false })
           .range(from, to)
@@ -108,13 +60,16 @@ export async function fetchAllProductRows(filters?: {
   }
 
   return fetchAllPages<ProductRow>(async (from, to) =>
-    withFilters(supabase.from('products').select('*'))
+    withFilters(db.from('products').select('*'))
       .order('created_at', { ascending: false })
       .range(from, to)
   )
 }
 
-async function fetchVariantsForProductIds(productIds: number[]): Promise<ProductVariantRow[]> {
+async function fetchVariantsForProductIds(
+  productIds: number[],
+  db: ProductDbClient = supabase
+): Promise<ProductVariantRow[]> {
   if (productIds.length === 0) return []
 
   try {
@@ -122,7 +77,7 @@ async function fetchVariantsForProductIds(productIds: number[]): Promise<Product
       productIds,
       POSTGREST_IN_CHUNK_SIZE,
       async (chunk, from, to) =>
-        supabase
+        db
           .from('product_variants')
           .select('*')
           .in('product_id', chunk)
@@ -144,7 +99,8 @@ export async function fetchProductsWithVariants(
     ownerIds?: string[]
     status?: string
     productIds?: number[]
-  }
+  },
+  db: ProductDbClient = supabase
 ): Promise<GroupedProduct[]> {
   try {
     let productsData: ProductRow[]
@@ -154,7 +110,7 @@ export async function fetchProductsWithVariants(
         filters.productIds,
         POSTGREST_IN_CHUNK_SIZE,
         async (chunk, from, to) =>
-          supabase
+          db
             .from('products')
             .select('*')
             .in('product_id', chunk)
@@ -162,11 +118,14 @@ export async function fetchProductsWithVariants(
             .range(from, to)
       )
     } else {
-      productsData = await fetchAllProductRows({
-        ownerId: filters?.ownerId,
-        ownerIds: filters?.ownerIds,
-        status: filters?.status,
-      })
+      productsData = await fetchAllProductRows(
+        {
+          ownerId: filters?.ownerId,
+          ownerIds: filters?.ownerIds,
+          status: filters?.status,
+        },
+        db
+      )
     }
 
     if (!productsData || productsData.length === 0) {
@@ -174,7 +133,7 @@ export async function fetchProductsWithVariants(
     }
 
     const productIds = productsData.map(p => p.product_id)
-    const variantsData = await fetchVariantsForProductIds(productIds)
+    const variantsData = await fetchVariantsForProductIds(productIds, db)
 
     const variantsByProductId = new Map<number, ProductVariantRow[]>()
     if (variantsData) {
@@ -224,50 +183,6 @@ export async function fetchProductsWithVariants(
     console.error('Unexpected error fetching products with variants:', err)
     throw err
   }
-}
-
-/**
- * Groups legacy product rows by product_id (for backward compatibility).
- * Products with multiple variants will have multiple rows that get grouped together.
- */
-export function groupProductsByProductId(rows: ProductRow[]): GroupedProduct[] {
-  const grouped = new Map<number, GroupedProduct>()
-
-  rows.forEach((row) => {
-    if (!grouped.has(row.product_id)) {
-      grouped.set(row.product_id, {
-        product_id: row.product_id,
-        product_title: row.product_title,
-        image: row.image,
-        bar_code: row.bar_code,
-        fk_owned_by: row.fk_owned_by,
-        status: row.status,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        has_variants: row.has_variants,
-        options: row.options,
-        variants: [],
-      })
-    }
-
-    const product = grouped.get(row.product_id)!
-
-    if (row.variant_id) {
-      product.variants.push({
-        variant_id: row.variant_id,
-        bar_code: row.bar_code,
-        size: row.size,
-        size_category: row.size_category,
-        color: row.color,
-        variant_selling_price: row.variant_selling_price || 0,
-        variant_stock: row.variant_stock || 0,
-        company_sku: row.company_sku,
-        active: row.active ?? true,
-      })
-    }
-  })
-
-  return Array.from(grouped.values())
 }
 
 /**

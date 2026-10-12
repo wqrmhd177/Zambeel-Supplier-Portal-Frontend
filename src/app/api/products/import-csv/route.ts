@@ -176,7 +176,10 @@ export async function POST(request: NextRequest) {
           }
         })
 
-        const { error: variantError } = await supabase.from('product_variants').insert(variantRows)
+        const { data: insertedVariants, error: variantError } = await supabase
+          .from('product_variants')
+          .insert(variantRows)
+          .select('variant_id, price, stock')
         if (variantError) {
           await supabase.from('products').delete().eq('product_id', productId)
           failures.push({
@@ -185,6 +188,21 @@ export async function POST(request: NextRequest) {
             error: variantError.message || 'Variant insert failed',
           })
           continue
+        }
+
+        const firstVariant = insertedVariants?.[0]
+        if (firstVariant) {
+          const firstRow = group.rows[0]
+          await supabase
+            .from('products')
+            .update({
+              variant_id: firstVariant.variant_id,
+              variant_selling_price: firstVariant.price,
+              variant_stock: firstVariant.stock,
+              company_sku: firstRow?.sku || null,
+              updated_at: now,
+            })
+            .eq('product_id', productId)
         }
 
         variantsCreated += variantRows.length

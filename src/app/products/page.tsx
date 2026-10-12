@@ -29,8 +29,9 @@ import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import Pagination from '@/components/Pagination'
 import { useAuth } from '@/hooks/useAuth'
-import { groupProductsByProductId, fetchProductsWithVariants, fetchAllProductRows, GroupedProduct, VariantInfo } from '@/lib/productHelpers'
-import { fetchProductsForPurchaser, fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { GroupedProduct, VariantInfo } from '@/lib/productHelpers'
+import { fetchProductCatalogViaApi, deleteProductViaApi } from '@/lib/productCatalogApi'
+import { fetchSuppliersForPurchaser, SupplierInfo, getPurchaserIntegerId } from '@/lib/supplierHelpers'
 import { extractImages } from '@/lib/imageHelpers'
 import { fetchPendingPriceRequests, PriceHistoryEntry, createPriceHistoryEntry } from '@/lib/priceHistoryHelpers'
 import {
@@ -317,49 +318,25 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     setIsLoading(true)
     try {
-      let groupedProducts: GroupedProduct[] = []
-
       if (userRole === 'purchaser' && userId) {
         const supplierList = await fetchSuppliersForPurchaser(userId)
         setSuppliers(supplierList)
-        
+
         const map = new Map<string, SupplierInfo>()
-        supplierList.forEach(s => {
+        supplierList.forEach((s) => {
           if (s.user_id) {
             map.set(s.user_id, s)
           }
         })
         setSupplierMap(map)
 
-        const legacyProductsData = await fetchProductsForPurchaser(userId)
-        const legacyGrouped = groupProductsByProductId(legacyProductsData)
-
-        const supplierIds = supplierList.map(s => s.user_id).filter(Boolean) as string[]
-        // Guard: if no suppliers found for this purchaser's country, show nothing.
-        // Calling fetchProductsWithVariants({ ownerIds: [] }) would return ALL products.
-        if (supplierIds.length === 0) {
+        if (supplierList.length === 0) {
           setAllProducts([])
           setProducts([])
           calculateStats([])
           setIsLoading(false)
           return
         }
-        const newGrouped = await fetchProductsWithVariants({ ownerIds: supplierIds })
-
-        const allProductIds = new Set([
-          ...legacyGrouped.map(p => p.product_id),
-          ...newGrouped.map(p => p.product_id)
-        ])
-
-        const mergedMap = new Map<number, GroupedProduct>()
-        legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
-        newGrouped.forEach(p => {
-          if (p.variants.length > 0) {
-            mergedMap.set(p.product_id, p)
-          }
-        })
-
-        groupedProducts = Array.from(mergedMap.values())
       } else if (userRole === 'admin' || userRole === 'listing_agent' || userRole === 'manager') {
         const { data: supplierData, error: supplierError } = await supabase
           .from('users')
@@ -370,48 +347,22 @@ export default function ProductsPage() {
         if (!supplierError && supplierData) {
           setSuppliers(supplierData)
           const map = new Map<string, SupplierInfo>()
-          supplierData.forEach(s => {
+          supplierData.forEach((s) => {
             if (s.user_id) {
               map.set(s.user_id, s)
             }
           })
           setSupplierMap(map)
         }
-
-        const legacyData = await fetchAllProductRows()
-        const legacyGrouped = groupProductsByProductId(legacyData || [])
-        const newGrouped = await fetchProductsWithVariants()
-
-        const mergedMap = new Map<number, GroupedProduct>()
-        legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
-        newGrouped.forEach(p => {
-          if (p.variants.length > 0) {
-            mergedMap.set(p.product_id, p)
-          }
-        })
-
-        groupedProducts = Array.from(mergedMap.values())
-      } else {
+      } else if (userRole === 'supplier') {
         const userFriendlyId = localStorage.getItem('userFriendlyId')
         if (!userFriendlyId) {
           setIsLoading(false)
           return
         }
-
-        const legacyData = await fetchAllProductRows({ ownerId: userFriendlyId })
-        const legacyGrouped = groupProductsByProductId(legacyData || [])
-        const newGrouped = await fetchProductsWithVariants({ ownerId: userFriendlyId })
-
-        const mergedMap = new Map<number, GroupedProduct>()
-        legacyGrouped.forEach(p => mergedMap.set(p.product_id, p))
-        newGrouped.forEach(p => {
-          if (p.variants.length > 0) {
-            mergedMap.set(p.product_id, p)
-          }
-        })
-
-        groupedProducts = Array.from(mergedMap.values())
       }
+
+      const groupedProducts = await fetchProductCatalogViaApi()
 
       setAllProducts(groupedProducts)
       applyFilters(groupedProducts)
@@ -550,15 +501,13 @@ export default function ProductsPage() {
   const handleDeleteProduct = async (productId: number) => {
     setIsDeletingProduct(true)
     try {
-      // Delete variants first, then the product
-      await supabase.from('product_variants').delete().eq('product_id', productId)
-      const { error } = await supabase.from('products').delete().eq('product_id', productId)
-      if (error) throw error
+      await deleteProductViaApi(productId)
       setProducts((prev) => prev.filter((p) => p.product_id !== productId))
       setAllProducts((prev) => prev.filter((p) => p.product_id !== productId))
     } catch (err) {
       console.error('Error deleting product:', err)
-      alert('Failed to delete product. Please try again.')
+      const msg = err instanceof Error ? err.message : 'Failed to delete product. Please try again.'
+      alert(msg)
     } finally {
       setIsDeletingProduct(false)
       setDeleteConfirmProductId(null)
@@ -968,7 +917,7 @@ export default function ProductsPage() {
                         } else {
                           displayPrice = `${currency} ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`
                         }
-                      } else if (product.variants.length > 0 && product.variants[0].variant_selling_price) {
+                      } else if (product.variants.length > 0 && product.variants[0].variant_selling_price != null) {
                         displayPrice = `${currency} ${product.variants[0].variant_selling_price.toLocaleString()}`
                       } else {
                         displayPrice = `${currency} 0`
@@ -1357,7 +1306,7 @@ export default function ProductsPage() {
                   >
                     <label className="text-xs sm:text-sm font-semibold text-white/70 block mb-2">Price</label>
                     <p className="text-sm sm:text-base md:text-lg font-medium text-white">
-                      {selectedProduct.variants.length > 0 && selectedProduct.variants[0].variant_selling_price
+                      {selectedProduct.variants.length > 0 && selectedProduct.variants[0].variant_selling_price != null
                         ? `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} ${selectedProduct.variants[0].variant_selling_price.toLocaleString()}`
                         : `${userRole === 'supplier' ? currentUserCurrency : (currencyByOwnerId.get(selectedProduct.fk_owned_by) ?? 'USD')} 0`}
                     </p>

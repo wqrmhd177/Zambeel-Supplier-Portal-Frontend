@@ -13,8 +13,8 @@ export async function getCurrencyForUserId(userId: string | null): Promise<strin
   const id = (userId ?? '').trim()
   if (!id) return 'USD'
   try {
-    const select = 'stock_location_country,country'
-    let data: { stock_location_country?: string; country?: string } | null = null
+    const select = 'currency,stock_location_country,country'
+    let data: { currency?: string; stock_location_country?: string; country?: string } | null = null
     let error: Error | null = null
 
     const byId = await supabase.from('users').select(select).eq('id', id).maybeSingle()
@@ -29,6 +29,8 @@ export async function getCurrencyForUserId(userId: string | null): Promise<strin
       else if (byUserId.error) error = byUserId.error
     }
     if (!data) return 'USD'
+    const fromColumn = (data.currency || '').trim().toUpperCase()
+    if (fromColumn) return fromColumn
     const country = (data.stock_location_country || data.country || '').trim()
     return getCurrencyForCountry(country)
   } catch {
@@ -45,22 +47,28 @@ export async function getCurrenciesForUserIds(userIds: string[]): Promise<Map<st
   const unique = Array.from(new Set(userIds.filter(Boolean)))
   if (unique.length === 0) return map
   try {
-    const addRow = (row: { user_id?: string; id?: string; stock_location_country?: string; country?: string }) => {
-      const country = (row.stock_location_country || row.country || '').trim()
-      const currency = getCurrencyForCountry(country)
+    const addRow = (row: {
+      user_id?: string
+      id?: string
+      currency?: string
+      stock_location_country?: string
+      country?: string
+    }) => {
+      const fromColumn = (row.currency || '').trim().toUpperCase()
+      const currency = fromColumn || getCurrencyForCountry((row.stock_location_country || row.country || '').trim())
       if (row.user_id) map.set(row.user_id, currency)
       if (row.id) map.set(row.id, currency)
     }
     let { data, error } = await supabase
       .from('users')
-      .select('user_id, id, stock_location_country, country')
+      .select('user_id, id, currency, stock_location_country, country')
       .in('user_id', unique)
     if (!error && data) data.forEach(addRow)
     const missing = unique.filter((id) => !map.has(id))
     if (missing.length > 0) {
       const { data: dataById, error: errById } = await supabase
         .from('users')
-        .select('user_id, id, stock_location_country, country')
+        .select('user_id, id, currency, stock_location_country, country')
         .in('id', missing)
       if (!errById && dataById) dataById.forEach(addRow)
     }
