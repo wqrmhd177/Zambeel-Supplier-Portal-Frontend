@@ -190,7 +190,7 @@ export default function CreateSupplierPage() {
           password: form.password,
           role: 'supplier',
           purchaser_id: purchaserIntId,
-          name: ownerName || null,
+          full_name: ownerName || null,
           shop_name_on_zambeel: form.shopNameOnZambeel.trim(),
           phone_number: form.phone.trim(),
           whatsapp_phone_number: form.whatsapp.trim(),
@@ -328,7 +328,7 @@ export default function CreateSupplierPage() {
                 </div>
               </Field>
 
-              <Field label="Name">
+              <Field label="Full Name">
                 <div className="relative">
                   <User className="absolute left-3 top-3.5 text-gray-400 w-4 h-4" />
                   <input
