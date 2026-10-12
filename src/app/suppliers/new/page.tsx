@@ -17,8 +17,14 @@ import { supabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/hooks/useAuth'
-import { getPurchaserIntegerId, getPurchaserCountry } from '@/lib/supplierHelpers'
-import { ALL_COUNTRIES, getCurrencyDisplayLabel, getCurrencyForCountry } from '@/lib/countryData'
+import { getPurchaserCountry, getPurchaserIntegerId } from '@/lib/supplierHelpers'
+import { getCurrencyDisplayLabel, getCurrencyForCountry } from '@/lib/countryData'
+import {
+  SUPPLIER_MARKETS,
+  formatSupplierMarketOption,
+  resolveSupplierMarketFromCountry,
+  resolveMarketForUserInsert,
+} from '@/lib/supportedMarkets'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SUPPLIER_TYPES = ['Trader', 'Wholesaler', 'Retailer', 'Selling from Home'] as const
@@ -90,13 +96,23 @@ export default function CreateSupplierPage() {
   useEffect(() => {
     if (authLoading || !isAuthenticated || userRole !== 'purchaser' || !userId) return
     getPurchaserCountry(userId).then((result) => {
-      if (result) {
+      if (!result) return
+      const resolved = resolveMarketForUserInsert(result.country)
+      if (resolved.ok) {
         setForm((f) => ({
           ...f,
-          country: result.country,
-          currency: getCurrencyForCountry(result.country),
+          country: resolved.dbCountry,
+          currency: resolved.currency,
         }))
+        return
       }
+      const market = resolveSupplierMarketFromCountry(result.country)
+      const dbCountry = market?.dbCountry ?? result.country
+      setForm((f) => ({
+        ...f,
+        country: dbCountry,
+        currency: getCurrencyForCountry(dbCountry),
+      }))
     })
   }, [authLoading, isAuthenticated, userRole, userId])
 
@@ -107,8 +123,16 @@ export default function CreateSupplierPage() {
   }
 
   function handleCountryChange(country: string) {
-    const currency = getCurrencyForCountry(country)
-    setForm((f) => ({ ...f, country, currency }))
+    const resolved = resolveMarketForUserInsert(country)
+    if (resolved.ok) {
+      setForm((f) => ({
+        ...f,
+        country: resolved.dbCountry,
+        currency: resolved.currency,
+      }))
+    } else {
+      setForm((f) => ({ ...f, country, currency: getCurrencyForCountry(country) }))
+    }
     setErrors((e) => ({ ...e, country: '' }))
   }
 
@@ -142,9 +166,9 @@ export default function CreateSupplierPage() {
     if (!form.phone.trim()) e.phone = 'Phone number is required'
     if (!form.whatsapp.trim()) e.whatsapp = 'WhatsApp number is required'
     if (!form.country) e.country = 'Country is required'
-    const currency = getCurrencyForCountry(form.country)
-    if (form.country && !currency) {
-      e.country = 'Could not determine currency for this country. Please pick another country or contact support.'
+    else {
+      const resolved = resolveMarketForUserInsert(form.country)
+      if (!resolved.ok) e.country = resolved.error
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -160,12 +184,61 @@ export default function CreateSupplierPage() {
     setSubmitSuccess('')
 
     try {
-      // Check for duplicate email
+      const resolved = resolveMarketForUserInsert(form.country)
+      if (!resolved.ok) {
+        setSubmitError(resolved.error)
+        setSaving(false)
+        return
+      }
+
+      const res = await fetch('/api/suppliers/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
+          ownerName: form.ownerName.trim(),
+          shopNameOnZambeel: form.shopNameOnZambeel.trim(),
+          phone: form.phone.trim(),
+          whatsapp: form.whatsapp.trim(),
+          country: resolved.dbCountry,
+          city: form.city.trim(),
+          supplierType: form.supplierType,
+          categories: form.categories,
+        }),
+      })
+
+      const payload = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        if (payload.user?.user_id) {
+          setSubmitSuccess(
+            `Supplier account created successfully! User ID: ${payload.user.user_id} (used for product ownership).`
+          )
+        } else {
+          setSubmitSuccess('Supplier account created successfully!')
+        }
+        setTimeout(() => router.push('/suppliers'), 1500)
+        return
+      }
+
+      // Fallback when API route is not deployed yet (legacy hosting)
+      if (res.status !== 404 && res.status !== 405) {
+        const msg =
+          res.status === 401
+            ? 'Session expired. Please sign out and sign in again, then retry.'
+            : payload.error || 'Failed to create supplier. Please try again.'
+        setSubmitError(msg)
+        setSaving(false)
+        return
+      }
+
       const { data: existing } = await supabase
         .from('users')
         .select('id')
-        .eq('email', form.email.trim())
-        .single()
+        .ilike('email', form.email.trim())
+        .maybeSingle()
 
       if (existing) {
         setSubmitError('An account with this email already exists.')
@@ -173,7 +246,6 @@ export default function CreateSupplierPage() {
         return
       }
 
-      // Resolve purchaser integer ID (needed for linkage)
       let purchaserIntId: number | null = null
       if (userRole !== 'admin' && userId) {
         purchaserIntId = await getPurchaserIntegerId(userId)
@@ -184,39 +256,32 @@ export default function CreateSupplierPage() {
         }
       }
 
-      const ownerName = form.ownerName.trim()
-      const pickupCity = form.city.trim()
-      const currency = getCurrencyForCountry(form.country)
-      if (!currency) {
-        setSubmitError('Could not determine currency for the selected country.')
-        setSaving(false)
-        return
-      }
-
       const { data: newUser, error: insertError } = await supabase
         .from('users')
-        .insert([{
-          email: form.email.trim(),
-          password: form.password,
-          role: 'supplier',
-          purchaser_id: purchaserIntId,
-          full_name: ownerName || null,
-          shop_name_on_zambeel: form.shopNameOnZambeel.trim(),
-          phone_number: form.phone.trim(),
-          whatsapp_phone_number: form.whatsapp.trim(),
-          country: form.country || null,
-          stock_location_country: form.country || null,
-          pickup_city: pickupCity || null,
-          currency,
-          supplier_type: form.supplierType || null,
-          category: form.categories.length > 0 ? JSON.stringify(form.categories) : null,
-          onboarded: true,
-          account_approval: 'Approved',
-          archived: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }])
-        .select()
+        .insert([
+          {
+            email: form.email.trim(),
+            password: form.password,
+            role: 'supplier',
+            purchaser_id: purchaserIntId,
+            full_name: form.ownerName.trim() || null,
+            shop_name_on_zambeel: form.shopNameOnZambeel.trim(),
+            phone_number: form.phone.trim(),
+            whatsapp_phone_number: form.whatsapp.trim(),
+            country: resolved.dbCountry,
+            stock_location_country: resolved.dbCountry,
+            pickup_city: form.city.trim() || null,
+            currency: resolved.currency,
+            supplier_type: form.supplierType || null,
+            category: form.categories.length > 0 ? JSON.stringify(form.categories) : null,
+            onboarded: true,
+            account_approval: 'Approved',
+            archived: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        .select('id, user_id')
         .single()
 
       if (insertError) {
@@ -224,7 +289,7 @@ export default function CreateSupplierPage() {
           setSubmitError('An account with this email already exists.')
         } else if (insertError.message?.includes('check_currency_valid')) {
           setSubmitError(
-            'Invalid currency for the selected country. Please check Country and try again, or contact support.'
+            `Database rejected currency "${resolved.currency}" for ${resolved.dbCountry}. Run extend_check_currency_valid.sql in Supabase (see frontend/scripts).`
           )
         } else {
           setSubmitError(insertError.message || 'Failed to create supplier. Please try again.')
@@ -233,10 +298,12 @@ export default function CreateSupplierPage() {
         return
       }
 
-      if (newUser) {
-        setSubmitSuccess('Supplier account created successfully!')
-        setTimeout(() => router.push('/suppliers'), 1500)
-      }
+      setSubmitSuccess(
+        newUser?.user_id
+          ? `Supplier created! User ID: ${newUser.user_id}`
+          : 'Supplier account created successfully!'
+      )
+      setTimeout(() => router.push('/suppliers'), 1500)
     } catch (err) {
       console.error('Unexpected error:', err)
       setSubmitError('An unexpected error occurred. Please try again.')
@@ -414,8 +481,10 @@ export default function CreateSupplierPage() {
                       className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white text-gray-900 focus:outline-none ${isCountryLocked ? 'bg-gray-50' : ''} ${errors.country ? 'border-red-500' : 'border-gray-200 focus:border-primary-blue'}`}
                     >
                       <option value="">Select country</option>
-                      {ALL_COUNTRIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
+                      {SUPPLIER_MARKETS.map((m) => (
+                        <option key={m.code} value={m.dbCountry}>
+                          {formatSupplierMarketOption(m)}
+                        </option>
                       ))}
                     </select>
                   </div>

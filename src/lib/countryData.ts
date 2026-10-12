@@ -1,5 +1,10 @@
 // Country-specific data for onboarding form
 
+import {
+  getCurrencyForMarketDbCountry,
+  resolveSupplierMarketFromCountry,
+} from './supportedMarkets'
+
 // All countries for general dropdowns (stock location, bank country, exchange country)
 export const ALL_COUNTRIES = [
   'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
@@ -481,6 +486,9 @@ const COUNTRY_NAME_ALIASES: Record<string, string> = {
   omn: 'Oman',
   iraq: 'Iraq',
   irq: 'Iraq',
+  usa: 'United States',
+  us: 'United States',
+  'united states': 'United States',
   india: 'India',
   ind: 'India',
 }
@@ -522,6 +530,12 @@ function normalizeCountryForCurrency(country: string): string {
 
 /** ISO currency code for a country name (used when creating users / showing prices). */
 export const getCurrencyForCountry = (country: string): string => {
+  const market = resolveSupplierMarketFromCountry(country)
+  if (market) return market.currency
+
+  const fromDb = getCurrencyForMarketDbCountry(country)
+  if (fromDb) return fromDb
+
   const normalized = normalizeCountryForCurrency(country)
   if (!normalized) return ''
   return COUNTRY_CURRENCY[normalized] ?? ''
