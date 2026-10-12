@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Package, 
-  Plus, 
+  Plus,
+  Upload,
   Search, 
   Filter,
   Edit,
@@ -765,13 +766,28 @@ export default function ProductsPage() {
               <h2 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2 theme-heading-gradient">Products</h2>
               <p className="text-sm sm:text-base text-gray-600">Manage your product inventory</p>
             </div>
-            <button
-              onClick={() => router.push('/products/new')}
-              className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all flex items-center justify-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90"
-            >
-              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-              Add Product
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              {(userRole === 'admin' ||
+                userRole === 'purchaser' ||
+                userRole === 'manager' ||
+                userRole === 'listing_agent') && (
+                <button
+                  type="button"
+                  onClick={() => router.push('/products/import')}
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all flex items-center justify-center gap-2 text-violet-700 bg-white border-2 border-violet-200 hover:bg-violet-50"
+                >
+                  <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Import CSV
+                </button>
+              )}
+              <button
+                onClick={() => router.push('/products/new')}
+                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all flex items-center justify-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90"
+              >
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                Add Product
+              </button>
+            </div>
           </div>
 
           {/* Stats Cards: Total, Pending Approval, Active, Inactive, Rejected */}
