@@ -48,6 +48,29 @@ interface FormData {
   categories: string[]
 }
 
+/** Must match Supabase `users.check_currency_valid` allowed values. */
+const ALLOWED_USER_CURRENCIES = ['PKR', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR', 'IQD'] as const
+type AllowedUserCurrency = (typeof ALLOWED_USER_CURRENCIES)[number]
+
+function resolveCurrencyForUserInsert(country: string): AllowedUserCurrency {
+  const fromMap = getCurrencyForCountry(country)
+  if (ALLOWED_USER_CURRENCIES.includes(fromMap as AllowedUserCurrency)) {
+    return fromMap as AllowedUserCurrency
+  }
+
+  const normalized = country.trim().toLowerCase()
+  if (normalized.includes('pak')) return 'PKR'
+  if (normalized.includes('emirates') || normalized.includes('uae')) return 'AED'
+  if (normalized.includes('saudi')) return 'SAR'
+  if (normalized.includes('qatar')) return 'QAR'
+  if (normalized.includes('kuwait')) return 'KWD'
+  if (normalized.includes('bahrain')) return 'BHD'
+  if (normalized.includes('oman')) return 'OMR'
+  if (normalized.includes('iraq')) return 'IQD'
+
+  return 'PKR'
+}
+
 const INIT: FormData = {
   email: '',
   password: '',
@@ -57,7 +80,7 @@ const INIT: FormData = {
   whatsapp: '',
   country: '',
   city: '',
-  currency: 'USD',
+  currency: 'PKR',
   supplierType: '',
   categories: [],
 }
@@ -94,7 +117,7 @@ export default function CreateSupplierPage() {
         setForm((f) => ({
           ...f,
           country: result.country,
-          currency: getCurrencyForCountry(result.country) || 'USD',
+          currency: resolveCurrencyForUserInsert(result.country),
         }))
       }
     })
@@ -107,7 +130,7 @@ export default function CreateSupplierPage() {
   }
 
   function handleCountryChange(country: string) {
-    const currency = getCurrencyForCountry(country) || 'USD'
+    const currency = resolveCurrencyForUserInsert(country)
     setForm((f) => ({ ...f, country, currency }))
     setErrors((e) => ({ ...e, country: '' }))
   }
@@ -182,6 +205,7 @@ export default function CreateSupplierPage() {
 
       const ownerName = form.ownerName.trim()
       const pickupCity = form.city.trim()
+      const currency = resolveCurrencyForUserInsert(form.country)
 
       const { data: newUser, error: insertError } = await supabase
         .from('users')
@@ -197,7 +221,7 @@ export default function CreateSupplierPage() {
           country: form.country || null,
           stock_location_country: form.country || null,
           pickup_city: pickupCity || null,
-          currency: form.currency || 'USD',
+          currency,
           supplier_type: form.supplierType || null,
           category: form.categories.length > 0 ? JSON.stringify(form.categories) : null,
           onboarded: true,
@@ -212,6 +236,10 @@ export default function CreateSupplierPage() {
       if (insertError) {
         if (insertError.code === '23505') {
           setSubmitError('An account with this email already exists.')
+        } else if (insertError.message?.includes('check_currency_valid')) {
+          setSubmitError(
+            'Invalid currency for the selected country. Please check Country and try again, or contact support.'
+          )
         } else {
           setSubmitError(insertError.message || 'Failed to create supplier. Please try again.')
         }
