@@ -147,6 +147,42 @@ export function resolveSupplierMarket(input: string): SupplierMarket | null {
   return resolveSupplierMarketFromCountry(trimmed) ?? getSupplierMarketByDbCountry(trimmed) ?? null
 }
 
+/** Distinct `users.country` / `stock_location_country` values stored for one market (for Supabase filters). */
+export function getMarketCountryDbValues(market: SupplierMarket): string[] {
+  const values = new Set<string>([market.dbCountry, market.code, market.label])
+  for (const alias of market.aliases) {
+    values.add(alias)
+  }
+  // Onboarding uses ALL_COUNTRIES spellings; suppliers created via API use dbCountry (e.g. "Saudia Arabia").
+  if (market.code === 'KSA') values.add('Saudi Arabia')
+  if (market.code === 'PK') values.add('Pakistan')
+  return [...values]
+}
+
+function quotePostgrestString(value: string): string {
+  return `"${String(value).replace(/"/g, '""')}"`
+}
+
+/** Build PostgREST `column.in.(...)` fragment for a list of country strings. */
+export function postgrestInFilter(column: string, values: string[]): string {
+  const unique = [...new Set(values.map((v) => v.trim()).filter(Boolean))]
+  if (unique.length === 0) return `${column}.is.null`
+  return `${column}.in.(${unique.map(quotePostgrestString).join(',')})`
+}
+
+/** True when two stored country fields refer to the same supplier market (e.g. KSA vs Saudia Arabia). */
+export function countriesShareSupplierMarket(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const ma = resolveSupplierMarket(a || '')
+  const mb = resolveSupplierMarket(b || '')
+  if (ma && mb) return ma.code === mb.code
+  const ta = (a || '').trim().toLowerCase()
+  const tb = (b || '').trim().toLowerCase()
+  return Boolean(ta && tb && ta === tb)
+}
+
 /**
  * Country + currency safe for `users` insert (canonical dbCountry + allowed currency).
  */

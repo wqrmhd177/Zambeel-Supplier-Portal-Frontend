@@ -3,6 +3,12 @@
 import { supabase } from './supabase'
 import { fetchAllPages } from './supabasePagination'
 import { fetchAllProductRows } from './productHelpers'
+import {
+  countriesShareSupplierMarket,
+  getMarketCountryDbValues,
+  postgrestInFilter,
+  resolveSupplierMarket,
+} from './supportedMarkets'
 
 /**
  * Get purchaser's country (and optional stock_location_country) for pre-filling new supplier form.
@@ -108,28 +114,45 @@ export async function fetchSuppliersForPurchaser(purchaserUuid: string): Promise
       return []
     }
     
-    console.log('Fetching suppliers for purchaser country:', purchaserCountry)
-    
-    // Fetch suppliers from the same country only.
-    // Match on either `country` OR `stock_location_country` so that suppliers whose personal
-    // country differs from their stock location are still visible to the correct purchaser.
-    const { data, error } = await supabase
+    const purchaserMarket = resolveSupplierMarket(purchaserCountry)
+    console.log('Fetching suppliers for purchaser country:', purchaserCountry, purchaserMarket?.code ?? '(legacy exact match)')
+
+    let query = supabase
       .from('users')
       .select('id, user_id, email, shop_name_on_zambeel, country, phone_number, onboarded, account_approval, created_at')
       .eq('role', 'supplier')
       .eq('archived', false)
       .eq('account_approval', 'Approved')
-      .or(`country.eq.${purchaserCountry},stock_location_country.eq.${purchaserCountry}`)
-      .order('shop_name_on_zambeel', { ascending: true })
+
+    // Same market, not necessarily the same string (e.g. purchaser "KSA" vs supplier "Saudia Arabia").
+    if (purchaserMarket) {
+      const countryValues = [
+        ...getMarketCountryDbValues(purchaserMarket),
+        purchaserCountry,
+        purchaserData?.stock_location_country,
+      ].filter(Boolean) as string[]
+      query = query.or(
+        `${postgrestInFilter('country', countryValues)},${postgrestInFilter('stock_location_country', countryValues)}`
+      )
+    } else {
+      query = query.or(`country.eq.${purchaserCountry},stock_location_country.eq.${purchaserCountry}`)
+    }
+
+    const { data, error } = await query.order('shop_name_on_zambeel', { ascending: true })
 
     if (error) {
       console.error('Error fetching suppliers:', error)
       return []
     }
-    
-    console.log('Found suppliers:', data?.length || 0, data)
 
-    return data || []
+    const rows = data || []
+    const filtered = purchaserMarket
+      ? rows.filter((s) => countriesShareSupplierMarket(purchaserCountry, s.country))
+      : rows
+
+    console.log('Found suppliers:', filtered.length)
+
+    return filtered
   } catch (err) {
     console.error('Unexpected error fetching suppliers:', err)
     return []
