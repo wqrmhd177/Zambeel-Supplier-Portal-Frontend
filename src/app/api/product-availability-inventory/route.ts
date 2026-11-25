@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const SESSION_COOKIE = 'supplier_session'
-
-function isAuthenticated(request: NextRequest): boolean {
-  const val = request.cookies.get(SESSION_COOKIE)?.value
-  return Boolean(val && val.length > 1 && val !== '0')
-}
+import { requireApiActor } from '@/lib/requireApiActor'
 
 const METABASE_PUBLIC_URL =
   'https://zambeel.metabaseapp.com/public/question/050ce5ce-ce25-41e9-b34a-819933ec0235.json'
@@ -23,9 +17,8 @@ function normalizeSku(input: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticated(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const auth = await requireApiActor(request)
+  if (!auth.ok) return auth.response
 
   try {
     const rawSku = request.nextUrl.searchParams.get('sku') || ''

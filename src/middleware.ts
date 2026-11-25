@@ -3,78 +3,47 @@ import type { NextRequest } from 'next/server'
 
 const SESSION_COOKIE = 'supplier_session'
 
-const protectedPaths = [
-  '/dashboard',
-  '/onboarding',
-  '/products',
-  '/profile',
-  '/listings',
-  '/product-availability',
-  '/orders',
-  '/returns',
-  '/approvals',
-  '/suppliers',
-  '/settings',
-]
-
-function isProtectedPath(pathname: string): boolean {
-  return protectedPaths.some((path) => pathname === path || pathname.startsWith(path + '/'))
-}
-
-function isValidSession(value: string | undefined): boolean {
-  if (!value || value.trim() === '') return false
-  // Accept UUID format, numeric IDs (e.g. "41"), or any non-empty truthy value
-  return value !== '0' && value !== 'undefined' && value !== 'null'
+function isHoldEnabled(): boolean {
+  const v = process.env.PORTAL_HOLD?.trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
 }
 
 export function middleware(request: NextRequest) {
-  const host = request.nextUrl.hostname.toLowerCase()
-  if (host === 'supplier-portal.zm.vercel.app') {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.hostname = 'supplier-portal-zm.vercel.app'
-    return NextResponse.redirect(redirectUrl)
-  }
+  if (!isHoldEnabled()) return NextResponse.next()
 
   const { pathname } = request.nextUrl
 
-  if (!isProtectedPath(pathname)) {
+  if (pathname === '/join') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('reason', 'hold')
+    return NextResponse.redirect(url)
+  }
+
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/auth/') ||
+    pathname === '/favicon.ico'
+  ) {
     return NextResponse.next()
   }
 
-  const session = request.cookies.get(SESSION_COOKIE)
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
 
-  if (!isValidSession(session?.value)) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('from', pathname)
-    return NextResponse.redirect(loginUrl)
+  const session = request.cookies.get(SESSION_COOKIE)?.value
+  if (!session) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('reason', 'hold')
+    return NextResponse.redirect(url)
   }
 
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: [
-    '/dashboard',
-    '/dashboard/:path*',
-    '/onboarding',
-    '/onboarding/:path*',
-    '/products',
-    '/products/:path*',
-    '/profile',
-    '/profile/:path*',
-    '/listings',
-    '/listings/:path*',
-    '/product-availability',
-    '/product-availability/:path*',
-    '/orders',
-    '/orders/:path*',
-    '/returns',
-    '/returns/:path*',
-    '/approvals',
-    '/approvals/:path*',
-    '/suppliers',
-    '/suppliers/:path*',
-    '/settings',
-    '/settings/:path*',
-  ],
+  matcher: ['/((?!_next/static|_next/image).*)'],
 }

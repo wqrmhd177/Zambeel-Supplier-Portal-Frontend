@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
 import { updateLastActivity } from '@/lib/authCookie'
-import { canAccessPortal, portalAccessDeniedMessage } from '@/lib/portalAccess'
+import { canAccessPortal, isClientPortalHoldEnabled, portalAccessDeniedMessage } from '@/lib/portalAccess'
 
 function LoginPageContent() {
   const router = useRouter()
@@ -68,6 +68,11 @@ function LoginPageContent() {
     try {
       const emailNormalized = email.trim().toLowerCase()
       if (isSignUp) {
+        if (isClientPortalHoldEnabled()) {
+          setPopupMessage(portalAccessDeniedMessage('hold'))
+          setIsLoading(false)
+          return
+        }
         // Sign up flow
         if (password !== confirmPassword) {
           setError('Passwords do not match')

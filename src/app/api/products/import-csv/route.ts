@@ -8,8 +8,7 @@ import {
   type ProductCsvRow,
 } from '@/lib/productCsvImport'
 import { resolveSupplierMarketFromCountry } from '@/lib/supportedMarkets'
-
-const SESSION_COOKIE = 'supplier_session'
+import { requireApiActor } from '@/lib/requireApiActor'
 const MAX_ROWS = 500
 const IMPORT_ROLES = new Set(['admin', 'purchaser', 'manager', 'listing_agent'])
 
@@ -27,16 +26,14 @@ function abbrevOptionValues(optionValues: Record<string, string>): Record<string
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get(SESSION_COOKIE)?.value
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-    }
+    const auth = await requireApiActor(request)
+    if (!auth.ok) return auth.response
 
     const supabase = getAdminSupabase()
     const { data: actor, error: actorError } = await supabase
       .from('users')
       .select('id, role, country, stock_location_country')
-      .eq('id', sessionId)
+      .eq('id', auth.actor.id)
       .maybeSingle()
 
     if (actorError || !actor) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { isServerPortalHoldEnabled, portalAccessDeniedMessage } from '@/lib/portalAccess'
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -9,6 +10,10 @@ function getAdminSupabase() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (isServerPortalHoldEnabled()) {
+      return NextResponse.json({ error: portalAccessDeniedMessage('hold') }, { status: 503 })
+    }
+
     const { email, password, fullName, phone, country, team } = await request.json()
 
     if (!email || !password || !fullName || !country || !team) {

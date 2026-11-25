@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { fetchMergedProductCatalog } from '@/lib/productCatalogServer'
-
-const SESSION_COOKIE = 'supplier_session'
+import { requireApiActor } from '@/lib/requireApiActor'
 const CATALOG_ROLES = new Set([
   'admin',
   'purchaser',
@@ -49,23 +48,21 @@ async function supplierUserIdsForPurchaser(
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get(SESSION_COOKIE)?.value
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-    }
+    const auth = await requireApiActor(request)
+    if (!auth.ok) return auth.response
 
     const supabase = getAdminSupabase()
     const { data: actor, error: actorError } = await supabase
       .from('users')
       .select('id, user_id, role')
-      .eq('id', sessionId)
+      .eq('id', auth.actor.id)
       .maybeSingle()
 
     if (actorError || !actor) {
       return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
     }
 
-    const role = String(actor.role || '').toLowerCase()
+    const role = auth.actor.role
     if (!CATALOG_ROLES.has(role)) {
       return NextResponse.json({ error: 'You do not have permission to view products.' }, { status: 403 })
     }

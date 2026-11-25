@@ -5,13 +5,7 @@ import {
   parseSearchTerms,
   rowMatchesSearch,
 } from '@/lib/filterUtils'
-
-const SESSION_COOKIE = 'supplier_session'
-
-function isAuthenticated(request: NextRequest): boolean {
-  const val = request.cookies.get(SESSION_COOKIE)?.value
-  return Boolean(val && val.length > 1 && val !== '0')
-}
+import { requireApiActor } from '@/lib/requireApiActor'
 
 const METABASE_ORDERS_URL =
   'https://zambeel.metabaseapp.com/public/question/deab3d2c-9fbc-4d1e-8400-e93d1513582e.json'
@@ -189,9 +183,8 @@ function filterRows(
 }
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticated(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const auth = await requireApiActor(request)
+  if (!auth.ok) return auth.response
 
   try {
     const sp = request.nextUrl.searchParams

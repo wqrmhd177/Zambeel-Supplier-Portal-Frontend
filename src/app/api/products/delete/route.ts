@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-
-const SESSION_COOKIE = 'supplier_session'
+import { requireApiActor } from '@/lib/requireApiActor'
 const DELETE_ROLES = new Set(['admin', 'agent', 'listing_agent'])
 
 function getAdminSupabase(): SupabaseClient {
@@ -12,23 +11,12 @@ function getAdminSupabase(): SupabaseClient {
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get(SESSION_COOKIE)?.value
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-    }
+    const auth = await requireApiActor(request)
+    if (!auth.ok) return auth.response
 
     const supabase = getAdminSupabase()
-    const { data: actor, error: actorError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', sessionId)
-      .maybeSingle()
 
-    if (actorError || !actor) {
-      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-    }
-
-    const role = String(actor.role || '').toLowerCase()
+    const role = auth.actor.role
     if (!DELETE_ROLES.has(role)) {
       return NextResponse.json({ error: 'You do not have permission to delete products.' }, { status: 403 })
     }

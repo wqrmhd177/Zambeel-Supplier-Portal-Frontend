@@ -5,8 +5,7 @@ import {
   resolveMarketForUserInsert,
 } from '@/lib/supportedMarkets'
 import { ensureUserFriendlyId, allocateNextUserId } from '@/lib/userIdHelpers'
-
-const SESSION_COOKIE = 'supplier_session'
+import { requireApiActor } from '@/lib/requireApiActor'
 
 function getAdminSupabase(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -34,24 +33,22 @@ async function getPurchaserIntegerId(supabase: SupabaseClient, purchaserUuid: st
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get(SESSION_COOKIE)?.value
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-    }
+    const auth = await requireApiActor(request)
+    if (!auth.ok) return auth.response
 
     const supabase = getAdminSupabase()
 
-    const { data: actor, error: actorError } = await supabase
-      .from('users')
-      .select('id, role, country, stock_location_country')
-      .eq('id', sessionId)
-      .maybeSingle()
+  const { data: actor, error: actorError } = await supabase
+    .from('users')
+    .select('id, role, country, stock_location_country')
+    .eq('id', auth.actor.id)
+    .maybeSingle()
 
     if (actorError || !actor) {
       return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
     }
 
-    const role = String(actor.role || '').toLowerCase()
+    const role = auth.actor.role
     if (role !== 'purchaser' && role !== 'admin') {
       return NextResponse.json({ error: 'You do not have permission to create suppliers.' }, { status: 403 })
     }
