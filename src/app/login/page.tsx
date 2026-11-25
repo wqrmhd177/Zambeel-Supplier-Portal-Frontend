@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Package, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react'
 import { updateLastActivity } from '@/lib/authCookie'
+import { canAccessPortal, portalAccessDeniedMessage } from '@/lib/portalAccess'
 
 function LoginPageContent() {
   const router = useRouter()
@@ -50,6 +51,11 @@ function LoginPageContent() {
       setIsSignUp(false)
     } else if (reason === 'timeout') {
       setPopupMessage('Your session has expired due to inactivity. Please sign in again to continue.')
+      setIsSignUp(false)
+    } else if (reason === 'hold') {
+      setPopupMessage(
+        'The supplier portal is temporarily unavailable. Please try again later or contact your administrator.'
+      )
       setIsSignUp(false)
     }
   }, [searchParams])
@@ -134,27 +140,19 @@ function LoginPageContent() {
         const existingUser = result.user
 
         if (existingUser) {
-          // Check user role and approval status BEFORE setting session
-          const userRole = String(existingUser.role || 'supplier').trim().toLowerCase()
-          const onboarded = existingUser.onboarded === true || String(existingUser.onboarded || '').trim().toLowerCase() === 'true'
-          const profileSubmitted = hasSubmittedOnboarding(existingUser)
-          const { isApproved, isRefused } = getApprovalFlags(existingUser.account_approval)
-
-          // For suppliers who have completed onboarding, check account approval status
-          if (userRole === 'supplier' && (onboarded || profileSubmitted)) {
-            if (isRefused) {
-              setPopupMessage('Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.')
-              setError('')
-              setIsLoading(false)
-              return
-            }
-            if (!isApproved) {
-              setPopupMessage('Your account approval is pending. Please wait for admin approval for sign in on the portal and listing your products.')
-              setError('')
-              setIsLoading(false)
-              return
-            }
+          const access = canAccessPortal(existingUser)
+          if (!access.ok) {
+            setPopupMessage(
+              access.reason === 'refused'
+                ? 'Thank you for your interest in becoming a Zambeel supplier. Your account has been refused due to invalid or incomplete information.'
+                : portalAccessDeniedMessage(access.reason)
+            )
+            setError('')
+            setIsLoading(false)
+            return
           }
+
+          const userRole = String(existingUser.role || 'supplier').trim().toLowerCase()
 
           localStorage.setItem('userId', existingUser.id)
           localStorage.setItem('userFriendlyId', existingUser.user_id || '')

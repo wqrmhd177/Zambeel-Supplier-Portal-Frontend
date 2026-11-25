@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { canAccessPortal, portalAccessDeniedMessage } from '@/lib/portalAccess'
 
 const SESSION_COOKIE = 'supplier_session'
 const COOKIE_MAX_AGE = 12 * 60 * 60
@@ -95,6 +96,25 @@ export async function POST(request: NextRequest) {
         .eq('id', matchedUser.id)
     } else if (!storedPw || storedPw !== password) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
+    }
+
+    const access = canAccessPortal(
+      matchedUser as {
+        role?: string
+        account_approval?: string
+        onboarded?: boolean
+        full_name?: string
+        shop_name_on_zambeel?: string
+        shop_name?: string
+        phone_number?: string
+        country?: string
+      }
+    )
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: portalAccessDeniedMessage(access.reason) },
+        { status: 403 }
+      )
     }
 
     // Strip password before returning to client

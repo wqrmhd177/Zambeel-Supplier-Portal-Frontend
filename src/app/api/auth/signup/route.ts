@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { isServerPortalHoldEnabled, portalAccessDeniedMessage } from '@/lib/portalAccess'
 
 const SESSION_COOKIE = 'supplier_session'
 const COOKIE_MAX_AGE = 12 * 60 * 60
@@ -12,6 +13,13 @@ function getAdminSupabase() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (isServerPortalHoldEnabled()) {
+      return NextResponse.json(
+        { error: portalAccessDeniedMessage('hold') },
+        { status: 503 }
+      )
+    }
+
     const { email, password } = await request.json()
 
     if (!email || !password) {

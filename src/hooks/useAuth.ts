@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { clearSessionCookie, setSessionCookie, isSessionIdle, updateLastActivity } from '@/lib/authCookie'
+import { canAccessPortal, isClientPortalHoldEnabled } from '@/lib/portalAccess'
 
 interface AuthState {
   isAuthenticated: boolean
@@ -28,22 +29,7 @@ export function useAuth() {
   })
 
   useEffect(() => {
-    const getApprovalFlags = (value: unknown) => {
-      const normalized = String(value || '').trim().toLowerCase()
-      const isApproved = normalized === 'approved' || normalized.includes('approved')
-      const isRefused = normalized === 'refused' || normalized.includes('refus')
-      return { isApproved, isRefused }
-    }
-
     const checkAuth = async () => {
-      const hasSubmittedOnboarding = (u: any) => {
-        const hasFullName = String(u?.full_name || '').trim().length > 0
-        const hasShopName = String(u?.shop_name_on_zambeel || u?.shop_name || '').trim().length > 0
-        const hasPhone = String(u?.phone_number || '').trim().length > 0
-        const hasCountry = String(u?.country || '').trim().length > 0
-        return hasFullName || hasShopName || hasPhone || hasCountry
-      }
-
       // Read all localStorage values in one batch
       const authData = {
         userId: localStorage.getItem('userId'),
@@ -117,30 +103,16 @@ export function useAuth() {
           return
         }
 
-        // Security check: normalize flags for robust handling across DB value formats.
         const userRole = String(data.role || 'supplier').trim().toLowerCase()
         const userCountry = String(data.country || '').trim()
-        const { isApproved, isRefused } = getApprovalFlags(data.account_approval)
 
-        // New suppliers go through onboarding before approval can be checked.
-        // Only enforce the gate once they have submitted their profile.
-        const onboarded = data.onboarded === true || String(data.onboarded || '').trim().toLowerCase() === 'true'
-        const isNewSupplierInOnboarding = userRole === 'supplier' && !onboarded && !hasSubmittedOnboarding(data)
-
-        // Enforce account approval for all roles except admin and suppliers still in onboarding.
-        if (userRole !== 'admin' && !isNewSupplierInOnboarding) {
-          if (isRefused) {
-            console.log('Account has been refused, logging out...')
-            clearAuth()
-            router.push('/login?reason=refused')
-            return
-          }
-          if (!isApproved) {
-            console.log('Account approval is pending, logging out...')
-            clearAuth()
-            router.push('/login?reason=pending')
-            return
-          }
+        const access = canAccessPortal(data, { portalHold: isClientPortalHoldEnabled() })
+        if (!access.ok) {
+          console.log('Portal access denied:', access.reason)
+          clearAuth()
+          const reason = access.reason === 'refused' ? 'refused' : access.reason === 'hold' ? 'hold' : 'pending'
+          router.push(`/login?reason=${reason}`)
+          return
         }
 
         // User exists and is not deleted, update with fresh data from database
